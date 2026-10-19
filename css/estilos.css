@@ -387,6 +387,12 @@ body.modo-unidad .chip.on svg { opacity: 1; }
 .pc-btn { display: block; margin: 8px 12px 0; padding: 9px 0; text-align: center; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 13px; background: #e41e2b; color: #fff !important; }
 .pc-btn.sec { background: #f1efeb; color: #1d1d1b !important; font-weight: 700; }
 .pc-cab.yo { background: linear-gradient(135deg, #1558b0, #1a73e8); }
+/* Universo ICE y clientes brigadistas en los mapas */
+.ice-anillo, .brig-punto { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; flex: none; }
+.ice-anillo { border: 2.5px solid #c28a00; }
+.brig-punto { background: #8a8985; border: 2.5px solid #1d1d1b; }
+.chip .ice-anillo, .chip .brig-punto { margin-right: 2px; }
+.rutas-resaltados { font-size: 13px; }
 .ctl-ubicacion button {
   display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 4px;
   background: #fff; color: #1d1d1b; cursor: pointer;

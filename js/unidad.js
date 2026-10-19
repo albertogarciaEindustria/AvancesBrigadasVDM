@@ -10,6 +10,12 @@ const Unidad = (function () {
   const PALETA_JEF = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#6250d6', '#e34948'];
   const GRIS_JEF = '#8a8985';
   const VERDE_TRAB = '#0a8f3c';
+  // Evaluable ICE (/adduniversoice): anillo dorado; cliente brigadista en las
+  // rutas: punto grande con borde oscuro
+  const ORO_ICE = '#c28a00';
+  const BORDE_BRIG = '#1d1d1b';
+  // Los resaltados se achican al alejar el mapa para que no se encimen
+  const escalaZoom = z => z >= 15 ? 1 : z >= 13 ? 0.8 : 0.6;
 
   // ── Semáforos (mismos cortes que ejemplo.py) ──────────────────────────
   const heatImpacto = v => v <= 170 ? 'critico' : v <= 190 ? 'serio' : 'ok';
@@ -524,14 +530,17 @@ const Unidad = (function () {
     for (const { j, i } of jefOrden) colorJef[i] = j === 'Sin jefatura' || slot >= PALETA_JEF.length ? GRIS_JEF : PALETA_JEF[slot++];
     const porJef = {};
     for (const p of M.faltantes) (porJef[p[4]] = porJef[p[4]] || []).push(p);
+    const ICE = !!D.universo_ice;
 
     panel.innerHTML = `
       <div class="mapa-barra">
-        <div class="mapa-resumen">Universo de clientes brigadistas: <b>${num(M.universo)}</b> · trabajados <b>${num(M.trabajados_universo)}</b> (${pct(M.universo ? M.trabajados_universo / M.universo * 100 : 0)}) · faltan <b>${num(M.faltantes.length)}</b></div>
+        <div class="mapa-resumen">Universo de clientes brigadistas: <b>${num(M.universo)}</b> · trabajados <b>${num(M.trabajados_universo)}</b> (${pct(M.universo ? M.trabajados_universo / M.universo * 100 : 0)}) · faltan <b>${num(M.faltantes.length)}</b>${ICE
+          ? `, de ellos <b>${num(M.faltantes_ice)}</b> también evaluables ICE (<span class="ice-anillo" aria-hidden="true"></span> anillo dorado)` : ''}</div>
         <div class="mapa-controles">
           <div class="chips" id="chipsMapa">
             <button type="button" class="chip on" data-capa="trab"><svg width="12" height="12" aria-hidden="true">${Graficas.marcaSvg('circulo', 6, 6, 5, VERDE_TRAB)}</svg>Trabajados (${num(M.trabajados.length)})</button>
             ${jefOrden.filter(({ i }) => porJef[i]).map(({ j, i }) => `<button type="button" class="chip on" data-capa="j${i}"><svg width="12" height="12" aria-hidden="true">${Graficas.marcaSvg('triangulo', 6, 6.5, 5, colorJef[i])}</svg>Faltan ${esc(j)} (${num(porJef[i].length)})</button>`).join('')}
+            ${ICE ? `<button type="button" class="chip" data-solo-ice aria-pressed="false"><span class="ice-anillo" aria-hidden="true"></span>Solo faltantes ICE (${num(M.faltantes_ice)})</button>` : ''}
           </div>
           <div class="buscador">
             <input type="search" id="buscaCliente" placeholder="Buscar SAP o cliente" aria-label="Buscar SAP o cliente" autocomplete="off">
@@ -551,25 +560,31 @@ const Unidad = (function () {
 
     capas.trab = L.layerGroup();
     for (const p of M.trabajados) {
-      const [lat, lon, sap, nombre, ji, zpv, ruta, quien, fecha, cal] = p;
+      const [lat, lon, sap, nombre, ji, zpv, ruta, ice, quien, fecha, cal] = p;
       const m = L.circleMarker([lat, lon], { renderer: rend, radius: 5.5, color: '#fff', weight: 1.5,
                                              fillColor: VERDE_TRAB, fillOpacity: 0.95 });
       m.bindPopup(() => `<div class="pc"><div class="pc-cab ok"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · ✅ Trabajado</span></div>
         <dl class="pc-cuerpo">${filaPop('Trabajado por', quien)}${filaPop('Fecha', fecha)}${filaPop('Calificación', cal == null ? '' : num(cal, 1))}
-        ${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}</dl>${enlacesGoogle(lat, lon)}</div>`);
+        ${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}</dl>${enlacesGoogle(lat, lon)}</div>`);
       m.addTo(capas.trab);
       indice.push({ sap, nombre, m, lat, lon });
       limites.push([lat, lon]);
     }
+    // Cada jefatura tiene dos subcapas: faltantes evaluables ICE (con anillo
+    // dorado, encima) y los demás, que "Solo faltantes ICE" oculta
+    const otros = {}, conIce = {}, anillos = [];
     for (const [ji, lista] of Object.entries(porJef)) {
       const capa = capas['j' + ji] = L.layerGroup();
+      otros[ji] = L.layerGroup().addTo(capa);
+      conIce[ji] = L.layerGroup().addTo(capa);
       for (const p of lista) {
-        const [lat, lon, sap, nombre, , zpv, ruta] = p;
-        const m = new Tri([lat, lon], { renderer: rend, radius: 5, color: '#fff', weight: 1,
+        const [lat, lon, sap, nombre, , zpv, ruta, ice] = p;
+        if (ice) anillos.push(L.circleMarker([lat, lon], { renderer: rend, radius: 9.5, color: ORO_ICE, weight: 2.5, fill: false, interactive: false }).addTo(conIce[ji]));
+        const m = new Tri([lat, lon], { renderer: rend, radius: ice ? 6 : 5, color: ice ? BORDE_BRIG : '#fff', weight: ice ? 1.4 : 1,
                                         fillColor: colorJef[ji], fillOpacity: 0.9 });
-        m.bindPopup(() => `<div class="pc"><div class="pc-cab falta"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · ▲ Falta</span></div>
-          <dl class="pc-cuerpo">${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}</dl>${enlacesGoogle(lat, lon)}</div>`);
-        m.addTo(capa);
+        m.bindPopup(() => `<div class="pc"><div class="pc-cab falta"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · ▲ Falta${ice ? ' · evaluable ICE' : ''}</span></div>
+          <dl class="pc-cuerpo">${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}</dl>${enlacesGoogle(lat, lon)}</div>`);
+        m.addTo(ice ? conIce[ji] : otros[ji]);
         indice.push({ sap, nombre, m, lat, lon });
         limites.push([lat, lon]);
       }
@@ -579,13 +594,36 @@ const Unidad = (function () {
     capas.trab.addTo(mapaC);
     if (limites.length) mapaC.fitBounds(limitesRobustos(limites).pad(0.04));
     else mapaC.setView([19.38, -99.14], 11);
+    let escalaC = null;
+    const ajustarAnillos = () => {
+      const e = escalaZoom(mapaC.getZoom());
+      if (e === escalaC) return;
+      escalaC = e;
+      anillos.forEach(a => { a.setRadius(9.5 * e); a.setStyle({ weight: e < 1 ? 2 : 2.5 }); });
+    };
+    ajustarAnillos();
+    mapaC.on('zoomend', ajustarAnillos);
 
-    panel.querySelectorAll('#chipsMapa .chip').forEach(b => b.addEventListener('click', () => {
+    panel.querySelectorAll('#chipsMapa .chip[data-capa]').forEach(b => b.addEventListener('click', () => {
       const capa = capas[b.dataset.capa], on = !b.classList.contains('on');
       b.classList.toggle('on', on);
       if (on) capa.addTo(mapaC); else mapaC.removeLayer(capa);
       if (on && b.dataset.capa !== 'trab') capas.trab.eachLayer(l => l.bringToFront());
     }));
+    const soloIce = panel.querySelector('#chipsMapa [data-solo-ice]');
+    if (soloIce) soloIce.addEventListener('click', () => {
+      const on = !soloIce.classList.contains('on');
+      soloIce.classList.toggle('on', on);
+      soloIce.setAttribute('aria-pressed', on);
+      for (const ji of Object.keys(otros)) {
+        if (on) capas['j' + ji].removeLayer(otros[ji]);
+        else {
+          capas['j' + ji].addLayer(otros[ji]);
+          if (mapaC.hasLayer(capas['j' + ji])) conIce[ji].eachLayer(l => l.bringToFront());
+        }
+      }
+      if (mapaC.hasLayer(capas.trab)) capas.trab.eachLayer(l => l.bringToFront());
+    });
     buscador(document.getElementById('buscaCliente'), document.getElementById('buscaResultados'), indice, mapaC);
   }
 
@@ -620,14 +658,20 @@ const Unidad = (function () {
   function mapaRutas() {
     const panel = document.getElementById('panel-rutas');
     if (mapaR) { setTimeout(() => mapaR.invalidateSize(), 50); return; }
-    const R = D.rutas, rutas = R.rutas;
+    const R = D.rutas, rutas = R.rutas, ICE = !!D.universo_ice;
     const total = rutas.reduce((a, r) => a + r.puntos.length, 0);
+    const cuenta = (r, k) => r.puntos.reduce((a, p) => a + (p[k] ? 1 : 0), 0);
+    const totBrig = rutas.reduce((a, r) => a + cuenta(r, 6), 0), totIce = rutas.reduce((a, r) => a + cuenta(r, 7), 0);
     const fecha = R.fecha.split('-').reverse().join('/');
     panel.innerHTML = `
       <div class="mapa-barra">
         <div class="mapa-resumen">Rutas activas hoy · <b>${esc(R.dia)} ${fecha}</b> (frecuencia <b>${esc(R.letra)}</b>) · <b>${num(rutas.length)}</b> rutas · <b>${num(total)}</b> clientes. Cada SalesTerritoryCode tiene su color y su etiqueta (visible al acercar el mapa); las líneas unen a los clientes de la misma ruta.</div>
+        <div class="mapa-resumen rutas-resaltados">Resaltados: <b>1º</b> <span class="brig-punto" aria-hidden="true"></span> cliente brigadista (<b>${num(totBrig)}</b>)${ICE
+          ? ` · <b>2º</b> <span class="ice-anillo" aria-hidden="true"></span> evaluable ICE (<b>${num(totIce)}</b>)` : ''}</div>
         <div class="mapa-controles">
           <div class="chips">
+            <button type="button" class="chip on" data-r="brig" aria-pressed="true"><span class="brig-punto" aria-hidden="true"></span>Resaltar brigadistas</button>
+            ${ICE ? '<button type="button" class="chip on" data-r="ice" aria-pressed="true"><span class="ice-anillo" aria-hidden="true"></span>Resaltar ICE</button>' : ''}
             <button type="button" class="chip" data-r="todas">Mostrar todas</button>
             <button type="button" class="chip" data-r="ninguna">Ocultar todas</button>
             <button type="button" class="chip on" data-r="etiquetas">Etiquetas</button>
@@ -642,7 +686,7 @@ const Unidad = (function () {
             <li><label><input type="checkbox" checked data-i="${i}">
               <span class="ruta-sw" style="background:${colorRuta(i)}"></span>
               <span class="ruta-cod">${esc(r.codigo)}</span>
-              <span class="ruta-info">${esc(r.jefatura || '—')} · ${num(r.puntos.length)}</span></label>
+              <span class="ruta-info">${esc(r.jefatura || '—')} · ${num(r.puntos.length)} · ${num(cuenta(r, 6))} brig.${ICE ? ` · ${num(cuenta(r, 7))} ICE` : ''}</span></label>
               <button type="button" class="ruta-ir" data-i="${i}" aria-label="Ver ruta ${esc(r.codigo)}">↗</button></li>`).join('')}
           </ul>
         </aside>
@@ -652,17 +696,33 @@ const Unidad = (function () {
     capaBase(mapaR);
     botonUbicacion(mapaR);
     const rend = L.canvas({ padding: 0.4, tolerance: 4 });
-    const grupos = [], limites = [];
+    // Resaltado: 1º cliente brigadista (punto grande con borde oscuro, encima
+    // de todo) y 2º evaluable ICE (anillo dorado alrededor del punto)
+    let resaltarBrig = true, resaltarIce = ICE, escalaR = 1;
+    const estiloPunto = (brig, color) => resaltarBrig && brig
+      ? { radius: 7 * escalaR, color: BORDE_BRIG, weight: escalaR < 1 ? 2 : 2.5, fillColor: color, fillOpacity: 1 }
+      : { radius: Math.max(3, 4 * escalaR), color: '#fff', weight: 1.2, fillColor: color, fillOpacity: 1 };
+    const radioHalo = brig => (resaltarBrig && brig ? 11 : 7.5) * escalaR;
+    const reestilar = () => marcadores.forEach(x => {
+      const e = estiloPunto(x.brig, x.color);
+      x.m.setRadius(e.radius); x.m.setStyle(e);
+      if (x.halo) { x.halo.setRadius(radioHalo(x.brig)); x.halo.setStyle({ weight: escalaR < 1 ? 2 : 2.5 }); }
+    });
+    const grupos = [], limites = [], marcadores = [];
     rutas.forEach((r, i) => {
       const color = colorRuta(i), coords = r.puntos.map(p => [p[0], p[1]]);
-      const g = { linea: L.polyline(coords, { renderer: rend, color, weight: 2.5, opacity: 0.85 }), puntos: L.layerGroup(), visible: true };
+      const g = { linea: L.polyline(coords, { renderer: rend, color, weight: 2.5, opacity: 0.85 }), puntos: L.layerGroup(),
+                  halos: L.layerGroup(), visible: true };
       g.linea.bindTooltip(`${r.codigo} · ${r.puntos.length} clientes`, { sticky: true });
       for (const p of r.puntos) {
-        const [lat, lon, sap, nombre, zpv, trab] = p;
-        L.circleMarker([lat, lon], { renderer: rend, radius: 4, color: '#fff', weight: 1.2, fillColor: color, fillOpacity: 1 })
-          .bindPopup(() => `<div class="pc"><div class="pc-cab" style="background:${color}"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · Ruta ${esc(r.codigo)}</span></div>
-            <dl class="pc-cuerpo">${filaPop('Jefatura', r.jefatura)}${filaPop('Frecuencia ZPV', zpv)}${filaPop('Trabajado por brigada', trab ? 'Sí' : 'No')}</dl>${enlacesGoogle(lat, lon)}</div>`)
+        const [lat, lon, sap, nombre, zpv, trab, brig, ice] = p;
+        const etiquetasPop = [brig ? 'cliente brigadista' : '', ice ? 'evaluable ICE' : ''].filter(Boolean).join(' · ');
+        const m = L.circleMarker([lat, lon], { renderer: rend, ...estiloPunto(brig, color) })
+          .bindPopup(() => `<div class="pc"><div class="pc-cab" style="background:${color}"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · Ruta ${esc(r.codigo)}${etiquetasPop ? ' · ' + etiquetasPop : ''}</span></div>
+            <dl class="pc-cuerpo">${filaPop('Jefatura', r.jefatura)}${filaPop('Frecuencia ZPV', zpv)}${filaPop('Cliente brigadista', brig ? 'Sí' : 'No')}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}${filaPop('Trabajado por brigada', trab ? 'Sí' : 'No')}</dl>${enlacesGoogle(lat, lon)}</div>`)
           .addTo(g.puntos);
+        const halo = ice ? L.circleMarker([lat, lon], { renderer: rend, radius: radioHalo(brig), color: ORO_ICE, weight: 2.5, fill: false, interactive: false }).addTo(g.halos) : null;
+        marcadores.push({ m, halo, brig, color, g });
         limites.push([lat, lon]);
       }
       const c = coords.reduce((a, p) => [a[0] + p[0] / coords.length, a[1] + p[1] / coords.length], [0, 0]);
@@ -677,27 +737,50 @@ const Unidad = (function () {
       const ver = etiquetas && mapaR.getZoom() >= 13;
       grupos.forEach(g => { if (ver && g.visible) g.etiqueta.addTo(mapaR); else mapaR.removeLayer(g.etiqueta); });
     };
+    const alFrente = () => marcadores.forEach(x => { if (x.brig && resaltarBrig && x.g.visible) x.m.bringToFront(); });
     const mostrar = (g, on) => {
       g.visible = on;
-      for (const capa of [g.linea, g.puntos]) { if (on) capa.addTo(mapaR); else mapaR.removeLayer(capa); }
+      for (const capa of [g.linea, g.halos, g.puntos]) {
+        if (on && (capa !== g.halos || resaltarIce)) capa.addTo(mapaR); else mapaR.removeLayer(capa);
+      }
     };
     grupos.forEach(g => mostrar(g, true));
+    alFrente();
     if (limites.length) mapaR.fitBounds(limitesRobustos(limites).pad(0.04));
     else mapaR.setView([19.38, -99.14], 11);
     pintarEtiquetas();
-    mapaR.on('zoomend', pintarEtiquetas);
+    const ajustarEscala = () => {
+      const e = escalaZoom(mapaR.getZoom());
+      if (e !== escalaR) { escalaR = e; reestilar(); }
+    };
+    ajustarEscala();
+    mapaR.on('zoomend', () => { pintarEtiquetas(); ajustarEscala(); });
 
     const checks = [...panel.querySelectorAll('#listaRutas input[type="checkbox"]')];
-    checks.forEach(ch => ch.addEventListener('change', () => { mostrar(grupos[+ch.dataset.i], ch.checked); pintarEtiquetas(); }));
+    checks.forEach(ch => ch.addEventListener('change', () => { mostrar(grupos[+ch.dataset.i], ch.checked); alFrente(); pintarEtiquetas(); }));
+    panel.querySelectorAll('[data-r="brig"], [data-r="ice"]').forEach(b => b.addEventListener('click', () => {
+      const on = !b.classList.contains('on');
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on);
+      if (b.dataset.r === 'brig') {
+        resaltarBrig = on;
+        reestilar();
+        alFrente();
+      } else {
+        resaltarIce = on;
+        grupos.forEach(g => mostrar(g, g.visible));
+        alFrente();
+      }
+    }));
     panel.querySelectorAll('.ruta-ir').forEach(b => b.addEventListener('click', () => {
       const i = +b.dataset.i, g = grupos[i];
-      if (!g.visible) { checks[i].checked = true; mostrar(g, true); }
+      if (!g.visible) { checks[i].checked = true; mostrar(g, true); alFrente(); }
       mapaR.fitBounds(g.limites.pad(0.15));
       g.linea.setStyle({ weight: 6 });
       setTimeout(() => g.linea.setStyle({ weight: 2.5 }), 1800);
       pintarEtiquetas();
     }));
-    panel.querySelector('[data-r="todas"]').addEventListener('click', () => { grupos.forEach((g, i) => { checks[i].checked = true; mostrar(g, true); }); pintarEtiquetas(); });
+    panel.querySelector('[data-r="todas"]').addEventListener('click', () => { grupos.forEach((g, i) => { checks[i].checked = true; mostrar(g, true); }); alFrente(); pintarEtiquetas(); });
     panel.querySelector('[data-r="ninguna"]').addEventListener('click', () => { grupos.forEach((g, i) => { checks[i].checked = false; mostrar(g, false); }); pintarEtiquetas(); });
     panel.querySelector('[data-r="etiquetas"]').addEventListener('click', e => { etiquetas = !etiquetas; e.currentTarget.classList.toggle('on', etiquetas); pintarEtiquetas(); });
     panel.querySelector('#buscaRuta').addEventListener('input', e => {
