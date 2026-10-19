@@ -122,13 +122,6 @@ const Intro = (function () {
       : arteAscii('AVANCE VDM');
   }
 
-  function cajaAscii(texto) {
-    const linea = '+' + '-'.repeat(texto.length + 8) + '+';
-    return `<span aria-hidden="true">${linea}</span>\n` +
-           `<span><span aria-hidden="true">|</span>    ${texto}    <span aria-hidden="true">|</span></span>\n` +
-           `<span aria-hidden="true">${linea}</span>`;
-  }
-
   function escribir(el, texto, ms) {
     if (reducido) { el.textContent = texto; return; }
     let i = 0;
@@ -233,7 +226,6 @@ const Intro = (function () {
     });
 
     const btn = document.getElementById('btnEntrar');
-    btn.innerHTML = cajaAscii('VER  AVANCE  >');
     const kicker = document.getElementById('introKicker');
     const pie = document.getElementById('introPie');
     if (!indice) {
@@ -244,7 +236,7 @@ const Intro = (function () {
     kicker.textContent = `CORTE · ${indice.corte.toUpperCase()}`;
     escribir(document.getElementById('introSub'),
              'Avance de brigadistas EPICA · Valle de México', 32);
-    pie.textContent = `publicado ${indice.generado}`;
+    pie.innerHTML = `Página actualizada el día <b>${Util.esc(indice.actualizado || indice.generado)}</b>`;
     if (!Cripto.disponible()) {
       pie.textContent = 'Este navegador no puede descifrar los datos; abre la página en Chrome, Edge, Firefox o Safari actualizados.';
       return;

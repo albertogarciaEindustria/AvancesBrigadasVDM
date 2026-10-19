@@ -3,7 +3,7 @@
  * Los datos descifrados viven solo en memoria: "Salir" recarga la página. */
 (function () {
   'use strict';
-  let indice = null, passLider = null, datosLider = null;
+  let indice = null, llavesLider = {}, datosLider = null;
 
   function cargarScript(src) {
     return new Promise((ok, mal) => {
@@ -28,7 +28,8 @@
     if (!datos) return false;
     Intro.detener();
     if (datos.tipo === 'lider') {
-      passLider = pass;
+      llavesLider = datos.llaves || {};
+      delete datos.llaves;
       datosLider = datos;
       mostrarLider();
     } else {
@@ -42,8 +43,8 @@
   }
 
   async function abrirUnidad(id) {
-    const datos = await Cripto.descifrar(await sobre(id), passLider);
-    if (!datos) throw new Error('La contraseña del líder no abre ' + id);
+    if (!llavesLider[id]) throw new Error('Los datos del líder no traen la llave de ' + id);
+    const datos = await Cripto.descifrarConLlave(await sobre(id), llavesLider[id]);
     Unidad.render(datos, { salir, volver: mostrarLider });
   }
 

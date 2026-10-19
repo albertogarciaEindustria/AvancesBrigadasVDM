@@ -43,15 +43,24 @@ body.modo-intro { overflow: hidden; background: #000; }
 .intro-sub { font-size: clamp(11px, 1.5vw, 16px); letter-spacing: .3em; color: #d2d2d2; min-height: 1.4em; }
 .cursor { animation: parpadeo 1s steps(1) infinite; }
 @keyframes parpadeo { 50% { opacity: 0; } }
-.btn-ascii {
-  font-family: var(--mono); font-size: 15px; line-height: 1.25; letter-spacing: .1em;
-  white-space: pre; background: transparent; color: #e6e6e6; border: 0; padding: 6px 10px; cursor: pointer;
-  transition: background .15s, color .15s;
+.btn-entrar {
+  display: inline-flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 30px;
+  font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  color: #050505; background: #ededed; border: 1px solid #ededed; border-radius: 8px; cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(190, 255, 225, 0), 0 8px 30px rgba(0, 0, 0, .55);
+  transition: background .15s, box-shadow .2s, transform .15s;
 }
-.btn-ascii > span { display: block; }
-.btn-ascii:not(:disabled):hover, .btn-ascii:focus-visible { background: #e6e6e6; color: #000; outline: none; }
-.btn-ascii:disabled { opacity: .45; cursor: default; }
-.intro-pie { font-size: 11px; color: #7b7b7b; letter-spacing: .18em; max-width: 520px; }
+.btn-entrar .flecha { font-weight: 500; letter-spacing: 0; transition: transform .2s; }
+.btn-entrar:not(:disabled):hover {
+  background: #fff; transform: translateY(-1px);
+  box-shadow: 0 0 0 4px rgba(190, 255, 225, .14), 0 0 34px rgba(160, 255, 220, .22), 0 8px 30px rgba(0, 0, 0, .55);
+}
+.btn-entrar:not(:disabled):hover .flecha { transform: translateX(4px); }
+.btn-entrar:not(:disabled):active { transform: translateY(0); background: #d9d9d9; }
+.btn-entrar:focus-visible { outline: 2px solid #bfffe6; outline-offset: 4px; }
+.btn-entrar:disabled { opacity: .4; cursor: default; }
+.intro-pie { font-size: 12px; color: #9d9d9d; letter-spacing: .12em; max-width: 520px; }
+.intro-pie b { color: #e2e2e2; font-weight: 700; white-space: nowrap; }
 @media (max-width: 699px) {
   .intro-titulo { font-size: min(16px, calc((100vw - 32px) / 40)); }
   .intro-kicker { letter-spacing: .3em; font-size: 11px; }
