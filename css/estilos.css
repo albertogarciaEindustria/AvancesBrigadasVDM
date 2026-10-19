@@ -522,6 +522,87 @@ body.modo-lider .chip {
 body.modo-lider .chip.on { background: var(--ld-tinta); color: #000; border-color: var(--ld-tinta); }
 .ld-chips { margin-bottom: 10px; }
 .ld-pie { font-size: 12px; color: var(--ld-muted); margin-top: 16px; line-height: 1.5; }
+.ld-nota { font-size: 12.5px; color: var(--ld-muted); line-height: 1.45; margin-top: 6px; }
+body.modo-lider .chip { display: inline-flex; align-items: center; gap: 6px; }
+body.modo-lider .chip svg { margin: 0; }
+
+/* Pestañas del líder */
+.ld-pestanas { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid var(--ld-borde); overflow-x: auto; }
+.ld-pestanas [role="tab"] {
+  flex: none; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 10px 14px; font-family: var(--mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ld-muted); cursor: pointer;
+}
+.ld-pestanas [role="tab"]:hover { color: var(--ld-tinta); }
+.ld-pestanas [role="tab"][aria-selected="true"] { color: var(--ld-tinta); border-bottom-color: var(--ld-tinta); }
+.ld-pestanas [role="tab"]:focus-visible { outline: 2px solid var(--ld-tinta); outline-offset: -2px; }
+
+/* Entrada y salida (/entradasalida): mitad izquierda entrada, derecha salida */
+.es-tabla { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.es-tabla th, .es-tabla td { border-bottom: 1px solid #1c1c20; padding: 3px 2px; text-align: center; }
+.es-tabla thead th { color: var(--ld-muted); font-size: 11px; font-weight: 650; padding: 4px 2px 6px; vertical-align: bottom; }
+.es-tabla thead th span { display: block; color: var(--ld-tinta); font-size: 12px; }
+.es-tabla thead th small { display: block; font-size: 10px; }
+.es-tabla thead th:first-child, .es-tabla th[scope="row"] { text-align: left; }
+.es-tabla th[scope="row"] {
+  position: sticky; left: 0; z-index: 1; background: var(--ld-panel); min-width: 128px; max-width: 160px;
+  padding: 4px 10px 4px 2px; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.es-clave { display: block; font-size: 10.5px; color: var(--ld-muted); font-weight: 600; }
+.es-tabla tr.vacante th[scope="row"] { color: var(--ld-tinta2); }
+.es-grupo th { text-align: left; padding: 12px 2px 6px; font-size: 13px; font-weight: 700; color: var(--ld-tinta); position: sticky; left: 0; }
+.es-grupo th svg { margin-right: 8px; vertical-align: -1px; }
+.es-par { display: flex; gap: 1px; }
+.es-media {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; width: 21px; height: 32px;
+  border-radius: 3px; color: #111; font-size: 10px; line-height: 1.15;
+}
+.es-media b { font-weight: 750; }
+.es-verde, .es-leyenda i.es-verde { background: #92d050; }
+.es-naranja, .es-leyenda i.es-naranja { background: #ffa726; }
+.es-rojo, .es-leyenda i.es-rojo { background: #ff5252; }
+.es-tabla .es-dom, .es-leyenda i.es-dom { background: repeating-linear-gradient(45deg, #141417 0 4px, #1e1e22 4px 8px); }
+.es-inc { padding-left: 8px !important; }
+.es-inc span { display: inline-block; min-width: 36px; padding: 6px 4px; border-radius: 6px; font-weight: 800; font-size: 13px; color: #111; }
+.es-inc .mal { background: #ffd6d6; }
+.es-inc .bien { background: #d4edda; }
+.es-leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--ld-tinta2); }
+.es-leyenda b { color: var(--ld-tinta); margin-left: 4px; }
+.es-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.es-leyenda i { width: 14px; height: 14px; border-radius: 3px; }
+
+/* Página Mapa NoGeo */
+.ld-panel-nogeo .ld-bloque { margin-top: 14px; }
+.ld-nogeo-cuerpo {
+  display: grid; grid-template-columns: minmax(0, 1fr) 330px; margin-top: 14px; border: 1px solid var(--ld-borde);
+  border-radius: 14px; overflow: hidden; background: var(--ld-panel);
+}
+.ld-mapa { height: max(480px, calc(100vh - 300px)); background: #1a1a1d; }
+.ld-mapa .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.88) saturate(.35); }
+.ld-nogeo-lista { display: flex; flex-direction: column; min-height: 0; height: max(480px, calc(100vh - 300px)); padding: 12px; border-left: 1px solid var(--ld-borde); }
+.ld-nogeo-lista input {
+  width: 100%; background: #0c0c0e; color: var(--ld-tinta); border: 1px solid #2c2c30; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px;
+}
+.ld-nogeo-lista input:focus { outline: none; border-color: var(--ld-tinta2); }
+.ld-nogeo-lista ul { list-style: none; margin: 8px 0 0; padding: 0; overflow: auto; flex: 1; }
+.ld-nogeo-lista li button {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0;
+  border-bottom: 1px solid #1c1c20; padding: 8px 4px; color: var(--ld-tinta); cursor: pointer; font: inherit; font-size: 12.5px;
+}
+.ld-nogeo-lista li button:hover { background: #17171a; }
+.ng-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ng-txt small { display: block; color: var(--ld-muted); font-size: 11px; }
+.ng-dist { flex: none; font-weight: 750; font-variant-numeric: tabular-nums; }
+.ng-etiqueta { background: none; border: 0; }
+.ng-etiqueta span {
+  display: inline-block; transform: translate(-50%, -50%); white-space: nowrap; padding: 2px 7px; border-radius: 999px;
+  font: 750 11px/1.25 var(--sans); background: rgba(8, 8, 10, .88); color: #fff; border: 1.5px solid; box-shadow: 0 1px 6px rgba(0,0,0,.5);
+}
+@media (max-width: 900px) {
+  .ld-nogeo-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .ld-mapa { height: 62vh; min-height: 380px; }
+  .ld-nogeo-lista { height: auto; max-height: 50vh; border-left: 0; border-top: 1px solid var(--ld-borde); }
+}
 @media (max-width: 960px) {
   .ld-hero { grid-template-columns: 1fr; }
   .ld-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -759,5 +759,5 @@ const Unidad = (function () {
     window.addEventListener('resize', () => { if (lienzo.isConnected) { medir(); dibujar(); } });
   }
 
-  return { render, detener };
+  return { render, detener, botonUbicacion };
 })();

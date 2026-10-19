@@ -11,7 +11,7 @@ const Lider = (function () {
   const COLOR_KOF = '#f0efec';
   const RIESGO = '#e66767';
 
-  let D = null, opc = {}, colorDe = {}, formaDe = {};
+  let D = null, opc = {}, colorDe = {}, formaDe = {}, mapaN = null;
 
   const semAvance = p => p >= 20 ? 'ok' : 'critico';
   const semTend = p => p >= 100 ? 'ok' : p >= 90 ? 'aviso' : 'critico';
@@ -34,6 +34,7 @@ const Lider = (function () {
 
   function render(datos, opciones = {}) {
     D = datos; opc = opciones;
+    if (mapaN) { mapaN.remove(); mapaN = null; }
     document.body.className = 'modo-lider';
     document.getElementById('vistaUnidad').hidden = true;
     const raiz = document.getElementById('vistaLider');
@@ -50,7 +51,12 @@ const Lider = (function () {
         </div>
         <button type="button" class="ld-btn" data-accion="salir">Salir</button>
       </header>
+      <nav class="ld-pestanas" role="tablist" aria-label="Páginas del líder">
+        <button role="tab" id="ldTabTablero" aria-controls="ldPanelTablero" aria-selected="true" data-pestana="tablero">Tablero</button>
+        <button role="tab" id="ldTabNogeo" aria-controls="ldPanelNogeo" aria-selected="false" tabindex="-1" data-pestana="nogeo">Mapa NoGeo</button>
+      </nav>
 
+      <div id="ldPanelTablero" role="tabpanel" aria-labelledby="ldTabTablero">
       <section class="ld-hero">
         <div class="ld-hero-num">
           <p class="ld-etq">Avance global de clientes únicos</p>
@@ -88,8 +94,12 @@ const Lider = (function () {
         ${bloque('Unidades operativas', 'Abre la página de cada unidad con tu contraseña de líder.', tarjetasUnidades())}
       </div>
 
+      ${bloque('Entrada y salida por brigadista', `Como /entradasalida: en cada día, la mitad izquierda es la hora de la primera épica (entrada) y la derecha la de la última (salida), con la hora arriba y los minutos abajo. Incidencias = mitades en rojo del mes (también suman en la disciplina operativa).`, tablaEntradaSalida(), 'ancho')}
+
       ${bloque('Ranking VDM completo', `Clientes contables de ${esc(D.mes)} (sin foto de foto ni NoGeo), como /rankingvdm. ▲▼ = cambio de posición contra el corte anterior.`, tablaRanking())}
-      <p class="ld-pie">Calificación EPICA = EPICA Total (máximo 110) por sesión única. Tendencia: ritmo diario sin domingos; los sábados restantes suman 3 clientes por lugar. NoGeo: cierre a más de ${D.no_geo_metros} m del cliente.</p>`;
+      <p class="ld-pie">Calificación EPICA = EPICA Total (máximo 110) por sesión única. Tendencia: ritmo diario sin domingos; los sábados restantes suman 3 clientes por lugar. NoGeo: cierre a más de ${D.no_geo_metros} m del cliente.</p>
+      </div>
+      <div id="ldPanelNogeo" class="ld-panel-nogeo" role="tabpanel" aria-labelledby="ldTabNogeo" hidden></div>`;
 
     raiz.querySelector('[data-accion="salir"]').addEventListener('click', () => opc.salir && opc.salir());
     raiz.querySelectorAll('[data-abrir]').forEach(b => b.addEventListener('click', async () => {
@@ -98,8 +108,30 @@ const Lider = (function () {
       catch (e) { console.error(e); b.querySelector('.ld-abrir').textContent = 'No se pudo abrir'; }
       finally { b.disabled = false; }
     }));
+    const tabs = [...raiz.querySelectorAll('.ld-pestanas [role="tab"]')];
+    tabs.forEach(t => {
+      t.addEventListener('click', () => pestana(t.dataset.pestana));
+      t.addEventListener('keydown', e => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const j = (tabs.indexOf(t) + 1) % tabs.length;
+        tabs[j].focus(); pestana(tabs[j].dataset.pestana);
+      });
+    });
+    filtroEntradaSalida(raiz);
     window.scrollTo(0, 0);
     graficas();
+  }
+
+  function pestana(cual) {
+    for (const t of document.querySelectorAll('.ld-pestanas [role="tab"]')) {
+      const activa = t.dataset.pestana === cual;
+      t.setAttribute('aria-selected', activa);
+      t.tabIndex = activa ? 0 : -1;
+    }
+    document.getElementById('ldPanelTablero').hidden = cual !== 'tablero';
+    document.getElementById('ldPanelNogeo').hidden = cual !== 'nogeo';
+    Graficas.Tip.hide();
+    if (cual === 'nogeo') paginaNogeo();
   }
 
   function tile(etiqueta, valor, sub, estado) {
@@ -202,6 +234,185 @@ const Lider = (function () {
         <td class="num">${conteo(r.fdf, r.d_fdf)}</td>
         <td><div class="ld-mini">${barra100(r.pct_mala, r.pct_mala > 10 ? RIESGO : '#3dbb3d')}<b>${pct(r.pct_mala)}</b>${flecha(r.d_pct_mala, false)}</div></td>
       </tr>`).join('')}</tbody></table></div>`;
+  }
+
+  // ── Entrada y salida (/entradasalida) ─────────────────────────────────
+  // Mismo semáforo que ejemplo.py; las mitades en rojo son las incidencias
+  const minutos = h => +h.slice(0, 2) * 60 + +h.slice(3, 5);
+  const colorEntrada = h => { const m = minutos(h); return m <= 10 * 60 + 30 ? 'verde' : m < 12 * 60 ? 'naranja' : 'rojo'; };
+  const colorSalida = h => { const m = minutos(h); return m >= 17 * 60 ? 'verde' : m >= 15 * 60 ? 'naranja' : 'rojo'; };
+
+  function tablaEntradaSalida() {
+    const dias = Array.from({ length: D.dia_corte }, (_, i) => i + 1);
+    const semana = d => new Date(D.anio, D.mes_num - 1, d).getDay();
+    const clase = d => semana(d) === 0 ? 'es-dom' : '';
+    const media = (h, color, que) => `<span class="es-media es-${color}" title="${que} ${h}"><b>${h.slice(0, 2)}</b><b>${h.slice(3, 5)}</b></span>`;
+    const fila = b => {
+      const H = D.horarios[b.clave] || {};
+      let incidencias = 0;
+      const celdas = dias.map(d => {
+        const par = H[d];
+        if (!par) return `<td class="${clase(d)}"></td>`;
+        const ce = colorEntrada(par[0]), cs = colorSalida(par[1]);
+        incidencias += (ce === 'rojo') + (cs === 'rojo');
+        return `<td class="${clase(d)}"><div class="es-par">${media(par[0], ce, 'Entrada')}${media(par[1], cs, 'Salida')}</div></td>`;
+      }).join('');
+      return `<tr class="${b.vacante ? 'vacante' : ''}" data-unidad="${esc(b.unidad)}">
+        <th scope="row"><span class="es-clave">${esc(b.clave)}</span>${esc(b.vacante ? 'Vacante' : b.corto)}</th>
+        ${celdas}<td class="es-inc"><span class="${incidencias ? 'mal' : 'bien'}">${incidencias}</span></td></tr>`;
+    };
+    const cuerpo = D.unidades.map(u => `
+      <tr class="es-grupo" data-unidad="${esc(u.nombre)}"><th scope="rowgroup" colspan="${dias.length + 2}">${swatch(u.nombre)}${esc(u.nombre)}</th></tr>
+      ${D.brigadistas.filter(b => b.unidad === u.nombre).map(fila).join('')}`).join('');
+    const muestra = (color, texto) => `<span><i class="es-${color}"></i>${texto}</span>`;
+    return `<div class="chips ld-chips" id="chipsEntradaSalida" role="group" aria-label="Unidad">
+        <button type="button" class="chip on" data-u="">Todas</button>
+        ${D.unidades.map(u => `<button type="button" class="chip" data-u="${esc(u.nombre)}">${esc(u.nombre)}</button>`).join('')}
+      </div>
+      <div class="tabla-scroll"><table class="es-tabla">
+        <thead><tr><th scope="col">Brigadista</th>
+          ${dias.map(d => `<th scope="col" class="${clase(d)}"><span>${d}</span><small>${'DLMMJVS'[semana(d)]}</small></th>`).join('')}
+          <th scope="col">Inciden-<br>cias</th></tr></thead>
+        <tbody>${cuerpo}</tbody>
+      </table></div>
+      <div class="es-leyenda">
+        <b>Entrada:</b>${muestra('verde', 'hasta 10:30')}${muestra('naranja', '10:31–11:59')}${muestra('rojo', '12:00 o después')}
+        <b>Salida:</b>${muestra('verde', '5 pm o después')}${muestra('naranja', '3:00–4:59 pm')}${muestra('rojo', 'antes de 3 pm')}
+        <span><i class="es-dom"></i>domingo</span>
+      </div>`;
+  }
+
+  function filtroEntradaSalida(raiz) {
+    const chips = [...raiz.querySelectorAll('#chipsEntradaSalida .chip')];
+    chips.forEach(c => c.addEventListener('click', () => {
+      chips.forEach(x => x.classList.toggle('on', x === c));
+      raiz.querySelectorAll('.es-tabla tbody tr').forEach(tr => { tr.hidden = !!c.dataset.u && tr.dataset.unidad !== c.dataset.u; });
+    }));
+  }
+
+  // ── Página "Mapa NoGeo" ───────────────────────────────────────────────
+  // Cada NoGeo une, con línea punteada, al cliente según la Master Data con el
+  // punto donde se cerró la encuesta; la etiqueta a mitad de la línea es la
+  // distancia entre ambos (visible al acercar el mapa)
+  const ZOOM_ETIQUETAS = 13;
+
+  function distancia(m) {
+    if (m == null) return '—';
+    return m < 1000 ? `${num(m)} m` : `${num(m / 1000, m < 10000 ? 2 : 1)} km`;
+  }
+
+  function encuadre(puntos) {
+    if (puntos.length < 20) return L.latLngBounds(puntos);
+    const q = (arr, p) => arr[Math.round((arr.length - 1) * p)];
+    const la = puntos.map(p => p[0]).sort((a, b) => a - b), lo = puntos.map(p => p[1]).sort((a, b) => a - b);
+    return L.latLngBounds([q(la, 0.01), q(lo, 0.01)], [q(la, 0.99), q(lo, 0.99)]);
+  }
+
+  function paginaNogeo() {
+    const panel = document.getElementById('ldPanelNogeo');
+    if (mapaN) { setTimeout(() => mapaN.invalidateSize(), 50); return; }
+    const P = D.nogeo.puntos, sinRef = D.nogeo.sin_ref || {};
+    const unidadDe = {}, nombreDe = {};
+    D.brigadistas.forEach(b => { unidadDe[b.clave] = b.unidad; nombreDe[b.clave] = b.vacante ? 'Vacante' : b.nombre; });
+    const us = D.unidades.map(u => u.nombre);
+    const resumen = us.map(u => {
+      const ds = P.filter(p => unidadDe[p[0]] === u && p[8] != null).map(p => p[8]);
+      return { u, n: ds.length, prom: ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : null, sin: sinRef[u] || 0 };
+    });
+    const totalSin = resumen.reduce((a, r) => a + r.sin, 0);
+
+    panel.innerHTML = `
+      <section class="ld-bloque">
+        <header><h2>NoGeo por unidad</h2>
+          <p>Cada línea punteada une al cliente según la Master Data (círculo relleno) con el punto donde se cerró la encuesta (círculo hueco); la etiqueta es la distancia entre ambos y aparece al acercar el mapa. NoGeo = cierre a más de ${D.no_geo_metros} m del cliente. ${esc(D.mes)}, corte al ${esc(D.corte)}.</p></header>
+        <div class="chips ld-chips" id="chipsNogeo" role="group" aria-label="Unidades">
+          ${resumen.map(r => `<button type="button" class="chip on" data-u="${esc(r.u)}" aria-pressed="true">${swatch(r.u)}${esc(r.u)} · <b>${num(r.n)}</b>${r.prom != null ? ` · prom. ${distancia(r.prom)}` : ''}</button>`).join('')}
+          <button type="button" class="chip on" data-etiquetas aria-pressed="true">Distancias</button>
+        </div>
+        ${totalSin ? `<p class="ld-nota">${num(totalSin)} NoGeo de clientes sin coordenadas en la Master Data no se pueden dibujar (${resumen.filter(r => r.sin).map(r => `${esc(r.u)}: ${num(r.sin)}`).join(', ')}).</p>` : ''}
+      </section>
+      <div class="ld-nogeo-cuerpo">
+        <div id="mapaNogeo" class="ld-mapa"></div>
+        <aside class="ld-nogeo-lista" aria-label="NoGeo de mayor a menor distancia">
+          <input type="search" id="buscaNogeo" placeholder="Buscar clave, SAP o cliente" aria-label="Buscar NoGeo">
+          <p class="ld-nota" id="cuentaNogeo"></p>
+          <ul id="listaNogeo"></ul>
+        </aside>
+      </div>`;
+
+    mapaN = L.map('mapaNogeo', { preferCanvas: true });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(mapaN);
+    Unidad.botonUbicacion(mapaN);
+    const rend = L.canvas({ padding: 0.5, tolerance: 6 });
+    const capas = {}, etiquetas = {}, items = [], limites = [];
+    us.forEach(u => { capas[u] = L.layerGroup(); etiquetas[u] = L.layerGroup(); });
+
+    P.forEach(p => {
+      const [clave, sap, cliente, fecha, la, lo, lk, ok, dist, cal] = p;
+      const u = unidadDe[clave], color = colorDe[u] || '#aaa';
+      if (!capas[u]) return;
+      const pop = () => `<div class="pc"><div class="pc-cab" style="background:${color}"><b>${esc(cliente || 'Cliente ' + sap)}</b><span>SAP ${esc(sap)} · NoGeo a ${distancia(dist)}</span></div>
+        <dl class="pc-cuerpo"><dt>Brigadista</dt><dd>${esc(clave)} · ${esc(nombreDe[clave] || '')}</dd><dt>Unidad</dt><dd>${esc(u)}</dd>
+        <dt>Fecha</dt><dd>${esc(fecha)}</dd><dt>Distancia</dt><dd>${distancia(dist)}</dd>${cal == null ? '' : `<dt>Calificación</dt><dd>${num(cal, 1)}</dd>`}</dl>
+        <a class="pc-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${la},${lo}">Cliente en Google Maps</a>
+        <a class="pc-btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${lk},${ok}">Cierre en Google Maps</a></div>`;
+      const linea = L.polyline([[la, lo], [lk, ok]], { renderer: rend, color, weight: 3, opacity: 0.95, dashArray: '1 7', lineCap: 'round' })
+        .bindPopup(pop).bindTooltip(`${esc(clave)} · ${distancia(dist)}`, { sticky: true }).addTo(capas[u]);
+      L.circleMarker([lk, ok], { renderer: rend, radius: 5, color, weight: 2.5, fillColor: '#0b0b0d', fillOpacity: 1 }).bindPopup(pop).addTo(capas[u]);
+      L.circleMarker([la, lo], { renderer: rend, radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 1 }).bindPopup(pop).addTo(capas[u]);
+      L.marker([(la + lk) / 2, (lo + ok) / 2], { interactive: false, keyboard: false,
+        icon: L.divIcon({ className: 'ng-etiqueta', html: `<span style="border-color:${color}">${distancia(dist)}</span>`, iconSize: null }) }).addTo(etiquetas[u]);
+      items.push({ p, u, linea, medio: L.latLng((la + lk) / 2, (lo + ok) / 2), limites: L.latLngBounds([[la, lo], [lk, ok]]) });
+      limites.push([la, lo], [lk, ok]);
+    });
+
+    const visibles = new Set(us);
+    let conEtiquetas = true;
+    const pintarEtiquetas = () => {
+      const ver = conEtiquetas && mapaN.getZoom() >= ZOOM_ETIQUETAS;
+      us.forEach(u => { if (ver && visibles.has(u)) etiquetas[u].addTo(mapaN); else mapaN.removeLayer(etiquetas[u]); });
+    };
+    us.forEach(u => capas[u].addTo(mapaN));
+    if (limites.length) mapaN.fitBounds(encuadre(limites).pad(0.05));
+    else mapaN.setView([19.38, -99.14], 11);
+    pintarEtiquetas();
+    mapaN.on('zoomend', pintarEtiquetas);
+
+    // Lista de NoGeo (de mayor a menor distancia)
+    const lista = panel.querySelector('#listaNogeo'), busca = panel.querySelector('#buscaNogeo');
+    const pintarLista = () => {
+      const q = busca.value.trim().toLowerCase();
+      const ver = items.filter(it => visibles.has(it.u) && (!q || `${it.p[0]} ${it.p[1]} ${it.p[2]}`.toLowerCase().includes(q)));
+      panel.querySelector('#cuentaNogeo').textContent = `${num(ver.length)} NoGeo · toca uno para verlo en el mapa`;
+      lista.innerHTML = ver.map(it => `<li><button type="button" data-i="${items.indexOf(it)}">
+          ${swatch(it.u)}<span class="ng-txt"><b>${esc(it.p[0])}</b> · ${esc(it.p[2] || it.p[1])}<small>${esc(it.p[3])}</small></span>
+          <span class="ng-dist">${distancia(it.p[8])}</span></button></li>`).join('') || '<li class="ld-nota">Sin NoGeo con ese filtro.</li>';
+    };
+    pintarLista();
+    busca.addEventListener('input', pintarLista);
+    lista.addEventListener('click', e => {
+      const b = e.target.closest('button[data-i]');
+      if (!b) return;
+      const it = items[+b.dataset.i];
+      mapaN.fitBounds(it.limites.pad(0.5), { maxZoom: 17 });
+      setTimeout(() => it.linea.openPopup(it.medio), 350);
+      if (window.innerWidth < 900) document.getElementById('mapaNogeo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    panel.querySelectorAll('#chipsNogeo .chip').forEach(c => c.addEventListener('click', () => {
+      const on = !c.classList.contains('on');
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-pressed', on);
+      if ('etiquetas' in c.dataset) conEtiquetas = on;
+      else {
+        if (on) { visibles.add(c.dataset.u); capas[c.dataset.u].addTo(mapaN); }
+        else { visibles.delete(c.dataset.u); mapaN.removeLayer(capas[c.dataset.u]); }
+        pintarLista();
+      }
+      pintarEtiquetas();
+    }));
   }
 
   // ── Gráficas ──────────────────────────────────────────────────────────
