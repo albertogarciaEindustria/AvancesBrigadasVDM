@@ -19,14 +19,28 @@ const Unidad = (function () {
   const opColor = v => v == null ? 'nulo' : v >= 95 ? 'ok' : v >= 85 ? 'aviso' : 'critico';
   const diaColor = v => !v ? '' : v <= 5 ? 'd-rojo' : v < 8 ? 'd-amarillo' : v <= 10 ? 'd-verde' : 'd-morado';
 
+  // Cambio contra el corte anterior, como ejemplo.py: ↑ / ↓ con la diferencia
+  // (verde si mejora) y — amarillo si quedó igual; sin corte anterior no hay flecha
   function flecha(delta, subirEsBueno = true, dec = 1) {
-    if (delta == null || delta === 0) return '';
+    if (delta == null) return '';
+    if (delta === 0) return '<span class="delta igual" title="igual que en el corte anterior">—</span>';
     const sube = delta > 0, bien = subirEsBueno === sube;
     return `<span class="delta ${bien ? 'bien' : 'mal'}" title="contra el corte anterior">${sube ? '↑' : '↓'}${num(Math.abs(delta), dec)}</span>`;
   }
 
+  // Conteos (NoGeo, foto de foto...): como en ejemplo.py, sin marca si no cambió
   function conteo(v, delta) {
-    return `<span class="conteo">${v > 0 ? `<b class="rojo">${num(v)}</b>` : '<span class="muted">—</span>'}${flecha(delta, false, 0)}</span>`;
+    return `<span class="conteo">${v > 0 ? `<b class="rojo">${num(v)}</b>` : '<span class="muted">—</span>'}${delta ? flecha(delta, false, 0) : ''}</span>`;
+  }
+
+  function repetidas(v, delta) {
+    return `<span class="conteo">${v > 0 ? `<b class="rojo">-${num(v)}</b>` : '<span class="muted">—</span>'}${delta ? flecha(delta, false, 0) : ''}</span>`;
+  }
+
+  // % de posible mala práctica: la barra completa es 100% (no se escala al mayor)
+  function barraMala(p, delta) {
+    const ancho = p > 0 ? `max(2px, ${Math.min(100, p)}%)` : '0';
+    return `<div class="celda mala"><span class="barra-mala" title="Escala de 0 a 100%"><span class="${p > 10 ? 'mal' : 'bien'}" style="width:${ancho}"></span></span><b>${pct(p)}</b>${flecha(delta, false)}</div>`;
   }
 
   const plural = (n, palabra) => `${num(n)} ${palabra}${n === 1 ? '' : 's'}`;
@@ -126,17 +140,17 @@ const Unidad = (function () {
     const panel = document.getElementById('panel-info');
     panel.innerHTML = `
       <div class="kof-kpis">
-        ${kpi('Clientes impactados', num(T.clientes), `de ${num(T.objetivo)} · objetivo ${D.objetivo_mes} por lugar`, T.pct_avance, avanceEstilo(T.pct_avance))}
-        ${kpi('Avance del mes', pct(T.pct_avance), `${num(T.repetidas)} épicas repetidas no cuentan`)}
-        ${kpi('Tendencia de cierre', num(T.tendencia), `${num(T.pct_tendencia, 0)}% del objetivo de ${esc(D.mes)}`)}
-        ${kpi('Promedio EPICA', T.promedio == null ? '—' : num(T.promedio, 1), `objetivo ${D.objetivo_calificacion}`, null, promColor(T.promedio))}
-        ${kpi('Posible mala práctica', pct(T.pct_mala), `${num(T.mala)} de ${num(T.evaluaciones)} evaluaciones`, null, T.pct_mala > 10 ? 'critico' : 'ok')}
+        ${kpi('Clientes impactados', num(T.clientes) + flecha(T.d_clientes, true, 0), `de ${num(T.objetivo)} · objetivo ${D.objetivo_mes} por lugar`, T.pct_avance, avanceEstilo(T.pct_avance))}
+        ${kpi('Avance del mes', pct(T.pct_avance) + flecha(T.d_pct_avance), `${num(T.repetidas)} épicas repetidas no cuentan`)}
+        ${kpi('Tendencia de cierre', num(T.tendencia) + flecha(T.d_tendencia, true, 0), `${num(T.pct_tendencia, 0)}% del objetivo de ${esc(D.mes)}`)}
+        ${kpi('Promedio EPICA', (T.promedio == null ? '—' : num(T.promedio, 1)) + flecha(T.d_promedio), `objetivo ${D.objetivo_calificacion}`, null, promColor(T.promedio))}
+        ${kpi('Posible mala práctica', pct(T.pct_mala) + flecha(T.d_pct_mala, false), `${num(T.mala)} de ${num(T.evaluaciones)} evaluaciones`, null, T.pct_mala > 10 ? 'critico' : 'ok')}
         ${kpi('Brigadistas', `${D.activos}<small> / ${D.lugares}</small>`, plural(D.lugares - D.activos, 'vacante'))}
       </div>
       ${seccion('Avance por brigadista', `Toca un nombre para ver su distribución de calificaciones y los clientes que visitó. Corte al ${esc(D.corte)}.`, tablaAvance())}
       ${seccion('Épicas por día', `Clientes distintos evaluados por día de ${esc(D.mes)}. Objetivo: 10 entre semana, 8 en sábado; domingo no laboral.`, tablaPorDia())}
       ${seccion('Oportunidades por ejecución', 'Promedio del % de cumplimiento (valor obtenido / target) por métrica en cada sesión. Verde ≥ 95%, ámbar 85–95%, rojo < 85%.', tablaOportunidad())}
-      ${seccion('Ranking VDM', `Posición de las ${D.ranking.length} claves por clientes contables de ${esc(D.mes)} (sin foto de foto ni NoGeo). En rojo, las claves de ${esc(D.unidad)}.`, ranking())}
+      ${seccion('Ranking VDM', `Posición de las ${D.ranking.length} claves por clientes contables de ${esc(D.mes)} (sin foto de foto ni NoGeo). Resaltadas, las claves de ${esc(D.unidad)}. ↑ ↓ = cambio contra el corte anterior.`, ranking())}
       <p class="kof-nota">Épicas repetidas: visitas a clientes que otro brigadista ya había evaluado. NoGeo: cierre a más de ${D.no_geo_metros} m del cliente según la Master Data. Hacer base: varias épicas de clientes distintos cerradas desde un mismo punto. Disciplina operativa: entradas desde las 12:00, salidas antes de las 15:00 y días con más de 5 épicas por hora.</p>`;
     panel.querySelectorAll('.nombre-btn').forEach(b => b.addEventListener('click', () => abrirFicha(b.dataset.clave)));
   }
@@ -156,22 +170,22 @@ const Unidad = (function () {
       <tr class="${s.vacante ? 'vacante' : ''}">
         <th scope="row"><button type="button" class="nombre-btn" data-clave="${esc(s.clave)}">
           <span class="clave">${esc(s.clave)}</span>${s.vacante ? '<span class="tag-vacante">Vacante</span>' : esc(s.nombre)}</button></th>
-        <td class="num">${s.repetidas > 0 ? `<b class="rojo">-${num(s.repetidas)}</b>` : '<span class="muted">—</span>'}</td>
-        <td><div class="celda"><i class="punto ${heatImpacto(s.clientes)}"></i><b>${num(s.clientes)}/${D.objetivo_mes}</b><span class="pill ${avanceEstilo(s.pct_avance)}">${pct(s.pct_avance)}</span></div></td>
+        <td class="num">${repetidas(s.repetidas, s.d_repetidas)}</td>
+        <td><div class="celda"><i class="punto ${heatImpacto(s.clientes)}"></i><b>${num(s.clientes)}/${D.objetivo_mes}</b><span class="pill ${avanceEstilo(s.pct_avance)}">${pct(s.pct_avance)}</span>${flecha(s.d_clientes, true, 0)}</div></td>
         <td><div class="celda"><i class="punto ${tendColor(s.tendencia)}"></i><b>${num(s.tendencia)}</b><span class="muted">${num(s.pct_tendencia)}%</span>${flecha(s.d_tendencia, true, 0)}</div></td>
         <td class="num">${s.bono ? '<b class="verde">+ BONO</b>' : s.epicas_dia == null ? '<span class="muted">—</span>' : `<b>${num(s.epicas_dia)}</b>`}</td>
         <td>${s.promedio == null ? '<span class="muted">Sin EPICA</span>' : `<div class="celda"><i class="punto ${promColor(s.promedio)}"></i><b>${num(s.promedio, 1)}</b>${flecha(s.d_promedio)}</div>`}</td>
-        <td class="num">${conteo(s.disciplina)}</td>
+        <td class="num">${conteo(s.disciplina, s.d_disciplina)}</td>
         <td class="num">${conteo(s.hacer_base, s.d_hacer_base)}</td>
         <td class="num">${conteo(s.no_geo, s.d_no_geo)}</td>
         <td class="num">${conteo(s.fdf, s.d_fdf)}</td>
-        <td><div class="celda mala"><span class="barra-mala"><span class="${s.pct_mala > 10 ? 'mal' : 'bien'}" style="width:${Math.min(100, s.pct_mala * 2)}%"></span></span><b>${pct(s.pct_mala)}</b></div></td>
+        <td>${barraMala(s.pct_mala, s.d_pct_mala)}</td>
       </tr>`).join('');
     return `<div class="tabla-scroll"><table class="kof-tabla tabla-avance">
       <thead><tr>
         <th scope="col">Nombre</th><th scope="col">Épicas<br>repetidas</th>
         <th scope="col">Clientes impactados<br>y % de avance</th>
-        <th scope="col">Tendencia de cierre<br>de avance de ${esc(D.mes)}</th>
+        <th scope="col">Tendencia</th>
         <th scope="col">Épicas<br>por día</th><th scope="col">Promedio<br>épicas</th>
         <th scope="col">Disciplina<br>operativa</th><th scope="col">Hacer<br>base</th>
         <th scope="col">No<br>GEO</th><th scope="col">Error foto<br>de foto</th>
@@ -180,14 +194,14 @@ const Unidad = (function () {
       <tbody>${filas}</tbody>
       <tfoot><tr>
         <th scope="row">TOTAL Y PROMEDIO</th>
-        <td class="num">${T.repetidas > 0 ? `<b class="rojo">-${num(T.repetidas)}</b>` : '—'}</td>
-        <td><div class="celda"><b>${num(T.clientes)}/${num(T.objetivo)}</b><span class="pill ${avanceEstilo(T.pct_avance)}">${pct(T.pct_avance)}</span></div></td>
-        <td><div class="celda"><b>${num(T.tendencia)}</b><span class="muted">${num(T.pct_tendencia, 0)}%</span></div></td>
+        <td class="num">${repetidas(T.repetidas, T.d_repetidas)}</td>
+        <td><div class="celda"><b>${num(T.clientes)}/${num(T.objetivo)}</b><span class="pill ${avanceEstilo(T.pct_avance)}">${pct(T.pct_avance)}</span>${flecha(T.d_clientes, true, 0)}</div></td>
+        <td><div class="celda"><b>${num(T.tendencia)}</b><span class="muted">${num(T.pct_tendencia, 0)}%</span>${flecha(T.d_tendencia, true, 0)}</div></td>
         <td class="num"><b>${num(T.epicas_dia)}</b></td>
-        <td><div class="celda"><i class="punto ${promColor(T.promedio)}"></i><b>${T.promedio == null ? '—' : num(T.promedio, 1)}</b></div></td>
-        <td class="num">${conteo(T.disciplina)}</td><td class="num">${conteo(T.hacer_base)}</td>
-        <td class="num">${conteo(T.no_geo)}</td><td class="num">${conteo(T.fdf)}</td>
-        <td><div class="celda mala"><span class="barra-mala"><span class="${T.pct_mala > 10 ? 'mal' : 'bien'}" style="width:${Math.min(100, T.pct_mala * 2)}%"></span></span><b>${pct(T.pct_mala)}</b></div></td>
+        <td><div class="celda"><i class="punto ${promColor(T.promedio)}"></i><b>${T.promedio == null ? '—' : num(T.promedio, 1)}</b>${flecha(T.d_promedio)}</div></td>
+        <td class="num">${conteo(T.disciplina, T.d_disciplina)}</td><td class="num">${conteo(T.hacer_base, T.d_hacer_base)}</td>
+        <td class="num">${conteo(T.no_geo, T.d_no_geo)}</td><td class="num">${conteo(T.fdf, T.d_fdf)}</td>
+        <td>${barraMala(T.pct_mala, T.d_pct_mala)}</td>
       </tr></tfoot>
     </table></div>`;
   }
@@ -223,14 +237,35 @@ const Unidad = (function () {
     return `<div class="tabla-scroll"><table class="kof-tabla tabla-op">
       <thead><tr><th scope="col">Nombre</th>${D.metricas.map(m => `<th scope="col">${esc(m)}</th>`).join('')}</tr></thead>
       <tbody>${O.filas.map(f => `<tr class="${f.vacante ? 'vacante' : ''}"><th scope="row"><span class="clave">${esc(f.clave)}</span>${esc(f.vacante ? 'Vacante' : f.nombre)}</th>${f.pcts.map((p, i) => celda(p, f.deltas[i])).join('')}</tr>`).join('')}</tbody>
-      <tfoot><tr><th scope="row">PROMEDIO ZONA</th>${O.promedio.map(p => celda(p)).join('')}</tr></tfoot>
+      <tfoot><tr><th scope="row">PROMEDIO ZONA</th>${O.promedio.map((p, i) => celda(p, (O.deltas || [])[i])).join('')}</tr></tfoot>
     </table></div>`;
   }
 
+  // Ranking en lista: posición y clave (sin nombres de otras unidades), promedio,
+  // % de avance con sus evaluaciones y las señales de posible mala práctica
   function ranking() {
     const mias = new Set(D.brigadistas.map(b => b.clave));
-    return `<ol class="ranking">${D.ranking.map(r => `
-      <li class="${mias.has(r.clave) ? 'mia' : ''}"><span class="pos">${r.pos}</span><span class="rk-clave">${esc(r.clave)}</span></li>`).join('')}</ol>`;
+    const medalla = ['oro', 'plata', 'bronce'];
+    const filas = D.ranking.map((r, i) => `
+      <tr class="${mias.has(r.clave) ? 'mia' : ''} ${r.vacante ? 'vacante' : ''}">
+        <th scope="row"><div class="rk-id"><span class="rk-pos ${medalla[i] || ''}">${r.pos}</span>
+          <span class="rk-clave">${esc(r.clave)}${r.vacante ? ' <span class="tag-vacante">Vacante</span>' : ''}</span>${flecha(r.d_pos, true, 0)}</div></th>
+        <td>${r.promedio == null ? '<span class="muted">Sin EPICA</span>' : `<div class="celda"><i class="punto ${promColor(r.promedio)}"></i><b>${num(r.promedio, 1)}</b>${flecha(r.d_promedio)}</div>`}</td>
+        <td><div class="celda rk-avance" title="${num(r.clientes)} clientes contables de ${D.objetivo_mes}"><span class="op-barra"><span class="${avanceEstilo(r.pct_avance)}" style="width:${Math.min(100, r.pct_avance)}%"></span></span><b>${pct(r.pct_avance)}</b>${flecha(r.d_pct_avance)}</div></td>
+        <td class="num"><b>${num(r.evaluaciones)}</b>${flecha(r.d_evaluaciones, true, 0)}</td>
+        <td class="num">${conteo(r.no_geo, r.d_no_geo)}</td>
+        <td class="num">${conteo(r.fdf, r.d_fdf)}</td>
+        <td>${barraMala(r.pct_mala, r.d_pct_mala)}</td>
+      </tr>`).join('');
+    return `<div class="tabla-scroll"><table class="kof-tabla tabla-ranking">
+      <thead><tr>
+        <th scope="col">Posición</th><th scope="col">Promedio<br>total</th>
+        <th scope="col">% de avance</th><th scope="col">Evaluaciones</th>
+        <th scope="col">No<br>GEO</th><th scope="col">Foto<br>de foto</th>
+        <th scope="col">% posible<br>mala práctica</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table></div>`;
   }
 
   // ── Ficha de brigadista ───────────────────────────────────────────────
@@ -387,6 +422,89 @@ const Unidad = (function () {
     }).addTo(mapa);
   }
 
+  // Botón "Mi ubicación": sigue la posición del celular o la computadora
+  // (GPS, Wi-Fi o red, lo que tenga el equipo) con un punto azul y su círculo
+  // de precisión. La primera lectura centra el mapa; otro toque lo apaga.
+  const ICONO_GPS = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/>
+    <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>`;
+
+  function botonUbicacion(mapa) {
+    let vigilancia = null, punto = null, circulo = null, centrado = false, boton = null, aviso = null, tAviso = null;
+
+    const avisar = texto => {
+      aviso.textContent = texto;
+      aviso.hidden = false;
+      clearTimeout(tAviso);
+      tAviso = setTimeout(() => { aviso.hidden = true; }, 6000);
+    };
+    const estado = e => {
+      boton.classList.toggle('activo', e === 'activo');
+      boton.classList.toggle('buscando', e === 'buscando');
+      boton.setAttribute('aria-pressed', e === 'apagado' ? 'false' : 'true');
+      boton.title = e === 'apagado' ? 'Mostrar mi ubicación' : 'Dejar de mostrar mi ubicación';
+    };
+    const apagar = () => {
+      if (vigilancia != null) navigator.geolocation.clearWatch(vigilancia);
+      vigilancia = null; centrado = false;
+      if (punto) { mapa.removeLayer(punto); mapa.removeLayer(circulo); punto = circulo = null; }
+      estado('apagado');
+    };
+    const encontrada = pos => {
+      const ll = [pos.coords.latitude, pos.coords.longitude], prec = Math.round(pos.coords.accuracy);
+      if (!punto) {
+        circulo = L.circle(ll, { radius: prec, color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(mapa);
+        punto = L.marker(ll, { keyboard: false, zIndexOffset: 1000,
+          icon: L.divIcon({ className: 'yo-icono', html: '<span class="yo-punto"></span>', iconSize: [22, 22] }) }).addTo(mapa);
+      }
+      punto.setLatLng(ll);
+      circulo.setLatLng(ll).setRadius(prec);
+      punto.bindPopup(`<div class="pc"><div class="pc-cab yo"><b>Estás aquí</b><span>Precisión ±${num(prec)} m</span></div>
+        <a class="pc-btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${ll[0]},${ll[1]}">Ver en Google Maps</a></div>`);
+      estado('activo');
+      if (!centrado) {
+        centrado = true;
+        mapa.setView(ll, Math.max(mapa.getZoom(), 16));
+        if (prec > 500) avisar(`Ubicación aproximada (±${num(prec)} m): este equipo no tiene GPS o no tiene señal.`);
+      }
+    };
+    const fallo = err => {
+      apagar();
+      avisar(err.code === 1 ? 'Sin permiso de ubicación: actívalo para esta página en tu navegador y vuelve a intentar.'
+           : err.code === 3 ? 'La ubicación tardó demasiado. Intenta de nuevo (en exteriores el GPS responde mejor).'
+           : 'No se pudo obtener tu ubicación: este equipo no tiene GPS o la ubicación está apagada.');
+    };
+    const encender = () => {
+      if (!('geolocation' in navigator) || !window.isSecureContext) {
+        avisar('Este navegador no puede dar tu ubicación (se necesita una página https).');
+        return;
+      }
+      estado('buscando');
+      vigilancia = navigator.geolocation.watchPosition(encontrada, fallo,
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+    };
+
+    const Control = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd() {
+        const caja = L.DomUtil.create('div', 'leaflet-bar ctl-ubicacion');
+        boton = L.DomUtil.create('button', '', caja);
+        boton.type = 'button';
+        boton.innerHTML = ICONO_GPS;
+        boton.setAttribute('aria-label', 'Mi ubicación');
+        estado('apagado');
+        L.DomEvent.disableClickPropagation(caja);
+        L.DomEvent.on(boton, 'click', () => (vigilancia == null ? encender() : apagar()));
+        return caja;
+      },
+    });
+    new Control().addTo(mapa);
+    aviso = L.DomUtil.create('div', 'mapa-aviso', mapa.getContainer());
+    aviso.setAttribute('role', 'status');
+    aviso.hidden = true;
+    mapa.on('unload', apagar);
+  }
+
   function enlacesGoogle(lat, lon) {
     return `<a class="pc-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving">🧭 Cómo llegar</a>
             <a class="pc-btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}">Ver en Google Maps</a>`;
@@ -425,6 +543,7 @@ const Unidad = (function () {
 
     mapaC = L.map('mapaClientes', { preferCanvas: true });
     capaBase(mapaC);
+    botonUbicacion(mapaC);
     const rend = L.canvas({ padding: 0.4, tolerance: 4 });
     const Tri = Triangulo();
     const capas = {}, indice = [];
@@ -531,6 +650,7 @@ const Unidad = (function () {
 
     mapaR = L.map('mapaRutas', { preferCanvas: true });
     capaBase(mapaR);
+    botonUbicacion(mapaR);
     const rend = L.canvas({ padding: 0.4, tolerance: 4 });
     const grupos = [], limites = [];
     rutas.forEach((r, i) => {

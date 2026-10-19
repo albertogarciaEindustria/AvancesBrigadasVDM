@@ -18,9 +18,11 @@ const Lider = (function () {
   const semCal = (v, obj) => v == null ? 'nulo' : v >= obj ? 'ok' : v >= 90 ? 'aviso' : 'critico';
   const semMala = p => p > 5 ? 'serio' : 'ok';
 
+  // Cambio contra el corte anterior (como ejemplo.py): verde si mejora, rojo si
+  // empeora y — amarillo si quedó igual; sin corte anterior no se dibuja
   function flecha(delta, subirEsBueno = true, dec = 1, sufijo = '') {
     if (delta == null) return '';
-    if (delta === 0) return '<span class="delta igual">= </span>';
+    if (delta === 0) return '<span class="delta igual" title="igual que en el corte anterior">—</span>';
     const sube = delta > 0, bien = subirEsBueno === sube;
     return `<span class="delta ${bien ? 'bien' : 'mal'}" title="contra el corte anterior">${sube ? '▲' : '▼'} ${num(Math.abs(delta), dec)}${sufijo}</span>`;
   }
@@ -130,7 +132,7 @@ const Lider = (function () {
         <th scope="col">Evaluaciones<br>realizadas</th><th scope="col">Prom. eval.<br>por figura</th>
         <th scope="col">Prom. eval.<br>sin vacantes</th><th scope="col">Clientes únicos<br><small>/ objetivo</small></th>
         <th scope="col">Avance vs<br>objetivo</th><th scope="col">Avance sin<br>vacantes</th>
-        <th scope="col">Tendencia<br><small>fin de ${esc(D.mes)}</small></th><th scope="col">Calificación<br>EPICA</th>
+        <th scope="col">Tendencia</th><th scope="col">Calificación<br>EPICA</th>
         <th scope="col">% posible<br>mala práctica</th>
       </tr></thead>
       <tbody>${D.tabla.filter(f => !f.es_total).map(fila).join('')}</tbody>
@@ -151,19 +153,21 @@ const Lider = (function () {
     <div class="ld-escala" aria-hidden="true"><span>60%</span><i></i><span>90%</span><i class="der"></i><span>100%</span></div>`;
   }
 
+  // Barra de porcentaje en escala fija de 0 a 100% (no se ajusta al mayor)
+  function barra100(p, color) {
+    const ancho = p > 0 ? `max(2px, ${Math.min(100, p)}%)` : '0';
+    return `<span class="ld-mini-barra" title="Escala de 0 a 100%"><span style="width:${ancho};background:${color}"></span></span>`;
+  }
+
   function tablaMala() {
     const us = D.unidades.map(u => u.nombre);
-    const maxPct = Math.max(1e-9, ...us.flatMap(u => {
-      const m = D.mala[u], e = m.evaluaciones || 1;
-      return [m.no_geo / e, m.fdf / e, m.hacer_base / e].map(x => x * 100);
-    }));
-    const celda = (n, e) => {
+    const celda = (n, e, d) => {
       const p = e ? n / e * 100 : 0;
-      return `<td><div class="ld-mini"><span class="ld-mini-barra"><span style="width:${p / maxPct * 100}%;background:${RIESGO}"></span></span><b>${num(n)}</b><span class="muted">${pct(p)}</span></div></td>`;
+      return `<td><div class="ld-mini">${barra100(p, RIESGO)}<b>${num(n)}</b><span class="muted">${pct(p)}</span>${flecha(d, false, 0)}</div></td>`;
     };
     return `<div class="tabla-scroll"><table class="ld-tabla ld-mala">
       <thead><tr><th scope="col">Unidad</th><th scope="col">NoGeo</th><th scope="col">Foto de foto</th><th scope="col">Hacer base</th></tr></thead>
-      <tbody>${us.map(u => { const m = D.mala[u]; return `<tr><th scope="row">${swatch(u)}${esc(u)}</th>${celda(m.no_geo, m.evaluaciones)}${celda(m.fdf, m.evaluaciones)}${celda(m.hacer_base, m.evaluaciones)}</tr>`; }).join('')}</tbody>
+      <tbody>${us.map(u => { const m = D.mala[u]; return `<tr><th scope="row">${swatch(u)}${esc(u)}</th>${celda(m.no_geo, m.evaluaciones, m.d_no_geo)}${celda(m.fdf, m.evaluaciones, m.d_fdf)}${celda(m.hacer_base, m.evaluaciones, m.d_hacer_base)}</tr>`; }).join('')}</tbody>
     </table></div>`;
   }
 
@@ -178,16 +182,25 @@ const Lider = (function () {
   }
 
   function tablaRanking() {
+    const conteoNeutro = (n, d) => `${n ? num(n) : '<span class="muted">—</span>'}${d ? flecha(d, false, 0) : ''}`;
+    const conteo = (n, d) => `${n ? `<b class="ld-rojo">${num(n)}</b>` : '<span class="muted">—</span>'}${d ? flecha(d, false, 0) : ''}`;
     return `<div class="tabla-scroll"><table class="ld-tabla ld-ranking">
       <thead><tr><th scope="col">Pos.</th><th scope="col">Clave</th><th scope="col">Nombre</th><th scope="col">Unidad</th>
-        <th scope="col">Clientes<br>contables</th><th scope="col">Épicas<br>descartadas</th><th scope="col">% avance</th><th scope="col">Promedio<br>EPICA</th></tr></thead>
+        <th scope="col">Clientes<br>contables</th><th scope="col">Épicas<br>descartadas</th><th scope="col">% avance</th>
+        <th scope="col">Promedio<br>total</th><th scope="col">Evalua-<br>ciones</th>
+        <th scope="col">NoGeo</th><th scope="col">Foto de<br>foto</th><th scope="col">% posible<br>mala práctica</th></tr></thead>
       <tbody>${D.ranking.map(r => `<tr class="${r.vacante ? 'vacante' : ''}">
         <td class="num"><b>${r.pos}</b> ${flecha(r.d_pos, true, 0)}</td>
         <td>${esc(r.clave)}</td><td>${r.vacante ? '<span class="tag-vac">Vacante</span>' : esc(r.nombre)}</td>
         <td>${swatch(r.unidad)}${esc(r.unidad)}</td>
-        <td class="num">${num(r.clientes)}</td><td class="num">${r.descartadas ? num(r.descartadas) : '<span class="muted">—</span>'}</td>
-        <td><div class="ld-mini"><span class="ld-mini-barra"><span style="width:${Math.min(100, r.pct_avance)}%;background:${colorDe[r.unidad]}"></span></span><b>${pct(r.pct_avance)}</b></div></td>
-        <td><span class="celda"><i class="punto ${semCal(r.promedio, D.objetivo_calificacion)}"></i>${r.promedio == null ? '—' : num(r.promedio, 1)}</span></td>
+        <td class="num">${num(r.clientes)}${flecha(r.d_clientes, true, 0)}</td>
+        <td class="num">${conteoNeutro(r.descartadas, r.d_descartadas)}</td>
+        <td><div class="ld-mini"><span class="ld-mini-barra"><span style="width:${Math.min(100, r.pct_avance)}%;background:${colorDe[r.unidad]}"></span></span><b>${pct(r.pct_avance)}</b>${flecha(r.d_pct_avance)}</div></td>
+        <td><span class="celda"><i class="punto ${semCal(r.promedio, D.objetivo_calificacion)}"></i>${r.promedio == null ? '—' : num(r.promedio, 1)}${flecha(r.d_promedio)}</span></td>
+        <td class="num">${num(r.evaluaciones)}${flecha(r.d_evaluaciones, true, 0)}</td>
+        <td class="num">${conteo(r.no_geo, r.d_no_geo)}</td>
+        <td class="num">${conteo(r.fdf, r.d_fdf)}</td>
+        <td><div class="ld-mini">${barra100(r.pct_mala, r.pct_mala > 10 ? RIESGO : '#3dbb3d')}<b>${pct(r.pct_mala)}</b>${flecha(r.d_pct_mala, false)}</div></td>
       </tr>`).join('')}</tbody></table></div>`;
   }
 

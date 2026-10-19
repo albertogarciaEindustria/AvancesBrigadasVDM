@@ -115,11 +115,17 @@ const Intro = (function () {
     return renglones.map(r => r.replace(/\s+$/, '')).join('\n');
   }
 
+  // El <pre> va alineado a la izquierda (centrado, cada renglón se recorría
+  // distinto); los bloques más angostos se centran con espacios
   function pintarTitulo() {
     const pre = document.getElementById('introTitulo');
-    pre.textContent = window.innerWidth < 700
-      ? arteAscii('AVANCE') + '\n\n' + arteAscii('VDM')
-      : arteAscii('AVANCE VDM');
+    const bloques = (window.innerWidth < 700 ? ['AVANCE', 'VDM'] : ['AVANCE VDM']).map(arteAscii);
+    const anchoDe = b => Math.max(...b.split('\n').map(r => r.length));
+    const ancho = Math.max(...bloques.map(anchoDe));
+    pre.textContent = bloques.map(b => {
+      const margen = ' '.repeat(Math.floor((ancho - anchoDe(b)) / 2));
+      return b.split('\n').map(r => margen + r).join('\n');
+    }).join('\n\n');
   }
 
   function escribir(el, texto, ms) {
