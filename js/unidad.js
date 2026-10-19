@@ -4,7 +4,7 @@ const Unidad = (function () {
   'use strict';
   const { esc, num, pct } = Util;
 
-  let D = null, opc = {}, mapaC = null, mapaR = null, mosaicoVivo = false;
+  let D = null, opc = {}, mapaC = null, mapaR = null, mosaicoVivo = false, buscadorListo = false;
 
   // Jefaturas: paleta categórica en orden fijo (sin el verde, que es "trabajado")
   const PALETA_JEF = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#6250d6', '#e34948'];
@@ -74,6 +74,8 @@ const Unidad = (function () {
   // ── Render principal ──────────────────────────────────────────────────
   function render(datos, opciones = {}) {
     D = datos; opc = opciones;
+    buscadorListo = false;
+    Buscador.cerrar();
     if (mapaC) { mapaC.remove(); mapaC = null; }
     if (mapaR) { mapaR.remove(); mapaR = null; }
     document.body.className = 'modo-unidad';
@@ -95,10 +97,12 @@ const Unidad = (function () {
       </header>
       <nav class="kof-pestanas" role="tablist" aria-label="Secciones">
         <button role="tab" id="tab-info" aria-controls="panel-info" aria-selected="true" data-pestana="info">Información</button>
+        <button role="tab" id="tab-buscador" aria-controls="panel-buscador" aria-selected="false" tabindex="-1" data-pestana="buscador">Buscador</button>
         <button role="tab" id="tab-mapa" aria-controls="panel-mapa" aria-selected="false" tabindex="-1" data-pestana="mapa">Mapa de clientes</button>
         <button role="tab" id="tab-rutas" aria-controls="panel-rutas" aria-selected="false" tabindex="-1" data-pestana="rutas">Rutas activas hoy</button>
       </nav>
       <div class="kof-panel" id="panel-info" role="tabpanel" aria-labelledby="tab-info"></div>
+      <div class="kof-panel" id="panel-buscador" role="tabpanel" aria-labelledby="tab-buscador" hidden></div>
       <div class="kof-panel kof-panel-mapa" id="panel-mapa" role="tabpanel" aria-labelledby="tab-mapa" hidden></div>
       <div class="kof-panel kof-panel-mapa" id="panel-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
       <div class="ficha" id="ficha" hidden></div>`;
@@ -134,8 +138,12 @@ const Unidad = (function () {
       t.setAttribute('aria-selected', activa);
       t.tabIndex = activa ? 0 : -1;
     }
-    for (const p of ['info', 'mapa', 'rutas']) document.getElementById('panel-' + p).hidden = p !== cual;
+    for (const p of ['info', 'buscador', 'mapa', 'rutas']) document.getElementById('panel-' + p).hidden = p !== cual;
     Graficas.Tip.hide();
+    if (cual === 'buscador' && !buscadorListo && D.buscador) {
+      buscadorListo = true;
+      Buscador.render(document.getElementById('panel-buscador'), D);
+    }
     if (cual === 'mapa') mapaClientes();
     if (cual === 'rutas') mapaRutas();
   }
@@ -358,7 +366,7 @@ const Unidad = (function () {
     const esc_ = e => { if (e.key === 'Escape') cerrar(); };
     document.addEventListener('keydown', esc_);
     ficha.querySelector('.ficha-cerrar').addEventListener('click', cerrar);
-    ficha.addEventListener('click', e => { if (e.target === ficha) cerrar(); });
+    ficha.onclick = e => { if (e.target === ficha) cerrar(); };
     ficha.querySelector('.ficha-cerrar').focus();
 
     if (st.n) {
@@ -511,6 +519,38 @@ const Unidad = (function () {
     mapa.on('unload', apagar);
   }
 
+  // ── Ficha de cliente al tocarlo ───────────────────────────────────────
+  // En celular el dedo casi nunca cae exacto sobre el punto: si el toque no le
+  // da a ningún cliente se abre la ficha del más cercano (hasta RADIO_TOQUE px).
+  // En computadora, al pasar el mouse se ve el nombre y el SAP.
+  const TACTIL = window.matchMedia('(pointer: coarse)').matches;
+  const RADIO_TOQUE = TACTIL ? 26 : 14;
+  const AYUDA_TOQUE = `<p class="mapa-ayuda">👆 ${TACTIL ? 'Toca' : 'Haz clic en'} un cliente para ver su nombre, su SAP y cómo llegar.</p>`;
+
+  function toqueCercano(mapa, marcadores) {
+    mapa.on('click', e => {
+      let mejor = null, dMin = RADIO_TOQUE;
+      for (const m of marcadores) {
+        if (!mapa.hasLayer(m)) continue;
+        const d = mapa.latLngToContainerPoint(m.getLatLng()).distanceTo(e.containerPoint);
+        if (d < dMin) { dMin = d; mejor = m; }
+      }
+      if (mejor) mejor.openPopup();
+    });
+  }
+
+  function etiquetaCliente(m, nombre, sap) {
+    if (!TACTIL) m.bindTooltip(`<b>${esc(nombre || 'Cliente sin nombre')}</b> · SAP ${esc(sap)}`, { direction: 'top', offset: [0, -6], opacity: 0.95 });
+  }
+
+  // Ficha: nombre, SAP, estado, botones para llegar y después los detalles
+  function fichaCliente({ nombre, sap, estado, clase = '', fondo = '', lat, lon, detalles }) {
+    return `<div class="pc"><div class="pc-cab ${clase}"${fondo ? ` style="background:${fondo}"` : ''}>
+        <b>${esc(nombre || 'Cliente sin nombre')}</b><span class="pc-sap">SAP <strong>${esc(sap)}</strong></span><span>${estado}</span></div>
+      ${enlacesGoogle(lat, lon)}
+      <dl class="pc-cuerpo">${detalles}</dl></div>`;
+  }
+
   function enlacesGoogle(lat, lon) {
     return `<a class="pc-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving">🧭 Cómo llegar</a>
             <a class="pc-btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}">Ver en Google Maps</a>`;
@@ -547,13 +587,14 @@ const Unidad = (function () {
             <ul id="buscaResultados" class="busca-res" hidden></ul>
           </div>
         </div>
+        ${AYUDA_TOQUE}
       </div>
       <div id="mapaClientes" class="mapa"></div>`;
 
     mapaC = L.map('mapaClientes', { preferCanvas: true });
     capaBase(mapaC);
     botonUbicacion(mapaC);
-    const rend = L.canvas({ padding: 0.4, tolerance: 4 });
+    const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
     const Tri = Triangulo();
     const capas = {}, indice = [];
     const limites = [];
@@ -563,9 +604,10 @@ const Unidad = (function () {
       const [lat, lon, sap, nombre, ji, zpv, ruta, ice, quien, fecha, cal] = p;
       const m = L.circleMarker([lat, lon], { renderer: rend, radius: 5.5, color: '#fff', weight: 1.5,
                                              fillColor: VERDE_TRAB, fillOpacity: 0.95 });
-      m.bindPopup(() => `<div class="pc"><div class="pc-cab ok"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · ✅ Trabajado</span></div>
-        <dl class="pc-cuerpo">${filaPop('Trabajado por', quien)}${filaPop('Fecha', fecha)}${filaPop('Calificación', cal == null ? '' : num(cal, 1))}
-        ${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}</dl>${enlacesGoogle(lat, lon)}</div>`);
+      m.bindPopup(() => fichaCliente({ nombre, sap, lat, lon, clase: 'ok', estado: '✅ Trabajado',
+        detalles: `${filaPop('Trabajado por', quien)}${filaPop('Fecha', fecha)}${filaPop('Calificación', cal == null ? '' : num(cal, 1))}
+          ${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}` }));
+      etiquetaCliente(m, nombre, sap);
       m.addTo(capas.trab);
       indice.push({ sap, nombre, m, lat, lon });
       limites.push([lat, lon]);
@@ -582,8 +624,9 @@ const Unidad = (function () {
         if (ice) anillos.push(L.circleMarker([lat, lon], { renderer: rend, radius: 9.5, color: ORO_ICE, weight: 2.5, fill: false, interactive: false }).addTo(conIce[ji]));
         const m = new Tri([lat, lon], { renderer: rend, radius: ice ? 6 : 5, color: ice ? BORDE_BRIG : '#fff', weight: ice ? 1.4 : 1,
                                         fillColor: colorJef[ji], fillOpacity: 0.9 });
-        m.bindPopup(() => `<div class="pc"><div class="pc-cab falta"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · ▲ Falta${ice ? ' · evaluable ICE' : ''}</span></div>
-          <dl class="pc-cuerpo">${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}</dl>${enlacesGoogle(lat, lon)}</div>`);
+        m.bindPopup(() => fichaCliente({ nombre, sap, lat, lon, clase: 'falta', estado: `▲ Falta${ice ? ' · evaluable ICE' : ''}`,
+          detalles: `${filaPop('Jefatura', M.jefaturas[ji])}${filaPop('Frecuencia', zpv)}${filaPop('Ruta', ruta)}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}` }));
+        etiquetaCliente(m, nombre, sap);
         m.addTo(ice ? conIce[ji] : otros[ji]);
         indice.push({ sap, nombre, m, lat, lon });
         limites.push([lat, lon]);
@@ -624,6 +667,7 @@ const Unidad = (function () {
       }
       if (mapaC.hasLayer(capas.trab)) capas.trab.eachLayer(l => l.bringToFront());
     });
+    toqueCercano(mapaC, indice.map(x => x.m));
     buscador(document.getElementById('buscaCliente'), document.getElementById('buscaResultados'), indice, mapaC);
   }
 
@@ -677,6 +721,7 @@ const Unidad = (function () {
             <button type="button" class="chip on" data-r="etiquetas">Etiquetas</button>
           </div>
         </div>
+        ${AYUDA_TOQUE}
       </div>
       <div class="rutas-cuerpo">
         <div id="mapaRutas" class="mapa"></div>
@@ -695,7 +740,7 @@ const Unidad = (function () {
     mapaR = L.map('mapaRutas', { preferCanvas: true });
     capaBase(mapaR);
     botonUbicacion(mapaR);
-    const rend = L.canvas({ padding: 0.4, tolerance: 4 });
+    const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
     // Resaltado: 1º cliente brigadista (punto grande con borde oscuro, encima
     // de todo) y 2º evaluable ICE (anillo dorado alrededor del punto)
     let resaltarBrig = true, resaltarIce = ICE, escalaR = 1;
@@ -718,9 +763,10 @@ const Unidad = (function () {
         const [lat, lon, sap, nombre, zpv, trab, brig, ice] = p;
         const etiquetasPop = [brig ? 'cliente brigadista' : '', ice ? 'evaluable ICE' : ''].filter(Boolean).join(' · ');
         const m = L.circleMarker([lat, lon], { renderer: rend, ...estiloPunto(brig, color) })
-          .bindPopup(() => `<div class="pc"><div class="pc-cab" style="background:${color}"><b>${esc(nombre)}</b><span>SAP ${esc(sap)} · Ruta ${esc(r.codigo)}${etiquetasPop ? ' · ' + etiquetasPop : ''}</span></div>
-            <dl class="pc-cuerpo">${filaPop('Jefatura', r.jefatura)}${filaPop('Frecuencia ZPV', zpv)}${filaPop('Cliente brigadista', brig ? 'Sí' : 'No')}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}${filaPop('Trabajado por brigada', trab ? 'Sí' : 'No')}</dl>${enlacesGoogle(lat, lon)}</div>`)
+          .bindPopup(() => fichaCliente({ nombre, sap, lat, lon, fondo: color, estado: `Ruta ${esc(r.codigo)}${etiquetasPop ? ' · ' + etiquetasPop : ''}`,
+            detalles: `${filaPop('Jefatura', r.jefatura)}${filaPop('Frecuencia ZPV', zpv)}${filaPop('Cliente brigadista', brig ? 'Sí' : 'No')}${ICE ? filaPop('Evaluable ICE', ice ? 'Sí' : 'No') : ''}${filaPop('Trabajado por brigada', trab ? 'Sí' : 'No')}` }))
           .addTo(g.puntos);
+        etiquetaCliente(m, nombre, sap);
         const halo = ice ? L.circleMarker([lat, lon], { renderer: rend, radius: radioHalo(brig), color: ORO_ICE, weight: 2.5, fill: false, interactive: false }).addTo(g.halos) : null;
         marcadores.push({ m, halo, brig, color, g });
         limites.push([lat, lon]);
@@ -737,6 +783,7 @@ const Unidad = (function () {
       const ver = etiquetas && mapaR.getZoom() >= 13;
       grupos.forEach(g => { if (ver && g.visible) g.etiqueta.addTo(mapaR); else mapaR.removeLayer(g.etiqueta); });
     };
+    toqueCercano(mapaR, marcadores.map(x => x.m));
     const alFrente = () => marcadores.forEach(x => { if (x.brig && resaltarBrig && x.g.visible) x.m.bringToFront(); });
     const mostrar = (g, on) => {
       g.visible = on;
