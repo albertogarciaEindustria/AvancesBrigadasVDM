@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#000000">
+<title>Avance Brigadas VDM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="css/estilos.css?v=20261018225047">
+</head>
+<body class="modo-intro">
+
+<!-- ── Pantalla de inicio ─────────────────────────────────────────────── -->
+<section id="intro" aria-label="Inicio">
+  <canvas id="matriz" aria-hidden="true"></canvas>
+  <div class="intro-velo" aria-hidden="true"></div>
+  <div class="intro-centro">
+    <p class="intro-kicker" id="introKicker">CARGANDO</p>
+    <pre class="intro-titulo" id="introTitulo" role="img" aria-label="Avance VDM"></pre>
+    <p class="intro-sub"><span id="introSub"></span><span class="cursor" aria-hidden="true">_</span></p>
+    <button class="btn-ascii" id="btnEntrar" type="button" disabled>
+<span aria-hidden="true">+------------------------+</span>
+<span><span aria-hidden="true">|</span>    VER  AVANCE   ▸    <span aria-hidden="true">|</span></span>
+<span aria-hidden="true">+------------------------+</span></button>
+    <p class="intro-pie" id="introPie"></p>
+  </div>
+</section>
+
+<!-- ── Acceso: unidad + contraseña ────────────────────────────────────── -->
+<div id="acceso" class="acceso" hidden>
+  <form class="acceso-caja" id="formAcceso" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="accesoTitulo">
+    <div class="acceso-titulo" id="accesoTitulo"><span>┌─</span> ACCESO <span class="acceso-linea"></span></div>
+    <p class="acceso-pregunta">&gt; ¿Qué unidad operativa quieres ver?</p>
+    <div class="acceso-opciones" id="accesoOpciones" role="radiogroup" aria-label="Unidad operativa"></div>
+    <label class="acceso-pregunta" for="accesoPass">&gt; Contraseña</label>
+    <div class="acceso-pass">
+      <span aria-hidden="true">[</span>
+      <input type="password" id="accesoPass" autocomplete="current-password" spellcheck="false">
+      <span aria-hidden="true">]</span>
+    </div>
+    <p class="acceso-estado" id="accesoEstado" role="status" aria-live="polite"></p>
+    <div class="acceso-botones">
+      <button type="submit" class="acceso-btn principal" id="accesoEntrar">[ ENTRAR ]</button>
+      <button type="button" class="acceso-btn" id="accesoCancelar">[ CANCELAR ]</button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Vistas (se llenan al descifrar) ────────────────────────────────── -->
+<main id="vistaUnidad" class="vista-unidad" hidden></main>
+<main id="vistaLider" class="vista-lider" hidden></main>
+
+<div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/cripto.js?v=20261018225047"></script>
+<script src="js/graficas.js?v=20261018225047"></script>
+<script src="js/intro.js?v=20261018225047"></script>
+<script src="js/unidad.js?v=20261018225047"></script>
+<script src="js/lider.js?v=20261018225047"></script>
+<script src="js/app.js?v=20261018225047"></script>
+</body>
+</html>

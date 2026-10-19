@@ -1,1 +1,0 @@
-Avance de brigadistas EPICA
