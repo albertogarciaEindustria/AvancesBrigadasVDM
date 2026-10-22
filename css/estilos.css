@@ -1,4 +1,4 @@
-/* Sitio de avance de brigadistas: inicio (terminal), unidad (KOF) y líder (negro). */
+/* Sitio de avance de brigadistas: inicio (manual de marca), unidad (KOF) y líder (negro). */
 
 :root {
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -21,98 +21,100 @@ button { font: inherit; }
 .g-num, .num { font-variant-numeric: tabular-nums; }
 body.sin-scroll { overflow: hidden; }
 
-/* ── Inicio ─────────────────────────────────────────────────────────── */
-body.modo-intro { overflow: hidden; background: #000; }
-#intro { position: fixed; inset: 0; background: #000; }
-#matriz { position: absolute; inset: 0; width: 100%; height: 100%; }
-.intro-velo {
-  position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 50% 44% at 50% 50%, rgba(0,0,0,.95) 0%, rgba(0,0,0,.84) 48%, rgba(0,0,0,.25) 82%, rgba(0,0,0,0) 100%);
+/* ── Inicio (manual de marca: rojo Coke, negro y blanco; títulos en negrita) ── */
+:root {
+  --marca: "Montserrat", "Gotham", "Helvetica Neue", Arial, sans-serif;
+  --coke: #F40000;
+  --coke-osc: #C40000;
+  --gris-marca: #C8C8C8;
 }
-.intro-centro {
-  position: relative; z-index: 2; height: 100%;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 22px; padding: 16px; text-align: center; font-family: var(--mono); color: #d8d8d8;
+body.modo-intro { overflow-x: hidden; background: #fff; color: #000; font-family: var(--marca); }
+.inicio { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+.inicio-panel { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.inicio-blanco { background: #fff; color: #000; }
+.inicio-rojo { background: var(--coke); color: #fff; }
+.inicio-contenido { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px; padding: clamp(40px, 8vw, 112px) clamp(24px, 6vw, 88px) 32px; }
+.inicio-kicker { font-size: 12px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: #4d4d4d; }
+.inicio-titulo { font-size: clamp(40px, 6.2vw, 84px); font-weight: 800; line-height: 1.02; letter-spacing: -.02em; color: #000; }
+.inicio-raya { display: block; width: 72px; height: 6px; background: var(--coke); }
+.inicio-texto { font-size: 16px; line-height: 1.55; color: #1a1a1a; max-width: 440px; }
+.inicio-corte { font-size: 13px; line-height: 1.5; color: #4d4d4d; max-width: 440px; min-height: 1.5em; }
+.inicio-corte b { color: #000; font-weight: 700; }
+/* Pie como el del manual: línea fina que cruza ambos paneles, texto espaciado */
+.inicio-pie { margin: 0 clamp(24px, 6vw, 88px) 26px; padding-top: 10px; border-top: 1px solid #8c8c8c; font-size: 10.5px; font-weight: 500; letter-spacing: .32em; text-transform: uppercase; color: #4d4d4d; }
+.inicio-rojo .inicio-pie { border-color: rgba(255,255,255,.75); color: #fff; text-align: right; }
+.inicio-folio { position: absolute; top: 0; right: clamp(24px, 4vw, 48px); padding-top: 26px; font-size: 13px; font-weight: 500; letter-spacing: .08em; }
+.inicio-folio::before { content: ''; position: absolute; top: 0; left: 50%; width: 6px; height: 18px; margin-left: -3px; background: #fff; }
+.inicio-opciones { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: clamp(56px, 8vw, 112px) clamp(24px, 6vw, 88px) 32px; }
+.inicio-opcion {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 20px; row-gap: 6px;
+  width: 100%; max-width: 560px; padding: 26px 28px; text-align: left; text-decoration: none; cursor: pointer;
+  font-family: var(--marca); color: #000; background: #fff; border: 0; border-radius: 0;
+  box-shadow: 0 14px 34px rgba(80, 0, 0, .28); transition: transform .18s, box-shadow .18s;
 }
-.intro-kicker { font-size: 13px; letter-spacing: .5em; color: #b9b9b9; padding-left: .5em; }
-/* Sombra negra alrededor de cada letra para que los símbolos de la matriz no
-   se lean a través de los títulos */
-.intro-kicker, .intro-sub, .intro-pie {
-  text-shadow: 0 0 3px #000, 0 0 6px #000, 0 0 12px #000, 0 0 18px #000;
+.io-titulo { grid-column: 1; font-size: clamp(30px, 3.6vw, 44px); font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: var(--coke); line-height: 1; }
+.io-texto { grid-column: 1; font-size: 14px; line-height: 1.45; color: #1a1a1a; }
+.io-flecha { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 34px; font-weight: 600; color: #000; transition: transform .18s; }
+.inicio-opcion:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 20px 44px rgba(80, 0, 0, .38); }
+.inicio-opcion:hover:not(:disabled) .io-flecha { transform: translateX(6px); }
+.inicio-opcion:focus-visible { outline: 3px solid #fff; outline-offset: 5px; }
+.inicio-opcion:disabled { cursor: default; opacity: .72; }
+@media (max-width: 820px) {
+  .inicio { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .inicio-contenido { flex: none; padding: 40px 20px 26px; gap: 14px; }
+  .inicio-opciones { justify-content: flex-start; padding: 52px 20px 28px; }
+  .inicio-pie { margin: 0 20px 20px; }
+  .inicio-blanco .inicio-pie { display: none; }
+  .inicio-opcion { padding: 22px 20px; }
 }
-.intro-titulo {
-  margin: 0; font-family: var(--mono); font-weight: 800; color: #f2f2f2; line-height: 1.04;
-  font-size: min(18px, calc((100vw - 48px) / 39)); letter-spacing: .06em;
-  /* El arte ASCII se alinea a la izquierda: centrado, cada renglón (de largo
-     distinto) se recorría y las letras se veían rotas */
-  text-align: left; white-space: pre;
-  text-shadow: 0 0 2px #000, 0 0 5px #000, 0 0 10px #000, 0 0 18px #000, 0 0 30px rgba(190, 255, 225, .16);
-}
-.intro-sub { font-size: clamp(11px, 1.5vw, 16px); letter-spacing: .3em; color: #e2e2e2; min-height: 1.4em; }
-.cursor { animation: parpadeo 1s steps(1) infinite; }
-@keyframes parpadeo { 50% { opacity: 0; } }
-.btn-entrar {
-  display: inline-flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 30px;
-  font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
-  color: #050505; background: #ededed; border: 1px solid #ededed; border-radius: 8px; cursor: pointer;
-  box-shadow: 0 0 0 0 rgba(190, 255, 225, 0), 0 8px 30px rgba(0, 0, 0, .55);
-  transition: background .15s, box-shadow .2s, transform .15s;
-}
-.btn-entrar .flecha { font-weight: 500; letter-spacing: 0; transition: transform .2s; }
-.btn-entrar:not(:disabled):hover {
-  background: #fff; transform: translateY(-1px);
-  box-shadow: 0 0 0 4px rgba(190, 255, 225, .14), 0 0 34px rgba(160, 255, 220, .22), 0 8px 30px rgba(0, 0, 0, .55);
-}
-.btn-entrar:not(:disabled):hover .flecha { transform: translateX(4px); }
-.btn-entrar:not(:disabled):active { transform: translateY(0); background: #d9d9d9; }
-.btn-entrar:focus-visible { outline: 2px solid #bfffe6; outline-offset: 4px; }
-.btn-entrar:disabled { opacity: .4; cursor: default; }
-.intro-pie { font-size: 12px; color: #9d9d9d; letter-spacing: .12em; max-width: 520px; }
-.intro-pie b { color: #e2e2e2; font-weight: 700; white-space: nowrap; }
-@media (max-width: 699px) {
-  /* "AVANCE" mide 35 caracteres de ancho: 24em con el espaciado */
-  .intro-titulo { font-size: min(16px, calc((100vw - 40px) / 24)); }
-  .intro-kicker { letter-spacing: .3em; font-size: 11px; }
-  .intro-sub { letter-spacing: .16em; }
+@media (prefers-reduced-motion: reduce) {
+  .inicio-opcion, .io-flecha { transition: none; }
 }
 
-/* Acceso */
+/* Acceso Brigadista (unidad + contraseña) */
 .acceso {
   position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px;
-  background: rgba(0,0,0,.55); backdrop-filter: blur(2px);
+  background: rgba(0,0,0,.6); overflow-y: auto;
 }
 .acceso-caja {
-  width: min(540px, 100%); background: #050505; border: 1px solid #3a3a3a; color: #d8d8d8;
-  font-family: var(--mono); font-size: 14px; padding: 18px 20px 20px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  width: min(560px, 100%); background: #fff; color: #000; font-family: var(--marca); font-size: 14px;
+  padding: 26px 26px 22px; border-top: 8px solid var(--coke); box-shadow: 0 24px 64px rgba(0,0,0,.45);
 }
-.acceso-titulo { display: flex; gap: 8px; align-items: center; color: #9a9a9a; font-size: 12px; letter-spacing: .3em; margin-bottom: 14px; }
-.acceso-linea { flex: 1; border-top: 1px dashed #3a3a3a; }
-.acceso-pregunta { display: block; color: #e8e8e8; margin: 4px 0 8px; }
-.acceso-opciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 6px; margin-bottom: 16px; }
+.acceso-kicker { font-size: 11px; font-weight: 700; letter-spacing: .32em; text-transform: uppercase; color: var(--coke); }
+.acceso-titulo { font-size: 30px; font-weight: 800; margin: 4px 0 16px; letter-spacing: -.01em; }
+.acceso-pregunta { display: block; font-weight: 700; font-size: 13px; margin: 6px 0 8px; }
+.acceso-opciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 18px; }
 .acceso-opcion {
-  display: flex; gap: 8px; align-items: center; text-align: left; cursor: pointer;
-  font-family: var(--mono); font-size: 13px; color: #c9c9c9; background: transparent;
-  border: 1px solid #2c2c2c; padding: 9px 10px; white-space: nowrap;
+  display: flex; gap: 10px; align-items: center; text-align: left; cursor: pointer; min-height: 44px;
+  font-family: var(--marca); font-size: 14px; font-weight: 600; color: #000; background: #fff;
+  border: 1.5px solid var(--gris-marca); padding: 9px 12px; white-space: nowrap;
 }
-.acceso-opcion .marca::before { content: '( )'; color: #6f6f6f; }
-.acceso-opcion[aria-checked="true"] { border-color: #dcdcdc; color: #fff; background: #141414; }
-.acceso-opcion[aria-checked="true"] .marca::before { content: '(•)'; color: #fff; }
-.acceso-opcion:hover { border-color: #8a8a8a; }
-.acceso-opcion.lider { grid-column: 1 / -1; letter-spacing: .06em; }
-.acceso-pass { display: flex; gap: 6px; align-items: center; color: #8a8a8a; }
-.acceso-pass input {
-  flex: 1; min-width: 0; background: #0d0d0d; border: 1px solid #333; color: #fff;
-  font-family: var(--mono); font-size: 16px; padding: 9px 10px; letter-spacing: .1em;
+.acceso-opcion .marca { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #8c8c8c; flex: none; }
+.acceso-opcion:hover { border-color: #000; }
+.acceso-opcion[aria-checked="true"] { border-color: var(--coke); background: var(--coke); color: #fff; }
+.acceso-opcion[aria-checked="true"] .marca { border-color: #fff; background: #fff; box-shadow: inset 0 0 0 3px var(--coke); }
+.acceso-opcion.lider { grid-column: 1 / -1; }
+.acceso-opcion.lider[aria-checked="true"] { border-color: #000; background: #000; }
+.acceso-opcion.lider[aria-checked="true"] .marca { box-shadow: inset 0 0 0 3px #000; }
+.acceso-opcion:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+.acceso-input {
+  display: block; width: 100%; font-family: var(--marca); font-size: 16px; padding: 11px 12px; color: #000;
+  background: #fff; border: 1.5px solid #000; border-radius: 0;
 }
-.acceso-pass input:focus { outline: none; border-color: #dcdcdc; }
-.acceso-estado { min-height: 1.5em; margin: 10px 0 4px; color: #b5b5b5; }
-.acceso-estado.error { color: #ff7a7a; }
+.acceso-input:focus { outline: 3px solid rgba(244, 0, 0, .35); outline-offset: 0; border-color: var(--coke); }
+.acceso-estado { min-height: 1.5em; margin: 10px 0 6px; color: #4d4d4d; font-weight: 600; }
+.acceso-estado.error { color: var(--coke-osc); }
 .acceso-botones { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-.acceso-btn { font-family: var(--mono); background: transparent; color: #cfcfcf; border: 0; padding: 8px 8px; letter-spacing: .1em; cursor: pointer; }
-.acceso-btn.principal { color: #fff; font-weight: 700; }
-.acceso-btn:hover, .acceso-btn:focus-visible { background: #e6e6e6; color: #000; outline: none; }
-.acceso-btn:disabled { opacity: .5; }
+.acceso-btn {
+  font-family: var(--marca); font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  background: #fff; color: #000; border: 1.5px solid #000; padding: 11px 20px; cursor: pointer; min-height: 44px;
+}
+.acceso-btn.principal { background: var(--coke); border-color: var(--coke); color: #fff; }
+.acceso-btn:hover { background: #000; border-color: #000; color: #fff; }
+.acceso-btn:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+.acceso-btn:disabled { opacity: .55; cursor: progress; }
+
+@keyframes parpadeo { 50% { opacity: 0; } }
 
 /* ── Tooltip y gráficas (comunes) ───────────────────────────────────── */
 .tooltip {

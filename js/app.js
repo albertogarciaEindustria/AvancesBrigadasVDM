@@ -3,6 +3,10 @@
  * Los datos descifrados viven solo en memoria: "Salir" recarga la página. */
 (function () {
   'use strict';
+  // No se muestra dentro de un marco de otro sitio (clickjacking)
+  if (window.top !== window.self) {
+    try { void window.top.location.href; } catch (e) { document.documentElement.style.display = 'none'; return; }
+  }
   let indice = null, llavesLider = {}, datosLider = null;
 
   function cargarScript(src) {

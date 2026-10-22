@@ -581,5 +581,7 @@ const Graficas = (function () {
   }
 
   return { violin, lineas, columnasApiladas, barras, barras100, dispersion, histograma,
-           colorDivergente, tintaSobre, Tip, conTip, marcaSvg, compacto };
+           colorDivergente, tintaSobre, Tip, conTip, marcaSvg, compacto,
+           // Piezas para armar otras gráficas con el mismo estilo (js/ice.js)
+           aux: { el, texto, montar, escala, ticks, ejeY, svgBase, barraV, leyenda, lineaObjetivo } };
 })();
