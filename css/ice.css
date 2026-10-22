@@ -116,6 +116,9 @@ button, input, select { font: inherit; }
 .ice-canal { display: inline-block; line-height: 1.6; }
 .ice-canal i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; }
 .ice-canal b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.ice-descargas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 18px; padding: 14px 16px; background: var(--gris-1); border-left: 6px solid var(--coke); font-size: 13px; line-height: 1.5; color: var(--tinta2); }
+.ice-descargas span { flex: 1 1 320px; }
+.ice-descargas b { color: var(--negro); }
 
 .delta { display: inline-block; margin: 0 2px 0 6px; font-size: 13px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .kpi-valor .delta { font-size: 15px; }
@@ -221,6 +224,12 @@ button, input, select { font: inherit; }
   border: 2px solid var(--blanco); box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .ev-marca.bajo, .ev-mini.bajo { background: var(--coke); }
 .ev-marca svg { width: 15px; height: 15px; }
+/* Semanas: número de la semana sobre el color de la prioridad; solo borde = ya evaluado en el mes */
+.sem-marca { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 800;
+  color: var(--blanco); background: var(--negro); border: 2px solid var(--blanco); box-shadow: 0 1px 4px rgba(0,0,0,.45); font-variant-numeric: tabular-nums; }
+.sem-marca.p1 { background: var(--coke); }
+.sem-marca.hecho { background: var(--blanco); color: var(--negro); border: 2.5px solid var(--negro); }
+.sem-marca.p1.hecho { color: var(--coke-osc); border-color: var(--coke); }
 
 .leaflet-container { font-family: var(--marca); }
 .leaflet-popup-content-wrapper { border-radius: 0; padding: 0; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.3); }

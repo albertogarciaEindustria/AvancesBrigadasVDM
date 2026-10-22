@@ -175,14 +175,14 @@ const PDF = (function () {
     }
   }
 
-  /** Descarga el blob como archivo (nombre sin caracteres raros). */
+  /** Descarga el blob como archivo (nombre sin caracteres raros; .pdf si no trae .pdf ni .xlsx). */
   function descargar(blob, nombre) {
     const limpio = String(nombre).normalize('NFKD').replace(/[̀-ͯ]/g, '')
       .replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').slice(0, 120) || 'reporte.pdf';
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = limpio.endsWith('.pdf') ? limpio : limpio + '.pdf';
+    a.download = /\.(pdf|xlsx)$/i.test(limpio) ? limpio : limpio + '.pdf';
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();

@@ -1,5 +1,6 @@
-/* Reporte ICE (ice.html): acceso con usuario + contraseña y las tres secciones
- * de la unidad (resumen, mapa y rutas con sus impresiones en PDF).
+/* Reporte ICE (ice.html): acceso con usuario + contraseña y las secciones de
+ * la unidad (resumen con el Excel de la clasificación, mapa, semanas del mes y
+ * rutas con sus impresiones en PDF).
  *
  * El usuario se normaliza (sin acentos, símbolos ni mayúsculas) y su hash dice
  * qué archivo pedir: datos/ice/u-<hash>.js trae, cifrados con la contraseña,
@@ -40,6 +41,7 @@ const Ice = (function () {
     bono:        '<rect x="3.5" y="9" width="17" height="12"/><path d="M12 9v12M3.5 13.5h17M12 9C10 4.5 6 4.5 6 7s4 2 6 2 6 .5 6-2-4-2.5-6 2z"/>',
     ok:          '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     imprimir:    '<path d="M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>',
+    excel:       '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M4 9h16M4 15h16M10 3v18"/>',
     gps:         '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/>',
   };
   const svgIcono = id => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[id] || ICONOS.ok}</svg>`;
@@ -165,7 +167,7 @@ const Ice = (function () {
     const v = $('iceVista');
     v.hidden = false;
     const c = D.corte;
-    const pestanas = [['resumen', 'Resumen'], ['mapa', 'Mapa'], ['rutas', 'Rutas']];
+    const pestanas = [['resumen', 'Resumen'], ['mapa', 'Mapa'], ['semanas', 'Semanas'], ['rutas', 'Rutas']];
     v.innerHTML = `
       <header class="ice-cab">
         <div>
@@ -185,6 +187,7 @@ const Ice = (function () {
       </nav>
       <div class="ice-panel" id="p-resumen" role="tabpanel" aria-labelledby="tab-resumen"></div>
       <div class="ice-panel ice-panel-mapa" id="p-mapa" role="tabpanel" aria-labelledby="tab-mapa" hidden></div>
+      <div class="ice-panel ice-panel-mapa" id="p-semanas" role="tabpanel" aria-labelledby="tab-semanas" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
       <footer class="ice-pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>`;
     v.querySelector('[data-accion="salir"]').addEventListener('click', () => location.reload());
@@ -208,9 +211,10 @@ const Ice = (function () {
       t.setAttribute('aria-selected', activa);
       t.tabIndex = activa ? 0 : -1;
     }
-    for (const p of ['resumen', 'mapa', 'rutas']) $('p-' + p).hidden = p !== cual;
+    for (const p of ['resumen', 'mapa', 'semanas', 'rutas']) $('p-' + p).hidden = p !== cual;
     Graficas.Tip.hide();
     if (cual === 'mapa') mapa();
+    if (cual === 'semanas') semanas();
     if (cual === 'rutas') rutas();
   }
 
@@ -263,6 +267,10 @@ const Ice = (function () {
         ${R.por_canal.map(c => `<span class="ice-canal"><i style="background:${COLOR_CANAL[c.canal]}"></i>${esc(c.canal)}
           <b>${dec1(c.promedio)}</b>${flecha(c.d_promedio)} <span class="muted">· ${plural(c.n, 'evaluado')} · ${esc(MA.mes)}: ${dec1(c.mes_anterior)}</span></span>`).join('')}
       </div>
+      ${D.excel ? `<div class="ice-descargas">
+        <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
+        <span>Los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}: prioridad, semana del mes en que suelen evaluarse, visitas, datos del cliente, ICE y ÉPICA de ${esc(D.mes)}.</span>
+      </div>` : ''}
       ${seccion('Distribución de calificaciones', `Calificación ICE de cada cliente evaluado en ${esc(D.mes)}. El histograma junta los dos canales; el violín los separa (la caja va del cuartil 1 al 3, el círculo es la mediana y la raya horizontal, el promedio).`,
         `<div class="ice-dos">
           <figure><figcaption>Histograma · todas las evaluaciones</figcaption><div class="grafica" id="gHist"></div></figure>
@@ -293,6 +301,7 @@ const Ice = (function () {
     }
     graficaDiaria($('gDia'));
     if ($('gMeses')) graficaMeses($('gMeses'));
+    if ($('btnExcel')) $('btnExcel').addEventListener('click', descargarExcel);
     graficasPerdidos();
   }
 
@@ -641,7 +650,7 @@ const Ice = (function () {
   }
 
   function popupCliente(c) {
-    const [sap, nombre, lat, lon, prio, zi, ruta, zpv, vprev, vant, ultima, ultimoIce, promHist, dir] = c;
+    const [sap, nombre, lat, lon, prio, zi, ruta, zpv, vprev, vant, ultima, ultimoIce, promHist, dir, semana, enSemana, conFecha] = c;
     const evs = porSapEval[sap] || [];
     return `<div class="pc"><div class="pc-cab ${PRIO[prio].clase}"><b>${esc(nombre || 'Cliente sin nombre')}</b>
         <span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
@@ -650,7 +659,8 @@ const Ice = (function () {
       <dl class="pc-cuerpo">${fila('Dirección', esc(dir))}${fila('Zona', esc(D.zonas[zi]))}${fila('Ruta', esc(ruta))}${fila('Frecuencia', esc(zpv))}
         ${fila(`Visitas en ${D.prioridad.mes_anterior}`, num(vant))}${fila('Visitas antes', num(vprev))}
         ${fila('Última visita ICE', ultima ? `${esc(fechaCorta(ultima))} · ${dec1(ultimoIce)}` : 'sin visitas')}
-        ${fila('Promedio ICE', dec1(promHist))}${fila(`ÉPICA de ${D.mes}`, textoEpica(sap))}</dl>
+        ${fila('Promedio ICE', dec1(promHist))}${semana ? fila('Semana del mes', `${num(semana)} <span class="muted">(${num(enSemana)} de ${plural(conFecha, 'visita')})</span>`) : ''}
+        ${fila(`ÉPICA de ${D.mes}`, textoEpica(sap))}</dl>
       ${evs.length ? metricasPopup(evs[0]) : ''}</div>`;
   }
 
@@ -775,6 +785,117 @@ const Ice = (function () {
     });
     input.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
     document.addEventListener('click', e => { if (!lista.contains(e.target) && e.target !== input) cerrar(); });
+  }
+
+  // ── Excel de la clasificación ─────────────────────────────────────────
+  function descargarExcel() {
+    const bin = atob(D.excel.datos), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    PDF.descargar(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), D.excel.nombre);
+  }
+
+  // ── Semanas del mes ───────────────────────────────────────────────────
+  // Semana 1 = días 1–7, 2 = 8–14, 3 = 15–21, 4 = del 22 al fin de mes
+  // (igual que Programas/prioridad_ice.py)
+  const semanaDe = dia => Math.min(4, Math.floor((dia - 1) / 7) + 1);
+  let mapaS = null;
+
+  function semanas() {
+    const panel = $('p-semanas');
+    if (mapaS) { setTimeout(() => mapaS.invalidateSize(), 50); return; }
+    const hoy = new Date(), sHoy = semanaDe(hoy.getDate()), sSig = sHoy === 4 ? 1 : sHoy + 1;
+    const mesSig = MESES[(hoy.getMonth() + (sHoy === 4 ? 1 : 0)) % 12];
+    const prior = D.clientes.filter(c => (c[4] === 1 || c[4] === 2) && c[14]);
+    const cuenta = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    for (const c of prior) cuenta[c[14]]++;
+    const etiqueta = s => `Semana ${s}${s === sHoy ? ' · esta' : s === sSig ? ' · próxima' : ''} (${num(cuenta[s])})`;
+    panel.innerHTML = `
+      <div class="mapa-barra">
+        <p class="mapa-resumen">Clientes <b>prioridad 1 y 2</b> según la semana del mes en que más veces los ha evaluado el auditor (todo su histórico ICE; si hay empate, la de su visita más reciente): <b>semana 1</b> = días 1–7, <b>2</b> = 8–14, <b>3</b> = 15–21 y <b>4</b> = del 22 al fin de mes. Hoy, ${hoy.getDate()} de ${MESES[hoy.getMonth()]}, es la <b>semana ${sHoy}</b>; la próxima es la <b>semana ${sSig}</b>${sHoy === 4 ? ` de ${esc(mesSig)}` : ''}.</p>
+        <div class="mapa-controles">
+          <div class="chips" role="group" aria-label="Semana del mes" id="botonesSemana">
+            <button type="button" class="chip grande" data-s="${sHoy},${sSig}" aria-pressed="true">Esta semana y la próxima (${num(cuenta[sHoy] + cuenta[sSig])})</button>
+            ${[1, 2, 3, 4].map(s => `<button type="button" class="chip grande" data-s="${s}" aria-pressed="false">${etiqueta(s)}</button>`).join('')}
+            <button type="button" class="chip grande" data-s="1,2,3,4" aria-pressed="false">Todas (${num(prior.length)})</button>
+          </div>
+          <div class="chips">
+            ${[1, 2].map(p => `<button type="button" class="chip on" aria-pressed="true" data-p="${p}"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</button>`).join('')}
+            <button type="button" class="chip" aria-pressed="false" id="semPendientes">Solo sin ICE en ${esc(D.mes)}</button>
+          </div>
+        </div>
+        <p class="mapa-ayuda">El número de cada punto es su semana. Relleno: aún sin ICE en ${esc(D.mes)}; solo borde: ya evaluado este mes. ${TACTIL ? 'Toca' : 'Haz clic en'} un cliente para ver su ficha; abajo del mapa está la lista.</p>
+      </div>
+      <div id="mapaSemanas" class="mapa"></div>
+      <section class="ruta-detalle" id="semanaLista"></section>`;
+
+    mapaS = L.map('mapaSemanas');
+    capaBase(mapaS);
+    botonUbicacion(mapaS);
+    const capa = L.layerGroup().addTo(mapaS);
+    const estado = { semanas: [sHoy, sSig], prios: new Set([1, 2]), pendientes: false };
+    const visibles = () => prior.filter(c => estado.semanas.includes(c[14]) && estado.prios.has(c[4]) &&
+                                             (!estado.pendientes || !porSapEval[c[0]]));
+    const pintar = encuadrar => {
+      capa.clearLayers();
+      const lista = visibles(), limites = [];
+      // Prioridad 2 abajo y prioridad 1 encima
+      for (const c of [...lista].sort((a, b) => b[4] - a[4])) {
+        if (c[2] == null) continue;
+        const hecho = !!porSapEval[c[0]];
+        const m = L.marker([c[2], c[3]], { keyboard: false, zIndexOffset: c[4] === 1 ? 200 : 0, riseOnHover: true,
+          icon: L.divIcon({ className: 'ev-icono', html: `<span class="sem-marca p${c[4]}${hecho ? ' hecho' : ''}">${num(c[14])}</span>`,
+                            iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -11] }) })
+          .bindPopup(() => popupCliente(c), { maxWidth: 320 });
+        if (!TACTIL) m.bindTooltip(`<b>${esc(c[1])}</b> · semana ${num(c[14])}${hecho ? ` · ICE ${esc(D.mes)}: ${dec1(porSapEval[c[0]][0][6])}` : ''}`,
+                                   { direction: 'top', offset: [0, -10], opacity: 0.95 });
+        m.addTo(capa);
+        limites.push([c[2], c[3]]);
+      }
+      if (encuadrar) {
+        if (limites.length) mapaS.fitBounds(limitesRobustos(limites).pad(0.06), { maxZoom: 15 });
+        else if (!mapaS._loaded) mapaS.setView([19.38, -99.14], 11);
+      }
+      listaSemana(lista);
+    };
+    pintar(true);
+    panel.querySelectorAll('#botonesSemana [data-s]').forEach(b => b.addEventListener('click', () => {
+      panel.querySelectorAll('#botonesSemana [data-s]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      estado.semanas = b.dataset.s.split(',').map(Number);
+      pintar(true);
+    }));
+    panel.querySelectorAll('.chip[data-p]').forEach(b => b.addEventListener('click', () => {
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', on);
+      b.classList.toggle('on', on);
+      if (on) estado.prios.add(+b.dataset.p); else estado.prios.delete(+b.dataset.p);
+      pintar(false);
+    }));
+    $('semPendientes').addEventListener('click', e => {
+      estado.pendientes = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+      e.currentTarget.setAttribute('aria-pressed', estado.pendientes);
+      e.currentTarget.classList.toggle('on', estado.pendientes);
+      pintar(false);
+    });
+  }
+
+  function listaSemana(lista) {
+    const orden = [...lista].sort((a, b) => a[14] - b[14] || a[4] - b[4] || D.zonas[a[5]].localeCompare(D.zonas[b[5]]) || a[6].localeCompare(b[6]));
+    const hechos = orden.filter(c => porSapEval[c[0]]).length;
+    $('semanaLista').innerHTML = `<div class="ruta-detalle-cab"><div>
+        <h3>${plural(orden.length, 'cliente')}</h3>
+        <p>${num(hechos)} ya con ICE en ${esc(D.mes)} · ${num(orden.length - hechos)} sin ICE todavía · orden: semana, prioridad, zona y ruta</p></div></div>
+      <div class="tabla-scroll"><table class="ice-tabla">
+        <thead><tr><th class="izq">Semana</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th>
+          <th class="izq">Zona</th><th class="izq">Ruta</th><th class="izq">Frecuencia</th><th>Visitas en su semana</th><th>Último ICE</th><th>ICE ${esc(D.mes)}</th><th class="izq">ÉPICA del mes</th></tr></thead>
+        <tbody>${orden.length ? orden.map(c => {
+          const ev = porSapEval[c[0]];
+          return `<tr><td class="izq"><b>${num(c[14])}</b></td><td class="izq"><span class="prio ${PRIO[c[4]].clase}">${PRIO[c[4]].corto}</span></td>
+            <td class="izq">${esc(c[0])}</td><td class="izq">${esc(c[1])}</td><td class="izq">${esc(c[13])}</td><td class="izq">${esc(D.zonas[c[5]])}</td>
+            <td class="izq">${esc(c[6])}</td><td class="izq">${esc(c[7])}</td><td>${num(c[15])} de ${num(c[16])}</td>
+            <td>${c[10] ? `${dec1(c[11])} <span class="muted">(${esc(fechaCorta(c[10]))})</span>` : '<span class="muted">—</span>'}</td>
+            <td>${ev ? `<b>${dec1(ev[0][6])}</b>` : '<span class="muted">—</span>'}</td><td class="izq">${textoEpica(c[0])}</td></tr>`;
+        }).join('') : '<tr><td class="izq muted" colspan="12">No hay clientes con estos filtros.</td></tr>'}</tbody>
+      </table></div>`;
   }
 
   // ── Rutas ─────────────────────────────────────────────────────────────
