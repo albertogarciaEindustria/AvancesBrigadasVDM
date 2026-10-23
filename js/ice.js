@@ -989,7 +989,14 @@ const Ice = (function () {
   }
 
   // ── Rutas ─────────────────────────────────────────────────────────────
-  let capaRutas = null, grupos = [], diaSel = 'hoy', rutaSel = null;
+  let capaRutas = null, capaEtiquetas = null, grupos = [], diaSel = 'hoy', rutaSel = null;
+  const ZOOM_ETIQUETAS = 13;   // igual que en el sitio de brigadistas (js/unidad.js)
+
+  // Letrero con el código de cada ruta (en el centro de sus clientes), solo al acercar el mapa
+  function pintarEtiquetas() {
+    if ($('etiquetasRuta').checked && mapaR.getZoom() >= ZOOM_ETIQUETAS) capaEtiquetas.addTo(mapaR);
+    else mapaR.removeLayer(capaEtiquetas);
+  }
 
   // Un color por ruta (ángulo dorado), sin rojos: el rojo es prioridad 1
   function colorRuta(i) {
@@ -1033,6 +1040,7 @@ const Ice = (function () {
         <aside class="rutas-lista" aria-label="Rutas del día">
           <input type="search" id="buscaRuta" placeholder="Buscar ruta o jefatura" aria-label="Buscar ruta o jefatura">
           <label class="ice-check"><input type="checkbox" id="soloIce"> Solo rutas con clientes ICE</label>
+          <label class="ice-check"><input type="checkbox" id="etiquetasRuta" checked> Etiquetas de ruta (al acercar el mapa)</label>
           <ul id="listaRutas"></ul>
         </aside>
       </div>
@@ -1041,7 +1049,9 @@ const Ice = (function () {
     capaBase(mapaR);
     botonUbicacion(mapaR);
     capaRutas = L.layerGroup().addTo(mapaR);
+    capaEtiquetas = L.layerGroup();
     pintarDia('hoy');
+    mapaR.on('zoomend', pintarEtiquetas);
 
     panel.querySelectorAll('.segmento button').forEach(b => b.addEventListener('click', () => {
       panel.querySelectorAll('.segmento button').forEach(x => x.setAttribute('aria-pressed', x === b));
@@ -1049,6 +1059,7 @@ const Ice = (function () {
     }));
     $('buscaRuta').addEventListener('input', filtrarLista);
     $('soloIce').addEventListener('change', filtrarLista);
+    $('etiquetasRuta').addEventListener('change', pintarEtiquetas);
     panel.querySelectorAll('[data-pdf]').forEach(b => b.addEventListener('click', () => imprimir(b)));
   }
 
@@ -1065,6 +1076,7 @@ const Ice = (function () {
     diaSel = dia; rutaSel = null;
     const R = D.rutas[dia];
     capaRutas.clearLayers();
+    capaEtiquetas.clearLayers();
     grupos = [];
     const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
     const limites = [], marcadores = [], ice = [];
@@ -1087,6 +1099,12 @@ const Ice = (function () {
         m.addTo(capaRutas);
         marcadores.push(m);
       }
+      if (coords.length) {
+        const c = coords.reduce((a, p) => [a[0] + p[0] / coords.length, a[1] + p[1] / coords.length], [0, 0]);
+        L.marker(c, { interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'ruta-etiqueta', html: `<span style="background:${color};color:${Graficas.tintaSobre(color)}">${esc(r.codigo)}</span>`, iconSize: null }) })
+          .addTo(capaEtiquetas);
+      }
       grupos.push(g);
     });
     // Los clientes ICE van encima de todo: aleatorios, prioridad 2 y prioridad 1
@@ -1102,8 +1120,9 @@ const Ice = (function () {
     else mapaR.setView([19.38, -99.14], 11);
     mapaR.off('click');
     toqueCercano(mapaR, marcadores);
+    pintarEtiquetas();
 
-    $('rutasResumen').innerHTML = `Rutas que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ZPV <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> rutas · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> aleatorios. Las líneas unen a los clientes de cada ruta.`;
+    $('rutasResumen').innerHTML = `Rutas que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ZPV <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> rutas · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> aleatorios. Las líneas unen a los clientes de cada ruta; al acercar el mapa aparece la etiqueta con el código de cada ruta.`;
     $('listaRutas').innerHTML = R.rutas.map((r, i) => {
       const t = cuentaTipos(r.puntos);
       return `<li><button type="button" class="ruta-item" data-i="${i}">
