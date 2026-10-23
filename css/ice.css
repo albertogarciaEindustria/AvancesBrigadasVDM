@@ -217,6 +217,7 @@ button, input, select { font: inherit; }
 .leyenda-metricas b { color: var(--negro); }
 .leyenda-metricas .ev-mini { width: 20px; height: 20px; }
 .leyenda-metricas .ev-mini svg { width: 12px; height: 12px; }
+.leyenda-metricas .leyenda-texto { flex-basis: 100%; line-height: 1.5; }
 
 /* Marcas de clientes evaluados (símbolo de la submétrica que más quita) */
 .ev-icono { background: none; border: 0; }
@@ -230,6 +231,25 @@ button, input, select { font: inherit; }
 .sem-marca.p1 { background: var(--coke); }
 .sem-marca.hecho { background: var(--blanco); color: var(--negro); border: 2.5px solid var(--negro); }
 .sem-marca.p1.hecho { color: var(--coke-osc); border-color: var(--coke); }
+/* Lo que le faltó en su última evaluación: símbolo de la submétrica sobre el color de la prioridad;
+   la insignia chica es la semana (pestaña Semanas) o la palomita de ya evaluado en el mes (Mapa) */
+.falta-marca { position: relative; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: var(--blanco); background: var(--negro);
+  border: 2px solid var(--blanco); box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.falta-marca.p1 { background: var(--coke); }
+.falta-marca.p3 { background: var(--blanco); color: var(--negro); border: 2.5px solid var(--tinta2); }
+.falta-marca svg { width: 15px; height: 15px; }
+.falta-marca i { position: absolute; top: -7px; right: -8px; display: grid; place-items: center; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+  font-style: normal; font-size: 9.5px; font-weight: 800; line-height: 1; color: var(--negro); background: var(--blanco); border: 1.5px solid var(--negro); font-variant-numeric: tabular-nums; }
+.falta-marca i svg { width: 9px; height: 9px; stroke-width: 3.5; }
+/* Ya evaluado en el mes: palomita sobre el color de la prioridad */
+.visto-marca, .visto-mini { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: var(--blanco); background: var(--negro);
+  border: 2px solid var(--blanco); box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.visto-marca.p1 { background: var(--coke); }
+.visto-marca.p3 { background: var(--blanco); color: var(--negro); border-color: var(--tinta2); }
+.visto-marca svg, .visto-mini svg { width: 11px; height: 11px; stroke-width: 3; }
+.visto-mini { display: inline-grid; justify-content: center; align-items: center; width: 17px; height: 17px; vertical-align: -4px; border-width: 1.5px; }
+.chip:disabled { opacity: .6; cursor: default; }
+.chip:disabled:hover { border-color: var(--negro); }
 
 .leaflet-container { font-family: var(--marca); }
 .leaflet-popup-content-wrapper { border-radius: 0; padding: 0; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
@@ -256,6 +276,7 @@ button, input, select { font: inherit; }
 .pc-met.peor .barra { background: #ffe5e5; font-weight: 800; }
 .pc-met.peor .barra i { background: rgba(244,0,0,.25); }
 .pc-met b { font-variant-numeric: tabular-nums; }
+.pc-sub { padding: 10px 14px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tinta3); }
 .pc-btn { display: block; margin: 8px 12px 0; padding: 9px 0; text-align: center; text-decoration: none; font-weight: 800; font-size: 12.5px; letter-spacing: .06em; background: var(--coke); color: var(--blanco) !important; }
 .pc-btn.sec { background: var(--gris-1); color: var(--negro) !important; font-weight: 700; }
 .ctl-ubicacion button { display: grid; place-items: center; width: 34px; height: 34px; background: var(--blanco); border: 0; cursor: pointer; color: var(--negro); }
