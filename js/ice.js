@@ -276,7 +276,7 @@ const Ice = (function () {
       </div>
       ${D.excel ? `<div class="ice-descargas">
         <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
-        <span>Los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}: prioridad, semana del mes en que suelen evaluarse, visitas, datos del cliente, ICE y ÉPICA de ${esc(D.mes)} y la submétrica que más le quitó a cada uno en su última evaluación.</span>
+        <span>Los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}: prioridad, semana del mes en que suelen evaluarse, visitas, datos del cliente, si ya se evaluó en ICE en ${esc(D.mes)}, la submétrica que más le quitó en su última evaluación y su ÉPICA de ${esc(D.mes)} separada en brigadistas, preventa y farmers.</span>
       </div>` : ''}
       ${seccion('Distribución de calificaciones', `Calificación ICE de cada cliente evaluado en ${esc(D.mes)}. El histograma junta los dos canales; el violín los separa (la caja va del cuartil 1 al 3, el círculo es la mediana y la raya horizontal, el promedio).`,
         `<div class="ice-dos">
@@ -1014,7 +1014,7 @@ const Ice = (function () {
           </div>
           <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en las rutas impresas</label>
         </div>
-        <p class="mapa-ayuda">Las impresiones de rutas de hoy y de mañana no traen a los clientes que ya tienen ICE en ${esc(D.mes)}, dicen qué submétrica le quitó más puntos a cada cliente en su última evaluación y van por jefatura: cada jefatura empieza en hoja nueva.</p>
+        <p class="mapa-ayuda">Las impresiones de rutas de hoy y de mañana solo traen a los clientes ICE que alguna vez se han evaluado y que aún no tienen ICE en ${esc(D.mes)}, dicen qué submétrica le quitó más puntos a cada uno en su última evaluación y van por jefatura: cada jefatura empieza en hoja nueva.</p>
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de las rutas">
             <button type="button" data-dia="hoy" aria-pressed="true">Hoy · ${esc(H.dia)} ${esc(fechaCorta(H.fecha))}</button>
@@ -1289,12 +1289,15 @@ const Ice = (function () {
     return { texto: `${dec1(e[1])} · ${ddmm(e[0])}${e[2] ? ' · NoGeo' : ''}${e[3] ? ' · FdF' : ''}`, negrita: !!(e[2] || e[3]), color: e[2] || e[3] ? ROJO : NEGRO };
   }
 
-  // Rutas de preventa del día: sin los clientes que ya tienen ICE en el mes y una jefatura por hoja
+  // Rutas de preventa del día: solo clientes ICE que alguna vez se evaluaron y aún no tienen ICE en el
+  // mes (los que nunca se han evaluado no traen nada que trabajar), una jefatura por hoja
   function pdfRutas(dia) {
     const R = D.rutas[dia], todos = $('pdfTodos').checked;
     const evaluado = p => !!porSapEval[p[2]];
+    const nunca = p => p[4] && !evaluado(p) && !(porSapCliente[p[2]] || [])[17];
     const quitados = R.rutas.reduce((a, r) => a + r.puntos.filter(evaluado).length, 0);
-    const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p)) }))
+    const sinHistoria = R.rutas.reduce((a, r) => a + r.puntos.filter(nunca).length, 0);
+    const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)) }))
       .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]));
     const tipos = cuentaTipos(rutasPdf.flatMap(x => x.puntos));
     const porJefatura = {};
@@ -1302,7 +1305,7 @@ const Ice = (function () {
     const jefaturas = Object.keys(porJefatura).sort((a, b) => (a === SIN_JEFATURA) - (b === SIN_JEFATURA) || a.localeCompare(b, 'es', { numeric: true }));
     const ctx = documento(`Rutas de ${dia === 'hoy' ? 'hoy' : 'mañana'}`, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`,
       `${plural(rutasPdf.length, 'ruta')} ${todos ? '' : 'con clientes ICE por evaluar '}en ${plural(jefaturas.length, 'jefatura')} (cada jefatura empieza en hoja nueva) · ICE por evaluar: ${num(tipos[1] || 0)} prioridad 1 (P1), ${num(tipos[2] || 0)} prioridad 2 (P2) y ${num(tipos[3] || 0)} aleatorios (A)` +
-      `${todos ? ` · se incluyen los ${num(tipos[0] || 0)} clientes no ICE` : ''}.${quitados ? ` No se imprimen ${plural(quitados, 'cliente que ya tiene', 'clientes que ya tienen')} ICE en ${D.mes}.` : ''} Orden: P1, P2, A${todos ? ' y después el resto en el orden de la ruta' : ''}. ` +
+      `${todos ? ` · se incluyen los ${num(tipos[0] || 0)} clientes no ICE` : ''}. Solo van clientes ICE que alguna vez se han evaluado: no se imprimen ${plural(quitados, 'cliente que ya tiene', 'clientes que ya tienen')} ICE en ${D.mes} ni ${plural(sinHistoria, 'cliente ICE que nunca se ha evaluado', 'clientes ICE que nunca se han evaluado')}. Orden: P1, P2, A${todos ? ' y después el resto en el orden de la ruta' : ''}. ` +
       `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE (en la que conviene trabajar). ÉPICA del mes: calificación y fecha, o Pendiente.`);
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
@@ -1312,7 +1315,7 @@ const Ice = (function () {
       const grupo = porJefatura[jef], tj = cuentaTipos(grupo.flatMap(x => x.puntos));
       seccionJefatura(ctx, jef, `${plural(grupo.length, 'ruta')} · ICE por evaluar: P1 ${tj[1] || 0} · P2 ${tj[2] || 0} · A ${tj[3] || 0}`, g === 0);
       for (const { r, puntos: pendientes } of grupo) {
-        const t = cuentaTipos(pendientes), fuera = r.puntos.length - pendientes.length;
+        const t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
         const ice = pendientes.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
         const puntos = todos ? ice.concat(pendientes.filter(p => !p[4])) : ice;
         const filas = puntos.map((p, k) => {
