@@ -1010,11 +1010,11 @@ const Ice = (function () {
           <div class="rutas-acciones">
             <button type="button" class="ice-btn rojo" data-pdf="hoy">${svgIcono('imprimir')}Impresión Hoy Rutas</button>
             <button type="button" class="ice-btn" data-pdf="manana">${svgIcono('imprimir')}Impresión Mañana Rutas</button>
-            <button type="button" class="ice-btn" data-pdf="epica">${svgIcono('imprimir')}Clientes ICE pendientes de EPICA</button>
+            <button type="button" class="ice-btn" data-pdf="epica">${svgIcono('imprimir')}Clientes ICE pendientes de EPICA de preventa</button>
           </div>
           <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en las rutas impresas</label>
         </div>
-        <p class="mapa-ayuda">Las impresiones de rutas de hoy y de mañana solo traen a los clientes ICE que alguna vez se han evaluado y que aún no tienen ICE en ${esc(D.mes)}, dicen qué submétrica le quitó más puntos a cada uno en su última evaluación y van por jefatura: cada jefatura empieza en hoja nueva.</p>
+        <p class="mapa-ayuda">Las impresiones de rutas de hoy y de mañana solo traen a los clientes ICE que alguna vez se han evaluado y que aún no tienen ICE en ${esc(D.mes)}, dicen qué submétrica le quitó más puntos a cada uno en su última evaluación y van por jefatura: cada jefatura empieza en hoja nueva. En los tres PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de las rutas">
             <button type="button" data-dia="hoy" aria-pressed="true">Hoy · ${esc(H.dia)} ${esc(fechaCorta(H.fecha))}</button>
@@ -1283,8 +1283,12 @@ const Ice = (function () {
     ctx.y += 12;
   }
 
+  // En los PDF imprimibles la ÉPICA del mes es solo la hecha por preventa (en pantalla, la de brigadistas)
+  const epicaPv = sap => (D.epica_preventa || {})[sap];
+  const epicaAl = () => D.epica_base_corte || D.epica_corte;
+
   function epicaPdf(sap) {
-    const e = D.epica[sap];
+    const e = epicaPv(sap);
     if (!e) return { texto: 'Pendiente', negrita: true, color: ROJO };
     return { texto: `${dec1(e[1])} · ${ddmm(e[0])}${e[2] ? ' · NoGeo' : ''}${e[3] ? ' · FdF' : ''}`, negrita: !!(e[2] || e[3]), color: e[2] || e[3] ? ROJO : NEGRO };
   }
@@ -1306,10 +1310,10 @@ const Ice = (function () {
     const ctx = documento(`Rutas de ${dia === 'hoy' ? 'hoy' : 'mañana'}`, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`,
       `${plural(rutasPdf.length, 'ruta')} ${todos ? '' : 'con clientes ICE por evaluar '}en ${plural(jefaturas.length, 'jefatura')} (cada jefatura empieza en hoja nueva) · ICE por evaluar: ${num(tipos[1] || 0)} prioridad 1 (P1), ${num(tipos[2] || 0)} prioridad 2 (P2) y ${num(tipos[3] || 0)} aleatorios (A)` +
       `${todos ? ` · se incluyen los ${num(tipos[0] || 0)} clientes no ICE` : ''}. Solo van clientes ICE que alguna vez se han evaluado: no se imprimen ${plural(quitados, 'cliente que ya tiene', 'clientes que ya tienen')} ICE en ${D.mes} ni ${plural(sinHistoria, 'cliente ICE que nunca se ha evaluado', 'clientes ICE que nunca se han evaluado')}. Orden: P1, P2, A${todos ? ' y después el resto en el orden de la ruta' : ''}. ` +
-      `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE (en la que conviene trabajar). ÉPICA del mes: calificación y fecha, o Pendiente.`);
+      `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE (en la que conviene trabajar). ÉPICA preventa: la ÉPICA de ${D.mes} hecha por preventa${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`);
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
-                      { titulo: 'ÉPICA del mes', ancho: 86 }];
+                      { titulo: 'ÉPICA preventa', ancho: 86 }];
     if (!rutasPdf.length) ctx.doc.texto(PDF_M, ctx.y + 10, `No hay rutas con clientes ICE por evaluar este día.`, { tam: 10, negrita: true });
     jefaturas.forEach((jef, g) => {
       const grupo = porJefatura[jef], tj = cuentaTipos(grupo.flatMap(x => x.puntos));
@@ -1334,29 +1338,30 @@ const Ice = (function () {
     const R = D.rutas.hoy;
     const conIce = R.rutas.filter(r => r.puntos.some(p => p[4]));
     const ice = conIce.flatMap(r => r.puntos.filter(p => p[4]));
-    const hechas = ice.filter(p => D.epica[p[2]]);
-    const nogeo = hechas.filter(p => D.epica[p[2]][2]).length, fdf = hechas.filter(p => D.epica[p[2]][3]).length;
-    const ctx = documento('Clientes ICE pendientes de EPICA', `Rutas de hoy · ${R.dia} ${fechaLarga(R.fecha)} · ÉPICA de ${D.mes}${D.epica_corte ? ` al ${fechaLarga(D.epica_corte)}` : ''}`,
-      `En las rutas de hoy hay ${plural(ice.length, 'cliente ICE', 'clientes ICE')}: ${num(ice.length - hechas.length)} pendientes de EPICA y ${num(hechas.length)} con EPICA en ${D.mes} ` +
-      `(${num(nogeo)} con NoGeo y ${num(fdf)} con foto de foto). En cada ruta van primero los pendientes. P1 = prioridad 1, P2 = prioridad 2, A = aleatorio; ` +
+    const hechas = ice.filter(p => epicaPv(p[2]));
+    const nogeo = hechas.filter(p => epicaPv(p[2])[2]).length, fdf = hechas.filter(p => epicaPv(p[2])[3]).length;
+    const ctx = documento('Clientes ICE pendientes de EPICA de preventa', `Rutas de hoy · ${R.dia} ${fechaLarga(R.fecha)} · ÉPICA de preventa de ${D.mes}${epicaAl() ? ` al ${fechaLarga(epicaAl())}` : ''}`,
+      `En las rutas de hoy hay ${plural(ice.length, 'cliente ICE', 'clientes ICE')}: ${num(ice.length - hechas.length)} pendientes de EPICA de preventa y ${num(hechas.length)} con EPICA de preventa en ${D.mes} ` +
+      `(${num(nogeo)} con NoGeo y ${num(fdf)} con foto de foto). Solo cuenta la EPICA hecha por preventa (claves de ruta), no la de brigadistas ni la de farmers. ` +
+      `En cada ruta van primero los pendientes. P1 = prioridad 1, P2 = prioridad 2, A = aleatorio; ` +
       `NoGeo = cierre a más de ${D.no_geo_metros} m del cliente; FdF = foto de foto.`);
     const columnas = [{ titulo: 'Estado', ancho: 62 }, { titulo: 'Tipo', ancho: 30 }, { titulo: 'SAP', ancho: 56 }, { titulo: 'Cliente', ancho: 136 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Calif.', ancho: 36, alinear: 'der' }, { titulo: 'NoGeo', ancho: 36 },
                       { titulo: 'FdF', ancho: 30 }, { titulo: 'Fecha', ancho: 40 }];
     if (!conIce.length) ctx.doc.texto(PDF_M, ctx.y + 10, 'Hoy no hay clientes ICE en las rutas.', { tam: 10, negrita: true });
     for (const r of conIce) {
-      const lista = r.puntos.filter(p => p[4]).sort((a, b) => (!!D.epica[a[2]] - !!D.epica[b[2]]) || a[4] - b[4]);
-      const pend = lista.filter(p => !D.epica[p[2]]).length;
+      const lista = r.puntos.filter(p => p[4]).sort((a, b) => (!!epicaPv(a[2]) - !!epicaPv(b[2])) || a[4] - b[4]);
+      const pend = lista.filter(p => !epicaPv(p[2])).length;
       const filas = lista.map(p => {
-        const e = D.epica[p[2]], c = porSapCliente[p[2]];
+        const e = epicaPv(p[2]), c = porSapCliente[p[2]];
         return [e ? { texto: 'Hecha', negrita: true } : { texto: 'PENDIENTE', negrita: true, color: ROJO }, { tipo: p[4] }, p[2], p[3], c ? c[13] : '',
                 e ? dec1(e[1]) : '', e ? (e[2] ? { texto: 'SÍ', negrita: true, color: ROJO } : 'no') : '',
                 e ? (e[3] ? { texto: 'SÍ', negrita: true, color: ROJO } : 'no') : '', e ? ddmm(e[0]) : ''];
       });
       tablaPdf(ctx, columnas, filas, cont => bandaRuta(ctx, `RUTA ${r.codigo}${cont ? ' (cont.)' : ''}`,
-        `${r.jefatura || 'Sin jefatura'} · ${plural(lista.length, 'cliente ICE', 'clientes ICE')} · ${num(pend)} pendientes de EPICA`));
+        `${r.jefatura || 'Sin jefatura'} · ${plural(lista.length, 'cliente ICE', 'clientes ICE')} · ${num(pend)} pendientes de EPICA de preventa`));
     }
-    PDF.descargar(ctx.doc.blob(), `ICE_Pendientes_EPICA_${D.unidad}_${R.fecha}.pdf`);
+    PDF.descargar(ctx.doc.blob(), `ICE_Pendientes_EPICA_Preventa_${D.unidad}_${R.fecha}.pdf`);
   }
 
   function imprimir(boton) {
