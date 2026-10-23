@@ -8,6 +8,7 @@
     try { void window.top.location.href; } catch (e) { document.documentElement.style.display = 'none'; return; }
   }
   let indice = null, llavesLider = {}, datosLider = null;
+  const datosUnidad = {};   // id -> promesa de sus datos (página Jóvenes del Futuro)
 
   function cargarScript(src) {
     return new Promise((ok, mal) => {
@@ -43,7 +44,17 @@
   }
 
   function mostrarLider() {
-    Lider.render(datosLider, { salir, abrirUnidad });
+    Lider.render(datosLider, { salir, abrirUnidad, cargarUnidad });
+  }
+
+  // Datos de una unidad con la llave del líder; se descifran una sola vez
+  function cargarUnidad(id) {
+    if (!llavesLider[id]) return Promise.reject(new Error('Los datos del líder no traen la llave de ' + id));
+    if (!datosUnidad[id]) {
+      datosUnidad[id] = sobre(id).then(s => Cripto.descifrarConLlave(s, llavesLider[id]));
+      datosUnidad[id].catch(() => { delete datosUnidad[id]; });
+    }
+    return datosUnidad[id];
   }
 
   async function abrirUnidad(id) {

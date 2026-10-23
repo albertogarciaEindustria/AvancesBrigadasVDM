@@ -144,7 +144,9 @@ body.modo-unidad .tooltip { background: #fff; color: #1d1d1b; border-color: #e6e
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ── Página de unidad (KOF) ─────────────────────────────────────────── */
-body.modo-unidad {
+/* .tema-kof: la misma piel clara dentro de la página del líder (mapa de rutas
+   de Jóvenes del Futuro) */
+body.modo-unidad, .tema-kof {
   --kof-rojo: #e41e2b; --kof-rojo-osc: #b5121b; --kof-rojo-suave: #f4b8bd;
   --fondo: #f6f4f1; --tarjeta: #ffffff; --tinta: #1d1d1b; --tinta2: #52514e; --borde: #e6e2dc;
   --g-tinta: #1d1d1b; --g-tinta2: #52514e; --g-muted: #898781; --g-grid: #ece9e4; --g-eje: #c3c2b7;
@@ -405,14 +407,14 @@ body.modo-unidad {
 .tag-rep { font-size: 10.5px; background: #fff0c0; color: #634700; padding: 1px 5px; border-radius: 4px; font-weight: 750; }
 .vacio { text-align: center; padding: 18px !important; }
 
-body.modo-unidad .chip {
+body.modo-unidad .chip, .vista-lider .tema-kof .chip {
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   border: 1px solid var(--borde); background: #f1efeb; color: var(--g-muted);
   border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 650;
 }
-body.modo-unidad .chip svg { opacity: .35; }
-body.modo-unidad .chip.on { background: #fff; color: var(--tinta); border-color: #1d1d1b; }
-body.modo-unidad .chip.on svg { opacity: 1; }
+body.modo-unidad .chip svg, .vista-lider .tema-kof .chip svg { opacity: .35; }
+body.modo-unidad .chip.on, .vista-lider .tema-kof .chip.on { background: #fff; color: var(--tinta); border-color: #1d1d1b; }
+body.modo-unidad .chip.on svg, .vista-lider .tema-kof .chip.on svg { opacity: 1; }
 
 /* Mapas */
 .mapa-barra { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--borde); }
@@ -472,6 +474,34 @@ body.modo-unidad .chip.on svg { opacity: 1; }
 .brig-punto { background: #8a8985; border: 2.5px solid #1d1d1b; }
 .chip .ice-anillo, .chip .brig-punto { margin-right: 2px; }
 .rutas-resaltados { font-size: 13px; }
+/* Jóvenes Construyendo el Futuro: pin negro con una persona */
+.jcf-sw {
+  display: inline-block; width: 11px; height: 11px; flex: none; vertical-align: -1px; margin: 0 2px 0 1px;
+  background: #1d1d1b; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+}
+.jcf-icono { background: none; border: 0; }
+.jcf-icono:focus-visible { outline: none; }
+.jcf-pin {
+  position: absolute; left: 0; top: 0; width: 30px; height: 30px; display: grid; place-items: center;
+  background: #1d1d1b; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  box-shadow: 0 2px 7px rgba(0,0,0,.45);
+}
+.jcf-icono:focus-visible .jcf-pin { box-shadow: 0 0 0 3px #2a78d6; }
+.jcf-pin svg { transform: rotate(45deg); }
+.jcf-nombre {
+  display: none; position: absolute; top: 41px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  padding: 2px 7px; border-radius: 4px; font: 750 11px/1.25 var(--sans); background: #1d1d1b; color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.jcf-con-nombre .jcf-nombre { display: block; }
+.pc-cab.jcf { background: linear-gradient(135deg, #1d1d1b, #45443f); }
+.pc-fila { display: flex; gap: 6px; margin: 8px 12px 0; }
+.pc-fila .pc-btn { flex: 1; margin: 0; }
+.rutas-sub { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta2); margin: 4px 2px 4px; }
+.rutas-lista ul.jcf-lista { margin: 0 0 14px; }
+.jcf-txt { flex: 1; min-width: 0; font-size: 13px; }
+.jcf-txt b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jcf-txt small { display: block; color: var(--g-muted); font-size: 11.5px; }
 .ctl-ubicacion button {
   display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 4px;
   background: #fff; color: #1d1d1b; cursor: pointer;
@@ -655,6 +685,11 @@ body.modo-lider .chip svg { margin: 0; }
 .es-leyenda b { color: var(--ld-tinta); margin-left: 4px; }
 .es-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
 .es-leyenda i { width: 14px; height: 14px; border-radius: 3px; }
+
+/* Página Jóvenes del Futuro: el mapa de rutas de la unidad en su piel clara */
+.ld-panel-jcf .ld-bloque { margin-top: 14px; }
+.ld-jcf-mapa { margin-top: 14px; border: 1px solid var(--ld-borde); border-radius: 14px; overflow: hidden; }
+.ld-jcf-mapa:empty { display: none; }
 
 /* Página Mapa NoGeo */
 .ld-panel-nogeo .ld-bloque { margin-top: 14px; }

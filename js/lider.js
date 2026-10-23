@@ -1,5 +1,6 @@
 /* Página LiderBrigadasVDM: tablero negro con las métricas de las 5 unidades
- * operativas (tabla de /avancegloballider y gráficas). */
+ * operativas (tabla de /avancegloballider y gráficas), mapa de NoGeo y mapa de
+ * rutas activas con los Jóvenes Construyendo el Futuro. */
 const Lider = (function () {
   'use strict';
   const { esc, num, pct } = Util;
@@ -11,7 +12,10 @@ const Lider = (function () {
   const COLOR_KOF = '#f0efec';
   const RIESGO = '#e66767';
 
-  let D = null, opc = {}, colorDe = {}, formaDe = {}, mapaN = null;
+  let D = null, opc = {}, colorDe = {}, formaDe = {}, mapaN = null, mapaJ = null;
+  // Jóvenes del Futuro: número de la última unidad pedida (descifrar tarda) y
+  // el dibujo que espera a que la pestaña esté visible
+  let pedidoJ = 0, pendienteJ = null;
 
   const semAvance = p => p >= 20 ? 'ok' : 'critico';
   const semTend = p => p >= 100 ? 'ok' : p >= 90 ? 'aviso' : 'critico';
@@ -35,6 +39,8 @@ const Lider = (function () {
   function render(datos, opciones = {}) {
     D = datos; opc = opciones;
     if (mapaN) { mapaN.remove(); mapaN = null; }
+    if (mapaJ) { mapaJ.remove(); mapaJ = null; }
+    pedidoJ++; pendienteJ = null;
     document.body.className = 'modo-lider';
     document.getElementById('vistaUnidad').hidden = true;
     const raiz = document.getElementById('vistaLider');
@@ -54,6 +60,7 @@ const Lider = (function () {
       <nav class="ld-pestanas" role="tablist" aria-label="Páginas del líder">
         <button role="tab" id="ldTabTablero" aria-controls="ldPanelTablero" aria-selected="true" data-pestana="tablero">Tablero</button>
         <button role="tab" id="ldTabNogeo" aria-controls="ldPanelNogeo" aria-selected="false" tabindex="-1" data-pestana="nogeo">Mapa NoGeo</button>
+        <button role="tab" id="ldTabJcf" aria-controls="ldPanelJcf" aria-selected="false" tabindex="-1" data-pestana="jcf">Jóvenes del Futuro</button>
       </nav>
 
       <div id="ldPanelTablero" role="tabpanel" aria-labelledby="ldTabTablero">
@@ -80,7 +87,7 @@ const Lider = (function () {
       <div class="ld-grid">
         ${bloque('Distribución de calificaciones EPICA por unidad', 'Violín con densidad (kernel gaussiano) y cada sesión como punto. Caja = Q1–Q3, círculo = mediana, línea = media, bigotes = 1.5 × RIC.', '<div class="g-scroll"><div class="grafica g-oscura" id="gViolin"></div></div>', 'ancho')}
         ${bloque('Comportamiento del promedio contra el objetivo', `Promedio de calificación EPICA por día de ${esc(D.mes)}; objetivo ${D.objetivo_calificacion}.`,
-          `<div class="chips ld-chips" role="group" aria-label="Tipo de promedio">
+          `<div class="chips ld-chips" id="chipsLineas" role="group" aria-label="Tipo de promedio">
              <button type="button" class="chip on" data-modo="acum">Promedio acumulado</button>
              <button type="button" class="chip" data-modo="dia">Promedio del día</button></div>
            <div class="grafica g-oscura" id="gLineas"></div>`, 'ancho')}
@@ -99,7 +106,8 @@ const Lider = (function () {
       ${bloque('Ranking VDM completo', `Clientes contables de ${esc(D.mes)} (sin foto de foto ni NoGeo), como /rankingvdm. ▲▼ = cambio de posición contra el corte anterior.`, tablaRanking())}
       <p class="ld-pie">Calificación EPICA = EPICA Total (máximo 110) por sesión única. Tendencia: ritmo diario sin domingos; los sábados restantes suman 3 clientes por lugar. NoGeo: cierre a más de ${D.no_geo_metros} m del cliente.</p>
       </div>
-      <div id="ldPanelNogeo" class="ld-panel-nogeo" role="tabpanel" aria-labelledby="ldTabNogeo" hidden></div>`;
+      <div id="ldPanelNogeo" class="ld-panel-nogeo" role="tabpanel" aria-labelledby="ldTabNogeo" hidden></div>
+      <div id="ldPanelJcf" class="ld-panel-jcf" role="tabpanel" aria-labelledby="ldTabJcf" hidden></div>`;
 
     raiz.querySelector('[data-accion="salir"]').addEventListener('click', () => opc.salir && opc.salir());
     raiz.querySelectorAll('[data-abrir]').forEach(b => b.addEventListener('click', async () => {
@@ -113,7 +121,7 @@ const Lider = (function () {
       t.addEventListener('click', () => pestana(t.dataset.pestana));
       t.addEventListener('keydown', e => {
         if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-        const j = (tabs.indexOf(t) + 1) % tabs.length;
+        const j = (tabs.indexOf(t) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
         tabs[j].focus(); pestana(tabs[j].dataset.pestana);
       });
     });
@@ -130,8 +138,10 @@ const Lider = (function () {
     }
     document.getElementById('ldPanelTablero').hidden = cual !== 'tablero';
     document.getElementById('ldPanelNogeo').hidden = cual !== 'nogeo';
+    document.getElementById('ldPanelJcf').hidden = cual !== 'jcf';
     Graficas.Tip.hide();
     if (cual === 'nogeo') paginaNogeo();
+    if (cual === 'jcf') paginaJovenes();
   }
 
   function tile(etiqueta, valor, sub, estado) {
@@ -415,6 +425,63 @@ const Lider = (function () {
     }));
   }
 
+  // ── Página "Jóvenes del Futuro" ───────────────────────────────────────
+  // El mapa de rutas activas de la unidad, el mismo de su página (sus datos se
+  // descifran con la llave del líder al elegirla), con los Jóvenes
+  // Construyendo el Futuro de BaseDeDatos/JovenesDelFuturo.JSON (/jcfvdm)
+
+  function paginaJovenes() {
+    const panel = document.getElementById('ldPanelJcf');
+    if (pendienteJ) { const dibujar = pendienteJ; pendienteJ = null; dibujar(); return; }
+    if (panel.childElementCount) { if (mapaJ) setTimeout(() => mapaJ.invalidateSize(), 50); return; }
+    const J = D.jovenes || [];
+    const cuantos = u => J.filter(j => j.unidad === u).length;
+    panel.innerHTML = `
+      <section class="ld-bloque">
+        <header><h2>Jóvenes Construyendo el Futuro en las rutas de hoy</h2>
+          <p>El mapa de "Rutas activas hoy" de cada unidad, igual al de su página, con la ubicación de sus jóvenes (pin negro). Toca a un joven para llamarle, escribirle por WhatsApp o ver las rutas de hoy que le quedan más cerca. Se agregan, editan y dan de baja con /jcfvdm en el bot; los cambios se ven en la siguiente publicación.</p></header>
+        <div class="chips ld-chips" id="chipsJcf" role="group" aria-label="Unidad">
+          ${D.unidades.map(u => `<button type="button" class="chip" data-u="${esc(u.id)}" aria-pressed="false">${swatch(u.nombre)}${esc(u.nombre)} · <b>${num(cuantos(u.nombre))}</b></button>`).join('')}
+        </div>
+        <p class="ld-nota" id="estadoJcf" role="status"></p>
+      </section>
+      <div class="tema-kof ld-jcf-mapa" id="rutasJcf"></div>`;
+    panel.querySelectorAll('#chipsJcf .chip').forEach(c => c.addEventListener('click', () => unidadJovenes(c.dataset.u)));
+    const inicial = D.unidades.find(u => cuantos(u.nombre)) || D.unidades[0];
+    if (inicial) unidadJovenes(inicial.id);
+  }
+
+  async function unidadJovenes(id) {
+    const u = D.unidades.find(x => x.id === id);
+    const panel = document.getElementById('ldPanelJcf');
+    panel.querySelectorAll('#chipsJcf .chip').forEach(c => {
+      const on = c.dataset.u === id;
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-pressed', on);
+    });
+    const estado = panel.querySelector('#estadoJcf'), cont = panel.querySelector('#rutasJcf');
+    const pedido = ++pedidoJ;
+    pendienteJ = null;
+    estado.textContent = `Descifrando las rutas de ${u.nombre}…`;
+    let datos;
+    try {
+      datos = await opc.cargarUnidad(id);
+    } catch (e) {
+      console.error(e);
+      if (pedido === pedidoJ) estado.textContent = `No se pudieron abrir las rutas de ${u.nombre}. Vuelve a tocar la unidad.`;
+      return;
+    }
+    if (pedido !== pedidoJ || !cont.isConnected) return;     // ya eligieron otra unidad o salieron
+    const J = (D.jovenes || []).filter(j => j.unidad === u.nombre);
+    const dibujar = () => {
+      if (mapaJ) { mapaJ.remove(); mapaJ = null; }
+      estado.textContent = `${u.nombre}: ${J.length === 1 ? '1 joven' : `${num(J.length)} jóvenes`} · ${num(datos.rutas.rutas.length)} rutas activas hoy.`;
+      mapaJ = Unidad.rutasEnPanel(cont, datos.rutas, { ice: !!datos.universo_ice, jovenes: J, unidad: u.nombre });
+    };
+    // Leaflet necesita el mapa visible para encuadrarlo
+    if (panel.hidden) pendienteJ = dibujar; else dibujar();
+  }
+
   // ── Gráficas ──────────────────────────────────────────────────────────
   function graficas() {
     const us = D.unidades.map(u => u.nombre);
@@ -445,8 +512,8 @@ const Lider = (function () {
       objetivo: { valor: obj, etiqueta: `Objetivo ${obj}` }, etiquetaFinal: true,
     });
     dibujarLineas('acum');
-    document.querySelectorAll('.ld-chips .chip').forEach(b => b.addEventListener('click', () => {
-      document.querySelectorAll('.ld-chips .chip').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('#chipsLineas .chip').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('#chipsLineas .chip').forEach(x => x.classList.toggle('on', x === b));
       dibujarLineas(b.dataset.modo);
     }));
 
