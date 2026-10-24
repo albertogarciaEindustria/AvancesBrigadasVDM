@@ -44,10 +44,11 @@
   }
 
   function mostrarLider() {
-    Lider.render(datosLider, { salir, abrirUnidad, cargarUnidad });
+    Lider.render(datosLider, { salir, abrirUnidad, cargarUnidad, tieneLlave: id => !!llavesLider[id] });
   }
 
-  // Datos de una unidad con la llave del líder; se descifran una sola vez
+  // Datos de una unidad (o sus rutas de la semana, 'semana-<id>') con la llave
+  // del líder; se descifran una sola vez
   function cargarUnidad(id) {
     if (!llavesLider[id]) return Promise.reject(new Error('Los datos del líder no traen la llave de ' + id));
     if (!datosUnidad[id]) {

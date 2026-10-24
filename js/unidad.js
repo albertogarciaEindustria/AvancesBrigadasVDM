@@ -727,7 +727,7 @@ const Unidad = (function () {
     }).filter(x => x.d < Infinity).sort((a, b) => a.d - b.d).slice(0, 3);
   }
 
-  function fichaJoven(j, cercanas, unidad) {
+  function fichaJoven(j, cercanas, unidad, cuando) {
     const tel = telefonoTxt(j.telefono);
     return `<div class="pc"><div class="pc-cab jcf">
         <b>${esc(j.nombre)}</b><span>Joven Construyendo el Futuro · ${esc(unidad)}</span></div>
@@ -736,21 +736,23 @@ const Unidad = (function () {
         <a class="pc-btn sec" target="_blank" rel="noopener" href="https://wa.me/52${esc(j.telefono)}">WhatsApp</a></div>` : ''}
       ${enlacesGoogle(j.lat, j.lon)}
       <dl class="pc-cuerpo">${filaPop('Teléfono', tel || 'Sin teléfono')}${filaPop('Coordenadas', `${j.lat}, ${j.lon}`)}
-        ${cercanas.length ? `<dt>Rutas cerca</dt><dd>${cercanas.map(c => `${esc(c.codigo)} · ${distanciaTxt(c.d)}`).join('<br>')}</dd>` : ''}</dl></div>`;
+        ${cercanas.length ? `<dt>Rutas cerca ${esc(cuando)}</dt><dd>${cercanas.map(c => `${esc(c.codigo)} · ${distanciaTxt(c.d)}`).join('<br>')}</dd>` : ''}</dl></div>`;
   }
 
   // Mapa de rutas activas en `panel` (la pestaña de la unidad y la página
-  // Jóvenes del Futuro del líder, que manda `jovenes` y `unidad`). Devuelve el mapa.
+  // Jóvenes del Futuro del líder, que manda `jovenes`, `unidad` y puede mandar
+  // otro día de la semana con R.hoy = false). Devuelve el mapa.
   function rutasEnPanel(panel, R, { ice = false, jovenes = null, unidad = '' } = {}) {
     const rutas = R.rutas, ICE = ice, J = jovenes;
     const total = rutas.reduce((a, r) => a + r.puntos.length, 0);
     const cuenta = (r, k) => r.puntos.reduce((a, p) => a + (p[k] ? 1 : 0), 0);
     const totBrig = rutas.reduce((a, r) => a + cuenta(r, 6), 0), totIce = rutas.reduce((a, r) => a + cuenta(r, 7), 0);
     const fecha = R.fecha.split('-').reverse().join('/');
+    const hoy = R.hoy !== false, dia = R.dia.toLowerCase(), cuando = hoy ? 'hoy' : `el ${dia}`;
     const cercanas = (J || []).map(j => rutasCercanas(j, rutas));
     panel.innerHTML = `
       <div class="mapa-barra">
-        <div class="mapa-resumen">Rutas activas hoy${unidad ? ` en <b>${esc(unidad)}</b>` : ''} · <b>${esc(R.dia)} ${fecha}</b> (frecuencia <b>${esc(R.letra)}</b>) · <b>${num(rutas.length)}</b> rutas · <b>${num(total)}</b> clientes. Cada SalesTerritoryCode tiene su color y su etiqueta (visible al acercar el mapa); las líneas unen a los clientes de la misma ruta.</div>
+        <div class="mapa-resumen">${hoy ? 'Rutas activas hoy' : 'Rutas que tocan'}${unidad ? ` en <b>${esc(unidad)}</b>` : ''} ${hoy ? `· <b>${esc(R.dia)} ${fecha}</b>` : `el <b>${esc(dia)} ${fecha}</b>`} (frecuencia <b>${esc(R.letra)}</b>) · <b>${num(rutas.length)}</b> rutas · <b>${num(total)}</b> clientes. Cada SalesTerritoryCode tiene su color y su etiqueta (visible al acercar el mapa); las líneas unen a los clientes de la misma ruta.</div>
         <div class="mapa-resumen rutas-resaltados">${J ? `<span class="jcf-sw" aria-hidden="true"></span> Jóvenes Construyendo el Futuro (<b>${num(J.length)}</b>) · ` : ''}Resaltados: <b>1º</b> <span class="brig-punto" aria-hidden="true"></span> cliente brigadista (<b>${num(totBrig)}</b>)${ICE
           ? ` · <b>2º</b> <span class="ice-anillo" aria-hidden="true"></span> evaluable ICE (<b>${num(totIce)}</b>)` : ''}</div>
         <div class="mapa-controles">
@@ -771,10 +773,10 @@ const Unidad = (function () {
           ${J ? `<h3 class="rutas-sub">Jóvenes Construyendo el Futuro (${num(J.length)})</h3>
           <ul class="jcf-lista">${J.length ? J.map((j, i) => `
             <li><span class="jcf-sw" aria-hidden="true"></span>
-              <span class="jcf-txt"><b>${esc(j.nombre)}</b><small>${cercanas[i].length ? `Ruta más cerca: ${esc(cercanas[i][0].codigo)} a ${distanciaTxt(cercanas[i][0].d)}` : 'Sin rutas activas hoy'}</small></span>
+              <span class="jcf-txt"><b>${esc(j.nombre)}</b><small>${cercanas[i].length ? `Ruta más cerca: ${esc(cercanas[i][0].codigo)} a ${distanciaTxt(cercanas[i][0].d)}` : `Sin rutas ${esc(cuando)}`}</small></span>
               <button type="button" class="ruta-ir" data-j="${i}" aria-label="Ver a ${esc(j.nombre)} en el mapa">↗</button></li>`).join('')
             : `<li class="muted">Sin jóvenes en ${esc(unidad)}: agrégalos con /jcfvdm en el bot.</li>`}</ul>
-          <h3 class="rutas-sub">Rutas activas (${num(rutas.length)})</h3>` : ''}
+          <h3 class="rutas-sub">${hoy ? 'Rutas activas' : `Rutas del ${esc(dia)}`} (${num(rutas.length)})</h3>` : ''}
           <input type="search" class="busca-ruta" placeholder="Buscar ruta o jefatura" aria-label="Buscar ruta">
           <ul class="lista-rutas">${rutas.map((r, i) => `
             <li><label><input type="checkbox" checked data-i="${i}">
@@ -833,7 +835,7 @@ const Unidad = (function () {
       return L.marker([j.lat, j.lon], { zIndexOffset: 1000, title: j.nombre,
         icon: L.divIcon({ className: 'jcf-icono', iconSize: [30, 38], iconAnchor: [15, 37], popupAnchor: [0, -34],
           html: `<span class="jcf-pin">${ICONO_JOVEN}</span><span class="jcf-nombre">${esc(j.nombre)}</span>` }) })
-        .bindPopup(() => fichaJoven(j, cercanas[i], unidad)).addTo(capaJ);
+        .bindPopup(() => fichaJoven(j, cercanas[i], unidad, cuando)).addTo(capaJ);
     });
     if (J) capaJ.addTo(mapaR);
     let etiquetas = true;

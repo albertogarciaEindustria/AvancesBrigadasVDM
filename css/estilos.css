@@ -690,6 +690,16 @@ body.modo-lider .chip svg { margin: 0; }
 .ld-panel-jcf .ld-bloque { margin-top: 14px; }
 .ld-jcf-mapa { margin-top: 14px; border: 1px solid var(--ld-borde); border-radius: 14px; overflow: hidden; }
 .ld-jcf-mapa:empty { display: none; }
+/* Botones de día: qué rutas y clientes tocan (nombre corto en celular) */
+.ld-dias { align-items: center; }
+.ld-dias:empty { display: none; }
+.ld-dias-tit { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ld-muted); margin-right: 4px; }
+.ld-dias .chip b { font-variant-numeric: tabular-nums; }
+.ld-dia-corto { display: none; }
+@media (max-width: 560px) {
+  .ld-dia-largo { display: none; }
+  .ld-dia-corto { display: inline; }
+}
 
 /* Página Mapa NoGeo */
 .ld-panel-nogeo .ld-bloque { margin-top: 14px; }

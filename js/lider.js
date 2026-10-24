@@ -13,9 +13,9 @@ const Lider = (function () {
   const RIESGO = '#e66767';
 
   let D = null, opc = {}, colorDe = {}, formaDe = {}, mapaN = null, mapaJ = null;
-  // Jóvenes del Futuro: número de la última unidad pedida (descifrar tarda) y
-  // el dibujo que espera a que la pestaña esté visible
-  let pedidoJ = 0, pendienteJ = null;
+  // Jóvenes del Futuro: número de la última unidad pedida (descifrar tarda),
+  // el dibujo que espera a que la pestaña esté visible y el día elegido
+  let pedidoJ = 0, pendienteJ = null, diaJ = null;
 
   const semAvance = p => p >= 20 ? 'ok' : 'critico';
   const semTend = p => p >= 100 ? 'ok' : p >= 90 ? 'aviso' : 'critico';
@@ -426,8 +426,9 @@ const Lider = (function () {
   }
 
   // ── Página "Jóvenes del Futuro" ───────────────────────────────────────
-  // El mapa de rutas activas de la unidad, el mismo de su página (sus datos se
-  // descifran con la llave del líder al elegirla), con los Jóvenes
+  // El mapa de rutas de la unidad, el mismo de "Rutas activas hoy" de su
+  // página, con un botón por día de la semana (sus rutas de lunes a domingo
+  // se descifran con la llave del líder al elegirla) y los Jóvenes
   // Construyendo el Futuro de BaseDeDatos/JovenesDelFuturo.JSON (/jcfvdm)
 
   function paginaJovenes() {
@@ -438,11 +439,12 @@ const Lider = (function () {
     const cuantos = u => J.filter(j => j.unidad === u).length;
     panel.innerHTML = `
       <section class="ld-bloque">
-        <header><h2>Jóvenes Construyendo el Futuro en las rutas de hoy</h2>
-          <p>El mapa de "Rutas activas hoy" de cada unidad, igual al de su página, con la ubicación de sus jóvenes (pin negro). Toca a un joven para llamarle, escribirle por WhatsApp o ver las rutas de hoy que le quedan más cerca. Se agregan, editan y dan de baja con /jcfvdm en el bot; los cambios se ven en la siguiente publicación.</p></header>
+        <header><h2>Jóvenes Construyendo el Futuro en las rutas de la semana</h2>
+          <p>El mapa de rutas de cada unidad, igual al de "Rutas activas hoy" de su página, con la ubicación de sus jóvenes (pin negro). Elige un día para ver qué rutas y clientes tocan ese día según su frecuencia ZPV (de entrada se ve hoy). Toca a un joven para llamarle, escribirle por WhatsApp o ver las rutas de ese día que le quedan más cerca. Se agregan, editan y dan de baja con /jcfvdm en el bot; los cambios se ven en la siguiente publicación.</p></header>
         <div class="chips ld-chips" id="chipsJcf" role="group" aria-label="Unidad">
           ${D.unidades.map(u => `<button type="button" class="chip" data-u="${esc(u.id)}" aria-pressed="false">${swatch(u.nombre)}${esc(u.nombre)} · <b>${num(cuantos(u.nombre))}</b></button>`).join('')}
         </div>
+        <div class="chips ld-chips ld-dias" id="diasJcf" role="group" aria-label="Día de la semana"></div>
         <p class="ld-nota" id="estadoJcf" role="status"></p>
       </section>
       <div class="tema-kof ld-jcf-mapa" id="rutasJcf"></div>`;
@@ -450,6 +452,26 @@ const Lider = (function () {
     const inicial = D.unidades.find(u => cuantos(u.nombre)) || D.unidades[0];
     if (inicial) unidadJovenes(inicial.id);
   }
+
+  // Rutas de lunes a domingo de la unidad (datos/semana-<id>.js): cada ruta
+  // trae sus clientes una sola vez y cada día [ruta, jefatura, orden de los
+  // que tocan]. Si la publicación es anterior a ese archivo, solo hoy.
+  async function semanaDe(id) {
+    if (opc.tieneLlave && opc.tieneLlave('semana-' + id)) return opc.cargarUnidad('semana-' + id);
+    const d = await opc.cargarUnidad(id), R = d.rutas;
+    return { ice: !!d.universo_ice, rutas: R.rutas,
+             dias: [{ dia: R.dia, letra: R.letra, fecha: R.fecha, hoy: true,
+                      rutas: R.rutas.map((r, i) => [i, r.jefatura, r.puntos.map((_, k) => k)]) }] };
+  }
+
+  // Un día de la semana con la forma de "Rutas activas hoy" (Unidad.rutasEnPanel)
+  const rutasDelDia = (S, d) => ({
+    dia: d.dia, letra: d.letra, fecha: d.fecha, hoy: d.hoy,
+    rutas: d.rutas.map(([i, jefatura, orden]) => ({ codigo: S.rutas[i].codigo, jefatura,
+                                                   puntos: orden.map(k => S.rutas[i].puntos[k]) })),
+  });
+  const clientesDia = d => d.rutas.reduce((a, r) => a + r[2].length, 0);
+  const fechaCorta = f => f.split('-').reverse().join('/');
 
   async function unidadJovenes(id) {
     const u = D.unidades.find(x => x.id === id);
@@ -460,12 +482,13 @@ const Lider = (function () {
       c.setAttribute('aria-pressed', on);
     });
     const estado = panel.querySelector('#estadoJcf'), cont = panel.querySelector('#rutasJcf');
+    const diasCont = panel.querySelector('#diasJcf');
     const pedido = ++pedidoJ;
     pendienteJ = null;
     estado.textContent = `Descifrando las rutas de ${u.nombre}…`;
-    let datos;
+    let S;
     try {
-      datos = await opc.cargarUnidad(id);
+      S = await semanaDe(id);
     } catch (e) {
       console.error(e);
       if (pedido === pedidoJ) estado.textContent = `No se pudieron abrir las rutas de ${u.nombre}. Vuelve a tocar la unidad.`;
@@ -473,11 +496,32 @@ const Lider = (function () {
     }
     if (pedido !== pedidoJ || !cont.isConnected) return;     // ya eligieron otra unidad o salieron
     const J = (D.jovenes || []).filter(j => j.unidad === u.nombre);
-    const dibujar = () => {
+    // El día elegido se queda al cambiar de unidad; si no lo tiene, hoy
+    if (!S.dias.some(d => d.dia === diaJ)) diaJ = (S.dias.find(d => d.hoy) || S.dias[0]).dia;
+    diasCont.innerHTML = `<span class="ld-dias-tit">Día:</span>` + S.dias.map(d => {
+      const txt = `${d.dia} ${fechaCorta(d.fecha)}${d.hoy ? ' (hoy)' : ''}: ${num(clientesDia(d))} clientes`;
+      return `<button type="button" class="chip" data-dia="${esc(d.dia)}" aria-pressed="false" aria-label="${esc(txt)}" title="${esc(txt)}">
+        <span class="ld-dia-largo">${esc(d.dia)}</span><span class="ld-dia-corto">${esc(d.dia.slice(0, 3))}</span>${d.hoy ? ' · hoy' : ''} · <b>${num(clientesDia(d))}</b></button>`;
+    }).join('');
+    // `vista` conserva el encuadre del mapa al cambiar de día
+    const dibujar = (vista = false) => {
+      const d = S.dias.find(x => x.dia === diaJ), R = rutasDelDia(S, d);
+      diasCont.querySelectorAll('.chip').forEach(c => {
+        const on = c.dataset.dia === diaJ;
+        c.classList.toggle('on', on);
+        c.setAttribute('aria-pressed', on);
+      });
+      const encuadre = vista && mapaJ ? [mapaJ.getCenter(), mapaJ.getZoom()] : null;
       if (mapaJ) { mapaJ.remove(); mapaJ = null; }
-      estado.textContent = `${u.nombre}: ${J.length === 1 ? '1 joven' : `${num(J.length)} jóvenes`} · ${num(datos.rutas.rutas.length)} rutas activas hoy.`;
-      mapaJ = Unidad.rutasEnPanel(cont, datos.rutas, { ice: !!datos.universo_ice, jovenes: J, unidad: u.nombre });
+      estado.textContent = `${u.nombre}: ${J.length === 1 ? '1 joven' : `${num(J.length)} jóvenes`} · ${d.hoy ? `hoy (${d.dia.toLowerCase()} ${fechaCorta(d.fecha)})` : `${d.dia.toLowerCase()} ${fechaCorta(d.fecha)}`}: ${num(R.rutas.length)} rutas y ${num(clientesDia(d))} clientes que tocan.`;
+      mapaJ = Unidad.rutasEnPanel(cont, R, { ice: !!S.ice, jovenes: J, unidad: u.nombre });
+      if (encuadre) mapaJ.setView(encuadre[0], encuadre[1], { animate: false });
     };
+    diasCont.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+      if (pedido !== pedidoJ || c.dataset.dia === diaJ) return;
+      diaJ = c.dataset.dia;
+      dibujar(true);
+    }));
     // Leaflet necesita el mapa visible para encuadrarlo
     if (panel.hidden) pendienteJ = dibujar; else dibujar();
   }
