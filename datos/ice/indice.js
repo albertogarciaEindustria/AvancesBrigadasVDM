@@ -1,1 +1,1 @@
-window.ICE_INDICE=window.ICE_INDICE||{};window.ICE_INDICE["datos"]={"version":"20261030010108","generado":"2026-10-30 01:01","actualizado":"30 de octubre de 2026","corte":"28 de octubre de 2026, 19:34","hay_datos":true,"aviso":""};
+window.ICE_INDICE=window.ICE_INDICE||{};window.ICE_INDICE["datos"]={"version":"20261031010112","generado":"2026-10-31 01:01","actualizado":"31 de octubre de 2026","corte":"28 de octubre de 2026, 19:34","hay_datos":true,"aviso":""};
