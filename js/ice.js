@@ -867,9 +867,9 @@ const Ice = (function () {
   // zona alta (75 %) y esta dentro de la amplia (90 %). Se dibujan de la más
   // amplia a la más chica para que el toque caiga en la de encima.
   const NIVELES_POL = {
-    50: { nombre: 'Núcleo', relleno: 0.42, grosor: 2, linea: '#C40000', kml: ['6b', 'ff0000c4', 2] },
-    75: { nombre: 'Zona alta', relleno: 0.24, grosor: 1.5, linea: ROJO, kml: ['3d', 'ff0000f4', 1.5] },
-    90: { nombre: 'Zona amplia', relleno: 0.12, grosor: 1.2, linea: ROJO, kml: ['1f', 'ff0000f4', 1] },
+    50: { nombre: 'Núcleo', relleno: 0.42, grosor: 2, linea: '#C40000' },
+    75: { nombre: 'Zona alta', relleno: 0.24, grosor: 1.5, linea: ROJO },
+    90: { nombre: 'Zona amplia', relleno: 0.12, grosor: 1.2, linea: ROJO },
   };
   const diaMes = iso => { const { m, d } = partes(iso); return `${d} de ${MESES[m - 1]}`; };
   const periodoPol = M => !M.desde || !M.hasta ? 'sin evaluaciones'
@@ -1133,9 +1133,12 @@ const Ice = (function () {
       boton.disabled = true;
       aviso.textContent = 'Generando el KMZ...';
       try {
-        const modo = estado.modo, M = PG[modo];
-        const blob = await zipUnArchivo('doc.kml', new TextEncoder().encode(kmlPoligonos(modo)));
-        PDF.descargar(blob, `PoligonosICE_${D.unidad}_${modo === 'historico' ? 'historico' : `ultimos_${PG.meses}_meses`}_${M.hasta}.kmz`);
+        const modo = estado.modo, M = PG[modo], R = M.resultado;
+        const blob = await Archivos.kmz(R, {
+          titulo: `Polígonos ICE · ${D.unidad} · ${nombreModoPol(modo)}`, peso: 'evaluaciones',
+          descripcion: `Zonas donde se concentran los clientes evaluados en ICE de la unidad ${D.unidad}${modo === 'historico' ? ' (todo el histórico de los clientes del universo ICE)' : ''}, ${periodoPol(M)}: ${num(R.evaluaciones)} evaluaciones de ${num(R.clientes)} clientes. Regiones de mayor densidad de probabilidad (kernel gaussiano adaptativo, ancho base ${num(R.ancho_m)} m): cada nivel es la superficie más chica que reúne el 50, 75 o 90 % de la densidad. Publicado ${D.generado}.`,
+        });
+        Archivos.descargar(blob, `PoligonosICE_${D.unidad}_${modo === 'historico' ? 'historico' : `ultimos_${PG.meses}_meses`}_${M.hasta}.kmz`);
         aviso.textContent = 'KMZ listo: revisa tus descargas.';
       } catch (err) {
         console.error(err);
@@ -1144,72 +1147,6 @@ const Ice = (function () {
         boton.disabled = false;
       }
     });
-  }
-
-  // KML de los polígonos del periodo (solo polígonos: sin clientes). Colores
-  // de KML en aabbggrr; exterior antihorario y huecos horarios (ya vienen así)
-  function kmlPoligonos(modo) {
-    const M = D.poligonos[modo], R = M.resultado;
-    const anillo = a => [...a, a[0]].map(([lat, lon]) => `${lon},${lat},0`).join(' ');
-    const dato = (k, v) => `<Data name="${k}"><value>${esc(v)}</value></Data>`;
-    const titulo = `Polígonos ICE · ${D.unidad} · ${nombreModoPol(modo)}`;
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>
-<name>${esc(titulo)}</name>
-<description>${esc(`Zonas donde se concentran los clientes evaluados en ICE de la unidad ${D.unidad}${modo === 'historico' ? ' (todo el histórico de los clientes del universo ICE)' : ''}, ${periodoPol(M)}: ${num(R.evaluaciones)} evaluaciones de ${num(R.clientes)} clientes. Regiones de mayor densidad de probabilidad (kernel gaussiano adaptativo, ancho base ${num(R.ancho_m)} m): cada nivel es la superficie más chica que reúne el 50, 75 o 90 % de la densidad. Publicado ${D.generado}.`)}</description>
-${[90, 75, 50].map(p => { const [a, linea, ancho] = NIVELES_POL[p].kml; return `<Style id="n${p}"><LineStyle><color>${linea}</color><width>${ancho}</width></LineStyle><PolyStyle><color>${a}0000f4</color></PolyStyle></Style>`; }).join('\n')}
-${[...R.niveles].sort((a, b) => b.p - a.p).map(n => `<Folder>
-<name>${esc(`${NIVELES_POL[n.p].nombre} (${n.p} %): ${partePct(n.evaluaciones, R.evaluaciones)} de las evaluaciones, ${num(n.area_km2, 1)} km²`)}</name>
-${n.poligonos.map((q, k) => `<Placemark>
-<name>${esc(`${NIVELES_POL[n.p].nombre} ${k + 1}`)}</name>
-<description>${esc(`${num(q.evaluaciones)} evaluaciones (${partePct(q.evaluaciones, R.evaluaciones)} del periodo) de ${num(q.clientes)} clientes · ${num(q.area_km2, 2)} km²`)}</description>
-<styleUrl>#n${n.p}</styleUrl>
-<ExtendedData>${dato('nivel_pct', n.p)}${dato('zona', `${NIVELES_POL[n.p].nombre} ${k + 1}`)}${dato('evaluaciones', q.evaluaciones)}${dato('clientes', q.clientes)}${dato('area_km2', q.area_km2)}</ExtendedData>
-<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${anillo(q.anillos[0])}</coordinates></LinearRing></outerBoundaryIs>${q.anillos.slice(1).map(h => `<innerBoundaryIs><LinearRing><coordinates>${anillo(h)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>
-</Placemark>`).join('\n')}
-</Folder>`).join('\n')}
-</Document>
-</kml>
-`;
-  }
-
-  // ZIP de un solo archivo (un KMZ es un ZIP con doc.kml); comprimido con
-  // deflate si el navegador tiene CompressionStream, si no, guardado tal cual
-  const TABLA_CRC = (() => {
-    const t = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
-    return t;
-  })();
-  function crc32(bytes) {
-    let c = 0xFFFFFFFF;
-    for (let i = 0; i < bytes.length; i++) c = TABLA_CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
-    return (c ^ 0xFFFFFFFF) >>> 0;
-  }
-  async function zipUnArchivo(nombre, datos) {
-    let cuerpo = datos, metodo = 0;
-    if (window.CompressionStream) {
-      try {
-        const flujo = new Blob([datos]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-        cuerpo = new Uint8Array(await new Response(flujo).arrayBuffer());
-        metodo = 8;
-      } catch (e) { cuerpo = datos; metodo = 0; }
-    }
-    const n = new TextEncoder().encode(nombre), crc = crc32(datos), f = new Date();
-    const hora = (f.getHours() << 11) | (f.getMinutes() << 5) | (f.getSeconds() >> 1);
-    const dia = ((f.getFullYear() - 1980) << 9) | ((f.getMonth() + 1) << 5) | f.getDate();
-    const local = new DataView(new ArrayBuffer(30)), central = new DataView(new ArrayBuffer(46)), fin = new DataView(new ArrayBuffer(22));
-    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, metodo, 2], [10, hora, 2], [12, dia, 2], [14, crc, 4],
-     [18, cuerpo.length, 4], [22, datos.length, 4], [26, n.length, 2], [28, 0, 2]]
-      .forEach(([o, v, t]) => t === 4 ? local.setUint32(o, v, true) : local.setUint16(o, v, true));
-    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, metodo, 2], [12, hora, 2], [14, dia, 2],
-     [16, crc, 4], [20, cuerpo.length, 4], [24, datos.length, 4], [28, n.length, 2], [30, 0, 2], [32, 0, 2],
-     [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, 0, 4]]
-      .forEach(([o, v, t]) => t === 4 ? central.setUint32(o, v, true) : central.setUint16(o, v, true));
-    [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, 1, 2], [10, 1, 2], [12, 46 + n.length, 4],
-     [16, 30 + n.length + cuerpo.length, 4], [20, 0, 2]]
-      .forEach(([o, v, t]) => t === 4 ? fin.setUint32(o, v, true) : fin.setUint16(o, v, true));
-    return new Blob([local, n, cuerpo, central, n, fin], { type: 'application/vnd.google-earth.kmz' });
   }
 
   // ── Excel de la clasificación ─────────────────────────────────────────

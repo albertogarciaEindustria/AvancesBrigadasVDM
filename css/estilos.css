@@ -528,6 +528,46 @@ body.modo-unidad .chip.on svg, .vista-lider .tema-kof .chip.on svg { opacity: 1;
   box-shadow: 0 6px 20px rgba(0,0,0,.25);
 }
 
+/* Botones de descarga (página de unidad) */
+.kof-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 16px; border-radius: 999px;
+  border: 2px solid var(--kof-rojo); background: var(--kof-rojo); color: #fff; font: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer;
+}
+.kof-btn:hover { background: var(--kof-rojo-osc); border-color: var(--kof-rojo-osc); }
+.kof-btn.sec { background: #fff; color: var(--kof-rojo-osc); }
+.kof-btn.sec:hover { background: var(--kof-rojo); border-color: var(--kof-rojo); color: #fff; }
+.kof-btn:disabled { opacity: .55; cursor: progress; }
+.kof-btn small { font-weight: 650; opacity: .75; }
+
+/* Polígonos de clientes fáciles: muestra del relleno de cada nivel (--a = opacidad) */
+.poli-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.poli-sw { width: 14px; height: 14px; flex: none; border-radius: 3px; background: rgba(228, 30, 43, var(--a, .3)); border: 1.5px solid var(--kof-rojo); }
+.poli-pt { width: 9px; height: 9px; flex: none; border-radius: 50%; background: #1d1d1b; box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px #1d1d1b; }
+.rutas-lista ul.poli-lista { margin: 0; }
+.rutas-lista li.poli-grupo { display: block; padding: 12px 4px 6px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.poli-grupo span { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--g-muted); margin-left: 4px; }
+.poli-item { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; width: 100%; padding: 6px 4px;
+  text-align: left; background: none; border: 0; border-radius: 8px; font: inherit; font-size: 13px; color: var(--tinta); cursor: pointer; }
+.poli-item:hover { background: #f6f4f1; }
+.poli-item[aria-current="true"] { background: #1d1d1b; color: #fff; }
+.poli-item .poli-sw { grid-row: 1 / span 2; }
+.poli-nombre { font-weight: 800; }
+.poli-km { font-variant-numeric: tabular-nums; font-weight: 650; }
+.poli-info { grid-column: 2 / span 2; font-size: 12px; color: var(--g-muted); }
+.poli-item[aria-current="true"] .poli-info { color: #d8d5cf; }
+
+/* Descargas para Google My Maps */
+.desc-todo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+.desc-estado { font-size: 13px; color: var(--tinta2); }
+.desc-grupos { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.desc-grupo { border: 1px solid var(--borde); border-top: 3px solid var(--kof-rojo); border-radius: 12px; padding: 12px 14px 14px; background: #fff; }
+.desc-grupo h3 { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 800; }
+.desc-grupo h3 span { color: var(--kof-rojo-osc); font-variant-numeric: tabular-nums; }
+.desc-grupo p { font-size: 12.5px; color: var(--tinta2); margin: 6px 0 10px; line-height: 1.45; }
+.desc-partes { display: flex; flex-wrap: wrap; gap: 6px; }
+.desc-pasos { margin: 16px 0 0 18px; font-size: 13px; color: var(--tinta2); line-height: 1.6; }
+.desc-pasos b { color: var(--tinta); }
+
 @media (max-width: 860px) {
   .kof-cabecera { flex-direction: column; padding: 18px 16px 38px; }
   .kof-cab-acciones { justify-content: flex-start; }

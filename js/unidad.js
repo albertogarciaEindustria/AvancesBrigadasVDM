@@ -1,10 +1,12 @@
-/* Página de una unidad operativa (estilo KOF): información, mapa de clientes
- * y rutas activas del día. */
+/* Página de una unidad operativa (estilo KOF): información, mapa de clientes,
+ * rutas activas del día, polígonos de clientes fáciles y descargas para
+ * Google My Maps (js/descargas.js). */
 const Unidad = (function () {
   'use strict';
   const { esc, num, pct } = Util;
 
-  let D = null, opc = {}, mapaC = null, mapaR = null, mosaicoVivo = false, buscadorListo = false;
+  let D = null, opc = {}, mapaC = null, mapaR = null, mapaP = null, mosaicoVivo = false, buscadorListo = false,
+    descargasListas = false;
 
   // Jefaturas: paleta categórica en orden fijo (sin el verde, que es "trabajado")
   const PALETA_JEF = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#6250d6', '#e34948'];
@@ -75,9 +77,11 @@ const Unidad = (function () {
   function render(datos, opciones = {}) {
     D = datos; opc = opciones;
     buscadorListo = false;
+    descargasListas = false;
     Buscador.cerrar();
     if (mapaC) { mapaC.remove(); mapaC = null; }
     if (mapaR) { mapaR.remove(); mapaR = null; }
+    if (mapaP) { mapaP.remove(); mapaP = null; }
     document.body.className = 'modo-unidad';
     const raiz = document.getElementById('vistaUnidad');
     document.getElementById('vistaLider').hidden = true;
@@ -100,11 +104,15 @@ const Unidad = (function () {
         <button role="tab" id="tab-buscador" aria-controls="panel-buscador" aria-selected="false" tabindex="-1" data-pestana="buscador">Buscador</button>
         <button role="tab" id="tab-mapa" aria-controls="panel-mapa" aria-selected="false" tabindex="-1" data-pestana="mapa">Mapa de clientes</button>
         <button role="tab" id="tab-rutas" aria-controls="panel-rutas" aria-selected="false" tabindex="-1" data-pestana="rutas">Rutas activas hoy</button>
+        <button role="tab" id="tab-poligonos" aria-controls="panel-poligonos" aria-selected="false" tabindex="-1" data-pestana="poligonos">Polígonos</button>
+        <button role="tab" id="tab-descargas" aria-controls="panel-descargas" aria-selected="false" tabindex="-1" data-pestana="descargas">Descargas</button>
       </nav>
       <div class="kof-panel" id="panel-info" role="tabpanel" aria-labelledby="tab-info"></div>
       <div class="kof-panel" id="panel-buscador" role="tabpanel" aria-labelledby="tab-buscador" hidden></div>
       <div class="kof-panel kof-panel-mapa" id="panel-mapa" role="tabpanel" aria-labelledby="tab-mapa" hidden></div>
       <div class="kof-panel kof-panel-mapa" id="panel-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
+      <div class="kof-panel kof-panel-mapa" id="panel-poligonos" role="tabpanel" aria-labelledby="tab-poligonos" hidden></div>
+      <div class="kof-panel" id="panel-descargas" role="tabpanel" aria-labelledby="tab-descargas" hidden></div>
       <div class="ficha" id="ficha" hidden></div>`;
 
     raiz.querySelector('[data-accion="salir"]').addEventListener('click', () => opc.salir && opc.salir());
@@ -138,7 +146,7 @@ const Unidad = (function () {
       t.setAttribute('aria-selected', activa);
       t.tabIndex = activa ? 0 : -1;
     }
-    for (const p of ['info', 'buscador', 'mapa', 'rutas']) document.getElementById('panel-' + p).hidden = p !== cual;
+    for (const p of ['info', 'buscador', 'mapa', 'rutas', 'poligonos', 'descargas']) document.getElementById('panel-' + p).hidden = p !== cual;
     Graficas.Tip.hide();
     if (cual === 'buscador' && !buscadorListo && D.buscador) {
       buscadorListo = true;
@@ -146,6 +154,11 @@ const Unidad = (function () {
     }
     if (cual === 'mapa') mapaClientes();
     if (cual === 'rutas') mapaRutas();
+    if (cual === 'poligonos') poligonos();
+    if (cual === 'descargas' && !descargasListas) {
+      descargasListas = true;
+      Descargas.render(document.getElementById('panel-descargas'), D, seccion);
+    }
   }
 
   // ── Información ───────────────────────────────────────────────────────
@@ -703,6 +716,177 @@ const Unidad = (function () {
     const panel = document.getElementById('panel-rutas');
     if (mapaR) { setTimeout(() => mapaR.invalidateSize(), 50); return; }
     mapaR = rutasEnPanel(panel, D.rutas, { ice: !!D.universo_ice });
+  }
+
+  // ── Polígonos: dónde están los clientes fáciles ───────────────────────
+  // Clientes que ya aceptaron ÉPICA en meses anteriores
+  // (Historicos/EPICAHistorico.db): regiones de mayor densidad de
+  // probabilidad (kernel gaussiano adaptativo, Programas/poligonos_ice.py) de
+  // todos ellos, cada uno con el peso de sus días con ÉPICA, o solo de los
+  // recurrentes. Los niveles se enciman (el núcleo de 50 % queda dentro de la
+  // zona alta de 75 % y esta dentro de la amplia de 90 %) y se dibujan del
+  // más amplio al núcleo para que el toque caiga en el de encima.
+  const ESTILO_POL = { 50: { relleno: 0.42, grosor: 2, linea: '#b5121b' }, 75: { relleno: 0.24, grosor: 1.5, linea: '#e41e2b' },
+                       90: { relleno: 0.12, grosor: 1.2, linea: '#e41e2b' } };
+  const MESES_POL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const fechaPol = iso => `${+iso.slice(8, 10)} de ${MESES_POL[+iso.slice(5, 7) - 1]} de ${iso.slice(0, 4)}`;
+  const parteDe = (n, total) => total ? `${num(n / total * 100, 0)} %` : '—';
+
+  function popupZona(p, k, q, R) {
+    return `<div class="pc"><div class="pc-cab" style="background:${ESTILO_POL[p].linea}"><b>${esc(Archivos.NIVELES[p].nombre)} ${k + 1}</b>
+        <span>Nivel ${p} %: las zonas más densas, que juntas reúnen el ${p} % de la densidad de los clientes fáciles</span></div>
+      <dl class="pc-cuerpo">${filaPop('Días con ÉPICA', `${num(q.evaluaciones)} (${parteDe(q.evaluaciones, R.evaluaciones)} del total)`)}
+        ${filaPop('Clientes', num(q.clientes))}${filaPop('Superficie', `${num(q.area_km2, 2)} km²`)}</dl></div>`;
+  }
+
+  function poligonos() {
+    const panel = document.getElementById('panel-poligonos');
+    if (mapaP) { setTimeout(() => mapaP.invalidateSize(), 50); return; }
+    const H = D.epica_historico;
+    if (!H) {
+      panel.innerHTML = '<div class="mapa-barra"><div class="mapa-resumen">Los polígonos aparecen a partir de la siguiente publicación del sitio.</div></div>';
+      return;
+    }
+    const clientes = Object.entries(H.clientes);
+    const recurrentes = clientes.filter(([, h]) => h[0] >= H.min_recurrente).length;
+    const coordDe = {};
+    for (const c of D.buscador.clientes) if (c[6] != null) coordDe[c[0]] = c;
+    const nombreModo = m => m === 'recurrentes' ? `Solo recurrentes (${H.min_recurrente} o más días con ÉPICA)` : 'Todos los clientes con ÉPICA';
+    const meses = H.meses.map(m => `${MESES_POL[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`).join(', ');
+    panel.innerHTML = `
+      <div class="mapa-barra">
+        <div class="mapa-resumen">Clientes de ${esc(D.unidad)} que ya aceptaron ÉPICA en meses anteriores (${H.desde ? `${esc(meses)}: del ${esc(fechaPol(H.desde))} al ${esc(fechaPol(H.hasta))}` : 'sin histórico'}): <b>${num(clientes.length)}</b>, de ellos <b>${num(recurrentes)}</b> recurrentes (ÉPICA en ${num(H.min_recurrente)} o más días distintos). Para guiar a los brigadistas a las zonas donde la ÉPICA sale más fácil.${H.meses.length === 1 ? ` Por ahora el histórico solo trae ${esc(meses)}: conforme se junten meses, los recurrentes serán los que repiten mes con mes.` : ''}</div>
+        <div class="mapa-controles">
+          <div class="chips" id="poliModo" role="group" aria-label="Clientes de los polígonos">
+            <button type="button" class="chip on" aria-pressed="true" data-modo="todos">Todos con ÉPICA (${num(clientes.length)})</button>
+            <button type="button" class="chip" aria-pressed="false" data-modo="recurrentes">Recurrentes, ${num(H.min_recurrente)}+ días (${num(recurrentes)})</button>
+          </div>
+          <div class="poli-acciones">
+            <button type="button" class="kof-btn" id="poliKmz">Descargar polígonos en KMZ</button>
+            <button type="button" class="kof-btn sec" id="poliExcel">Excel de clientes fáciles (My Maps)</button>
+          </div>
+        </div>
+        <div class="mapa-resumen" id="poliResumen"></div>
+        <div class="chips" id="poliNiveles" role="group" aria-label="Zonas en el mapa"></div>
+        <p class="mapa-ayuda">Cada zona sombreada es la superficie más chica que reúne el 50, 75 o 90 % de la densidad de probabilidad de los clientes fáciles (kernel gaussiano adaptativo; cada cliente pesa los días que tuvo ÉPICA, así los que más se repiten cuentan más). ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver cuántos clientes reúne. El KMZ trae solo los polígonos (para Google Earth, My Maps o QGIS) y el Excel, los clientes fáciles en archivos de hasta ${num(Descargas.MAX_FILAS)} para My Maps.</p>
+        <p class="mapa-ayuda" id="poliEstado" role="status" aria-live="polite"></p>
+      </div>
+      <div class="rutas-cuerpo">
+        <div id="mapaPoliU" class="mapa"></div>
+        <aside class="rutas-lista" aria-label="Zonas de clientes fáciles"><ul id="listaPoliU" class="poli-lista"></ul></aside>
+      </div>`;
+
+    mapaP = L.map('mapaPoliU');
+    capaBase(mapaP);
+    botonUbicacion(mapaP);
+    const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
+    const capaPol = L.layerGroup().addTo(mapaP), capaPts = L.layerGroup();
+    const estado = { modo: 'todos', niveles: new Set([50, 75, 90]), puntos: false };
+    let capas = {}, encuadrado = false;
+    const $p = sel => panel.querySelector(sel);
+
+    const ponerNiveles = () => {
+      capaPol.clearLayers();
+      for (const p of [90, 75, 50]) {
+        if (!estado.niveles.has(p)) continue;
+        for (const [clave, capa] of Object.entries(capas)) if (clave.startsWith(p + '-')) capa.addTo(capaPol);
+      }
+    };
+    const pintar = () => {
+      const R = H.poligonos[estado.modo];
+      const del = clientes.filter(([, h]) => estado.modo === 'todos' || h[0] >= H.min_recurrente);
+      capas = {};
+      capaPts.clearLayers();
+      $p('#poliResumen').innerHTML = `<b>${esc(nombreModo(estado.modo))}</b>: ${num(del.length)} clientes${R ? ` · ${num(R.evaluaciones)} días con ÉPICA · ancho de banda base ${num(R.ancho_m)} m` : ''}.`;
+      $p('#poliNiveles').innerHTML = (R ? R.niveles.map(n => `<button type="button" class="chip${estado.niveles.has(n.p) ? ' on' : ''}" aria-pressed="${estado.niveles.has(n.p)}" data-nivel="${n.p}"><span class="poli-sw" style="--a:${ESTILO_POL[n.p].relleno}" aria-hidden="true"></span>${esc(Archivos.NIVELES[n.p].nombre)} (${n.p} %) · ${parteDe(n.evaluaciones, R.evaluaciones)} de los días con ÉPICA · ${num(n.area_km2, 1)} km²</button>`).join('') : '')
+        + `<button type="button" class="chip${estado.puntos ? ' on' : ''}" aria-pressed="${estado.puntos}" data-puntos="1"><span class="poli-pt" aria-hidden="true"></span>Clientes fáciles (${num(del.length)})</button>`;
+      $p('#poliKmz').disabled = !R;
+      if (R) for (const n of [...R.niveles].sort((a, b) => b.p - a.p)) {
+        const E = ESTILO_POL[n.p];
+        n.poligonos.forEach((q, k) => {
+          const capa = L.polygon(q.anillos, { color: E.linea, weight: E.grosor, fillColor: '#e41e2b', fillOpacity: E.relleno })
+            .bindPopup(() => popupZona(n.p, k, q, R), { maxWidth: 300 });
+          if (!TACTIL) capa.bindTooltip(`<b>${esc(Archivos.NIVELES[n.p].nombre)} ${k + 1}</b> · ${num(q.clientes)} clientes · ${num(q.area_km2, 2)} km²`, { sticky: true, opacity: 0.95 });
+          capas[`${n.p}-${k}`] = capa;
+        });
+      }
+      ponerNiveles();
+      for (const [sap, h] of del) {
+        const c = coordDe[sap];
+        if (!c) continue;
+        const m = L.circleMarker([c[6], c[7]], { renderer: rend, radius: Math.min(7, 2.5 + Math.sqrt(h[0])), color: '#fff', weight: 1, fillColor: '#1d1d1b', fillOpacity: 0.85 })
+          .bindPopup(() => fichaCliente({ nombre: c[1], sap, lat: c[6], lon: c[7], fondo: '#1d1d1b',
+            estado: `ÉPICA en ${h[0] === 1 ? '1 día' : `${num(h[0])} días`} de meses anteriores`,
+            detalles: `${filaPop('Última ÉPICA', fechaPol(h[3]))}${filaPop('Sesiones', num(h[2]))}${H.grupos.map((g, i) => h[4 + i] ? filaPop(`Hechas por ${g}`, num(h[4 + i])) : '').join('')}` }), { maxWidth: 300 });
+        etiquetaCliente(m, c[1], sap);
+        m.addTo(capaPts);
+      }
+      if (estado.puntos) capaPts.addTo(mapaP); else mapaP.removeLayer(capaPts);
+      $p('#listaPoliU').innerHTML = R ? R.niveles.map(n => `
+        <li class="poli-grupo">${esc(Archivos.NIVELES[n.p].nombre)} · ${n.p} % <span>${n.poligonos.length === 1 ? '1 zona' : `${num(n.poligonos.length)} zonas`}</span></li>
+        ${n.poligonos.map((q, k) => `<li><button type="button" class="poli-item" data-capa="${n.p}-${k}">
+          <span class="poli-sw" style="--a:${ESTILO_POL[n.p].relleno}" aria-hidden="true"></span>
+          <span class="poli-nombre">${esc(Archivos.NIVELES[n.p].nombre)} ${k + 1}</span><span class="poli-km">${num(q.area_km2, 2)} km²</span>
+          <span class="poli-info">${num(q.clientes)} clientes · ${num(q.evaluaciones)} días con ÉPICA (${parteDe(q.evaluaciones, R.evaluaciones)})</span></button></li>`).join('')}`).join('')
+        : `<li class="poli-grupo">Muy pocos clientes con coordenadas para calcular zonas.</li>`;
+      if (!encuadrado) {
+        const pts = del.map(([sap]) => coordDe[sap]).filter(Boolean).map(c => [c[6], c[7]]);
+        if (pts.length) mapaP.fitBounds(limitesRobustos(pts).pad(0.04)); else mapaP.setView([19.38, -99.14], 11);
+        encuadrado = true;
+      }
+    };
+    pintar();
+
+    $p('#poliModo').addEventListener('click', e => {
+      const b = e.target.closest('[data-modo]');
+      if (!b || b.dataset.modo === estado.modo) return;
+      estado.modo = b.dataset.modo;
+      $p('#poliModo').querySelectorAll('[data-modo]').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
+      $p('#poliEstado').textContent = '';
+      pintar();
+    });
+    $p('#poliNiveles').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', on);
+      b.classList.toggle('on', on);
+      if (b.dataset.puntos) {
+        estado.puntos = on;
+        if (on) capaPts.addTo(mapaP); else mapaP.removeLayer(capaPts);
+        return;
+      }
+      if (on) estado.niveles.add(+b.dataset.nivel); else estado.niveles.delete(+b.dataset.nivel);
+      ponerNiveles();
+    });
+    $p('#listaPoliU').addEventListener('click', e => {
+      const b = e.target.closest('[data-capa]');
+      if (!b) return;
+      const capa = capas[b.dataset.capa], p = +b.dataset.capa.split('-')[0];
+      if (!estado.niveles.has(p)) $p(`#poliNiveles [data-nivel="${p}"]`).click();
+      $p('#listaPoliU').querySelectorAll('[aria-current]').forEach(x => x.removeAttribute('aria-current'));
+      b.setAttribute('aria-current', 'true');
+      mapaP.fitBounds(capa.getBounds().pad(0.25));
+      setTimeout(() => capa.openPopup(capa.getBounds().getCenter()), 300);
+      if (window.innerWidth < 860) mapaP.getContainer().scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const ocupado = async (boton, texto, tarea) => {
+      const aviso = $p('#poliEstado');
+      boton.disabled = true;
+      aviso.textContent = texto;
+      try { await tarea(); aviso.textContent = 'Listo: revisa tus descargas.'; }
+      catch (err) { console.error(err); aviso.textContent = 'No se pudo generar el archivo.'; }
+      finally { boton.disabled = false; }
+    };
+    $p('#poliKmz').addEventListener('click', e => ocupado(e.currentTarget, 'Generando el KMZ...', async () => {
+      const R = H.poligonos[estado.modo];
+      const blob = await Archivos.kmz(R, {
+        titulo: `Clientes fáciles de ÉPICA · ${D.unidad} · ${nombreModo(estado.modo)}`, peso: 'días con ÉPICA',
+        descripcion: `Zonas donde se concentran los clientes de ${D.unidad} que ya aceptaron ÉPICA en meses anteriores (${meses}: del ${fechaPol(H.desde)} al ${fechaPol(H.hasta)}), ${nombreModo(estado.modo).toLowerCase()}: ${num(R.clientes)} clientes. Regiones de mayor densidad de probabilidad (kernel gaussiano adaptativo, ancho base ${num(R.ancho_m)} m; cada cliente pesa sus días con ÉPICA): cada nivel es la superficie más chica que reúne el 50, 75 o 90 % de la densidad. Publicado ${D.generado}.`,
+      });
+      Archivos.descargar(blob, `PoligonosEPICA_${D.unidad}_${estado.modo}_${H.hasta}.kmz`);
+    }));
+    $p('#poliExcel').addEventListener('click', e => ocupado(e.currentTarget, 'Generando el Excel...', () => Descargas.descargarGrupo(D, 'faciles')));
   }
 
   // ── Jóvenes Construyendo el Futuro (página del líder) ─────────────────
