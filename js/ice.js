@@ -1,6 +1,6 @@
 /* Reporte ICE (ice.html): acceso con usuario + contraseña y las secciones de
- * la unidad (resumen con el Excel de la clasificación, mapa, semanas del mes y
- * rutas con sus impresiones en PDF).
+ * la unidad (resumen con el Excel de la clasificación, mapa, semanas del mes,
+ * rutas con sus impresiones en PDF y polígonos de concentración en KMZ).
  *
  * "Lo que le faltó" a un cliente = la submétrica que más puntos le quitó en su
  * última evaluación ICE (la del mes si ya se evaluó; elemento 17 de cada
@@ -48,6 +48,7 @@ const Ice = (function () {
     excel:       '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M4 9h16M4 15h16M10 3v18"/>',
     gps:         '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/>',
     lista:       '<path d="M9 3.5h6v3H9zM7.5 5H5v16h14V5h-2.5M8.5 11.5h7M8.5 15.5h5"/>',
+    descarga:    '<path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4 16.5v4h16v-4"/>',
   };
   // Nombres cortos de las submétricas para los PDF
   const CORTO = { precio: 'Com. de precios', plataformas: 'Act. plataformas' };
@@ -162,7 +163,7 @@ const Ice = (function () {
   }
 
   // ── Reporte ───────────────────────────────────────────────────────────
-  let D = null, mapaM = null, mapaR = null, porSapCliente = {}, porSapEval = {};
+  let D = null, mapaM = null, mapaR = null, mapaP = null, porSapCliente = {}, porSapEval = {};
 
   function render(datos) {
     D = datos;
@@ -174,7 +175,8 @@ const Ice = (function () {
     const v = $('iceVista');
     v.hidden = false;
     const c = D.corte;
-    const pestanas = [['resumen', 'Resumen'], ['mapa', 'Mapa'], ['semanas', 'Semanas'], ['rutas', 'Rutas']];
+    const pestanas = [['resumen', 'Resumen'], ['mapa', 'Mapa'], ['semanas', 'Semanas'], ['rutas', 'Rutas'],
+                      ['poligonos', 'Polígonos']];
     v.innerHTML = `
       <header class="ice-cab">
         <div>
@@ -196,6 +198,7 @@ const Ice = (function () {
       <div class="ice-panel ice-panel-mapa" id="p-mapa" role="tabpanel" aria-labelledby="tab-mapa" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-semanas" role="tabpanel" aria-labelledby="tab-semanas" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
+      <div class="ice-panel ice-panel-mapa" id="p-poligonos" role="tabpanel" aria-labelledby="tab-poligonos" hidden></div>
       <footer class="ice-pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>`;
     v.querySelector('[data-accion="salir"]').addEventListener('click', () => location.reload());
     const tabs = [...v.querySelectorAll('[role="tab"]')];
@@ -218,11 +221,12 @@ const Ice = (function () {
       t.setAttribute('aria-selected', activa);
       t.tabIndex = activa ? 0 : -1;
     }
-    for (const p of ['resumen', 'mapa', 'semanas', 'rutas']) $('p-' + p).hidden = p !== cual;
+    for (const p of ['resumen', 'mapa', 'semanas', 'rutas', 'poligonos']) $('p-' + p).hidden = p !== cual;
     Graficas.Tip.hide();
     if (cual === 'mapa') mapa();
     if (cual === 'semanas') semanas();
     if (cual === 'rutas') rutas();
+    if (cual === 'poligonos') poligonos();
   }
 
   // Cambio contra el corte anterior: ▲ sube, ▼ baja (negro si mejora, rojo si
@@ -852,6 +856,240 @@ const Ice = (function () {
     });
     input.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
     document.addEventListener('click', e => { if (!lista.contains(e.target) && e.target !== input) cerrar(); });
+  }
+
+  // ── Polígonos ─────────────────────────────────────────────────────────
+  // Zonas donde se concentran los clientes evaluados en ICE: regiones de mayor
+  // densidad de probabilidad de las evaluaciones (kernel gaussiano adaptativo,
+  // ver Programas/poligonos_ice.py) de los últimos meses o de todo el histórico
+  // del universo ICE. Cada nivel es la superficie más chica que reúne ese % de
+  // la probabilidad, así que se enciman: el núcleo (50 %) queda dentro de la
+  // zona alta (75 %) y esta dentro de la amplia (90 %). Se dibujan de la más
+  // amplia a la más chica para que el toque caiga en la de encima.
+  const NIVELES_POL = {
+    50: { nombre: 'Núcleo', relleno: 0.42, grosor: 2, linea: '#C40000', kml: ['6b', 'ff0000c4', 2] },
+    75: { nombre: 'Zona alta', relleno: 0.24, grosor: 1.5, linea: ROJO, kml: ['3d', 'ff0000f4', 1.5] },
+    90: { nombre: 'Zona amplia', relleno: 0.12, grosor: 1.2, linea: ROJO, kml: ['1f', 'ff0000f4', 1] },
+  };
+  const diaMes = iso => { const { m, d } = partes(iso); return `${d} de ${MESES[m - 1]}`; };
+  const periodoPol = M => !M.desde || !M.hasta ? 'sin evaluaciones'
+    : `del ${diaMes(M.desde)}${M.desde.slice(0, 4) !== M.hasta.slice(0, 4) ? ` de ${M.desde.slice(0, 4)}` : ''} al ${fechaLarga(M.hasta)}`;
+  const partePct = (n, total) => total ? `${num(n / total * 100, 0)} %` : '—';
+  const nombreModoPol = modo => modo === 'historico' ? 'Todo el histórico ICE' : `Últimos ${D.poligonos.meses} meses`;
+
+  function popupPoligono(p, k, q, R) {
+    const N = NIVELES_POL[p];
+    return `<div class="pc"><div class="pc-cab${p === 50 ? ' p1' : ''}"><b>${esc(N.nombre)} ${k + 1}</b>
+        <span>Nivel ${p} %: las zonas más densas, que juntas reúnen el ${p} % de la densidad de las evaluaciones</span></div>
+      <dl class="pc-cuerpo">${fila('Evaluaciones', `${num(q.evaluaciones)} <span class="muted">(${partePct(q.evaluaciones, R.evaluaciones)} del periodo)</span>`)}
+        ${fila('Clientes', num(q.clientes))}${fila('Superficie', `${num(q.area_km2, 2)} km²`)}
+        ${q.anillos.length > 1 ? fila('Huecos', `${num(q.anillos.length - 1)} <span class="muted">(áreas sin concentración dentro)</span>`) : ''}</dl></div>`;
+  }
+
+  function poligonos() {
+    const panel = $('p-poligonos');
+    if (mapaP) { setTimeout(() => mapaP.invalidateSize(), 50); return; }
+    const PG = D.poligonos;
+    if (!PG) {
+      panel.innerHTML = '<div class="mapa-barra"><p class="mapa-resumen">Los polígonos aparecen a partir de la siguiente publicación del sitio.</p></div>';
+      return;
+    }
+    panel.innerHTML = `
+      <div class="mapa-barra">
+        <div class="mapa-controles">
+          <div class="segmento" role="group" aria-label="Evaluaciones de los polígonos">
+            <button type="button" data-modo="recientes" aria-pressed="true">${esc(nombreModoPol('recientes'))}</button>
+            <button type="button" data-modo="historico" aria-pressed="false">${esc(nombreModoPol('historico'))}</button>
+          </div>
+          <button type="button" class="ice-btn rojo" id="btnKmz">${svgIcono('descarga')}Descargar polígonos en KMZ</button>
+        </div>
+        <p class="mapa-resumen" id="poliResumen"></p>
+        <div class="chips" id="poliNiveles" role="group" aria-label="Zonas en el mapa"></div>
+        <p class="mapa-ayuda">Cada zona sombreada es la superficie más chica que reúne el 50, 75 o 90 % de la densidad de probabilidad de las evaluaciones ICE (kernel gaussiano adaptativo: más fino donde hay muchos clientes evaluados y más amplio donde hay pocos; cada cliente pesa las veces que se evaluó). Las zonas se enciman: el núcleo está dentro de la zona alta y esta dentro de la amplia. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver cuántas evaluaciones y clientes reúne. El KMZ trae solo los polígonos del periodo elegido, sin clientes, para abrirlo en Google Earth, Google My Maps o QGIS.</p>
+        <p class="mapa-ayuda" id="kmzEstado" role="status" aria-live="polite"></p>
+      </div>
+      <div class="rutas-cuerpo">
+        <div id="mapaPoli" class="mapa"></div>
+        <aside class="rutas-lista" aria-label="Zonas de concentración"><ul id="listaPoli"></ul></aside>
+      </div>`;
+
+    mapaP = L.map('mapaPoli');
+    capaBase(mapaP);
+    botonUbicacion(mapaP);
+    const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
+    const capaPol = L.layerGroup().addTo(mapaP), capaPts = L.layerGroup();
+    const estado = { modo: 'recientes', niveles: new Set([50, 75, 90]), puntos: false };
+    let capas = {}, encuadrado = false;
+
+    const pintar = () => {
+      const M = PG[estado.modo], R = M.resultado;
+      capaPol.clearLayers();
+      capaPts.clearLayers();
+      capas = {};
+      const notas = [M.sin_coord ? `${plural(M.sin_coord, 'evaluación', 'evaluaciones')} sin coordenadas en la Master Data` : '',
+                     R && R.fuera ? `${plural(R.fuera, 'evaluación', 'evaluaciones')} con coordenadas lejos de la unidad` : '']
+        .filter(Boolean).join(' y ');
+      $('poliResumen').innerHTML = `<b>${esc(nombreModoPol(estado.modo))}</b>${estado.modo === 'historico' ? ' (clientes del universo ICE)' : ''}: ${esc(periodoPol(M))} · <b>${num(M.evaluaciones)}</b> evaluaciones ICE de <b>${num(M.clientes)}</b> clientes${notas ? ` (${esc(notas)} no cuentan)` : ''}.${R ? ` Ancho de banda base ${num(R.ancho_m)} m.` : ''}`;
+      $('poliNiveles').innerHTML = (R ? R.niveles.map(n => {
+        const N = NIVELES_POL[n.p];
+        return `<button type="button" class="chip" aria-pressed="${estado.niveles.has(n.p)}" data-nivel="${n.p}"><span class="poli-sw" style="--a:${N.relleno}" aria-hidden="true"></span>${esc(N.nombre)} (${n.p} %) · ${partePct(n.evaluaciones, R.evaluaciones)} de las evaluaciones · ${num(n.area_km2, 1)} km²</button>`;
+      }).join('') : '') + `<button type="button" class="chip" aria-pressed="${estado.puntos}" data-puntos="1"><span class="poli-pt" aria-hidden="true"></span>Clientes evaluados (${num(M.puntos.length)})</button>`;
+      $('btnKmz').disabled = !R;
+
+      // De la zona más amplia al núcleo: el núcleo queda encima
+      if (R) for (const n of [...R.niveles].sort((a, b) => b.p - a.p)) {
+        const N = NIVELES_POL[n.p];
+        n.poligonos.forEach((q, k) => {
+          const capa = L.polygon(q.anillos, { color: N.linea, weight: N.grosor, fillColor: ROJO, fillOpacity: N.relleno })
+            .bindPopup(() => popupPoligono(n.p, k, q, R), { maxWidth: 320 });
+          if (!TACTIL) capa.bindTooltip(`<b>${esc(N.nombre)} ${k + 1}</b> · ${num(q.evaluaciones)} evaluaciones · ${num(q.area_km2, 2)} km²`, { sticky: true, opacity: 0.95 });
+          capas[`${n.p}-${k}`] = capa;
+          if (estado.niveles.has(n.p)) capa.addTo(capaPol);
+        });
+      }
+      for (const [lat, lon, n, sap] of M.puntos) {
+        const c = porSapCliente[sap];
+        const m = L.circleMarker([lat, lon], { renderer: rend, radius: Math.min(7, 2.5 + Math.sqrt(n)), color: BLANCO, weight: 1, fillColor: NEGRO, fillOpacity: 0.85 });
+        if (!TACTIL) m.bindTooltip(`<b>${esc(c ? c[1] || 'Cliente sin nombre' : 'Cliente')}</b> · SAP ${esc(sap)} · ${plural(n, 'evaluación', 'evaluaciones')}`, { direction: 'top', offset: [0, -4], opacity: 0.95 });
+        m.addTo(capaPts);
+      }
+      if (estado.puntos) capaPts.addTo(mapaP); else mapaP.removeLayer(capaPts);
+
+      $('listaPoli').innerHTML = R ? R.niveles.map(n => `
+        <li class="poli-grupo">${esc(NIVELES_POL[n.p].nombre)} · ${n.p} % <span>${plural(n.poligonos.length, 'zona')}</span></li>
+        ${n.poligonos.map((q, k) => `<li><button type="button" class="ruta-item" data-capa="${n.p}-${k}">
+          <span class="poli-sw" style="--a:${NIVELES_POL[n.p].relleno}" aria-hidden="true"></span>
+          <span class="ruta-cod">${esc(NIVELES_POL[n.p].nombre)} ${k + 1}</span><span>${num(q.area_km2, 2)} km²</span>
+          <span class="ruta-info">${num(q.evaluaciones)} evaluaciones (${partePct(q.evaluaciones, R.evaluaciones)}) · ${plural(q.clientes, 'cliente')}</span></button></li>`).join('')}`).join('')
+        : `<li class="poli-grupo">Muy pocos clientes evaluados con coordenadas para calcular zonas.</li>`;
+
+      if (!encuadrado) {
+        const pts = M.puntos.map(p => [p[0], p[1]]);
+        if (pts.length) mapaP.fitBounds(limitesRobustos(pts).pad(0.04)); else mapaP.setView([19.38, -99.14], 11);
+        encuadrado = true;
+      }
+    };
+    pintar();
+
+    panel.querySelectorAll('.segmento button').forEach(b => b.addEventListener('click', () => {
+      if (estado.modo === b.dataset.modo) return;
+      panel.querySelectorAll('.segmento button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      estado.modo = b.dataset.modo;
+      $('kmzEstado').textContent = '';
+      pintar();
+    }));
+    $('poliNiveles').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', on);
+      if (b.dataset.puntos) {
+        estado.puntos = on;
+        if (on) capaPts.addTo(mapaP); else mapaP.removeLayer(capaPts);
+        return;
+      }
+      const p = +b.dataset.nivel;
+      if (on) estado.niveles.add(p); else estado.niveles.delete(p);
+      // Se vuelven a poner todas para conservar el orden (núcleo encima)
+      capaPol.clearLayers();
+      for (const q of [90, 75, 50]) {
+        if (!estado.niveles.has(q)) continue;
+        for (const [clave, capa] of Object.entries(capas)) if (clave.startsWith(q + '-')) capa.addTo(capaPol);
+      }
+    });
+    $('listaPoli').addEventListener('click', e => {
+      const b = e.target.closest('[data-capa]');
+      if (!b) return;
+      const capa = capas[b.dataset.capa], p = +b.dataset.capa.split('-')[0];
+      if (!estado.niveles.has(p)) $('poliNiveles').querySelector(`[data-nivel="${p}"]`).click();
+      $('listaPoli').querySelectorAll('[aria-current]').forEach(x => x.removeAttribute('aria-current'));
+      b.setAttribute('aria-current', 'true');
+      mapaP.fitBounds(capa.getBounds().pad(0.25));
+      setTimeout(() => capa.openPopup(capa.getBounds().getCenter()), 300);
+      if (window.innerWidth < 860) mapaP.getContainer().scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    $('btnKmz').addEventListener('click', async () => {
+      const boton = $('btnKmz'), aviso = $('kmzEstado');
+      boton.disabled = true;
+      aviso.textContent = 'Generando el KMZ...';
+      try {
+        const modo = estado.modo, M = PG[modo];
+        const blob = await zipUnArchivo('doc.kml', new TextEncoder().encode(kmlPoligonos(modo)));
+        PDF.descargar(blob, `PoligonosICE_${D.unidad}_${modo === 'historico' ? 'historico' : `ultimos_${PG.meses}_meses`}_${M.hasta}.kmz`);
+        aviso.textContent = 'KMZ listo: revisa tus descargas.';
+      } catch (err) {
+        console.error(err);
+        aviso.textContent = 'No se pudo generar el KMZ.';
+      } finally {
+        boton.disabled = false;
+      }
+    });
+  }
+
+  // KML de los polígonos del periodo (solo polígonos: sin clientes). Colores
+  // de KML en aabbggrr; exterior antihorario y huecos horarios (ya vienen así)
+  function kmlPoligonos(modo) {
+    const M = D.poligonos[modo], R = M.resultado;
+    const anillo = a => [...a, a[0]].map(([lat, lon]) => `${lon},${lat},0`).join(' ');
+    const dato = (k, v) => `<Data name="${k}"><value>${esc(v)}</value></Data>`;
+    const titulo = `Polígonos ICE · ${D.unidad} · ${nombreModoPol(modo)}`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<name>${esc(titulo)}</name>
+<description>${esc(`Zonas donde se concentran los clientes evaluados en ICE de la unidad ${D.unidad}${modo === 'historico' ? ' (todo el histórico de los clientes del universo ICE)' : ''}, ${periodoPol(M)}: ${num(R.evaluaciones)} evaluaciones de ${num(R.clientes)} clientes. Regiones de mayor densidad de probabilidad (kernel gaussiano adaptativo, ancho base ${num(R.ancho_m)} m): cada nivel es la superficie más chica que reúne el 50, 75 o 90 % de la densidad. Publicado ${D.generado}.`)}</description>
+${[90, 75, 50].map(p => { const [a, linea, ancho] = NIVELES_POL[p].kml; return `<Style id="n${p}"><LineStyle><color>${linea}</color><width>${ancho}</width></LineStyle><PolyStyle><color>${a}0000f4</color></PolyStyle></Style>`; }).join('\n')}
+${[...R.niveles].sort((a, b) => b.p - a.p).map(n => `<Folder>
+<name>${esc(`${NIVELES_POL[n.p].nombre} (${n.p} %): ${partePct(n.evaluaciones, R.evaluaciones)} de las evaluaciones, ${num(n.area_km2, 1)} km²`)}</name>
+${n.poligonos.map((q, k) => `<Placemark>
+<name>${esc(`${NIVELES_POL[n.p].nombre} ${k + 1}`)}</name>
+<description>${esc(`${num(q.evaluaciones)} evaluaciones (${partePct(q.evaluaciones, R.evaluaciones)} del periodo) de ${num(q.clientes)} clientes · ${num(q.area_km2, 2)} km²`)}</description>
+<styleUrl>#n${n.p}</styleUrl>
+<ExtendedData>${dato('nivel_pct', n.p)}${dato('zona', `${NIVELES_POL[n.p].nombre} ${k + 1}`)}${dato('evaluaciones', q.evaluaciones)}${dato('clientes', q.clientes)}${dato('area_km2', q.area_km2)}</ExtendedData>
+<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${anillo(q.anillos[0])}</coordinates></LinearRing></outerBoundaryIs>${q.anillos.slice(1).map(h => `<innerBoundaryIs><LinearRing><coordinates>${anillo(h)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>
+</Placemark>`).join('\n')}
+</Folder>`).join('\n')}
+</Document>
+</kml>
+`;
+  }
+
+  // ZIP de un solo archivo (un KMZ es un ZIP con doc.kml); comprimido con
+  // deflate si el navegador tiene CompressionStream, si no, guardado tal cual
+  const TABLA_CRC = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = TABLA_CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  async function zipUnArchivo(nombre, datos) {
+    let cuerpo = datos, metodo = 0;
+    if (window.CompressionStream) {
+      try {
+        const flujo = new Blob([datos]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+        cuerpo = new Uint8Array(await new Response(flujo).arrayBuffer());
+        metodo = 8;
+      } catch (e) { cuerpo = datos; metodo = 0; }
+    }
+    const n = new TextEncoder().encode(nombre), crc = crc32(datos), f = new Date();
+    const hora = (f.getHours() << 11) | (f.getMinutes() << 5) | (f.getSeconds() >> 1);
+    const dia = ((f.getFullYear() - 1980) << 9) | ((f.getMonth() + 1) << 5) | f.getDate();
+    const local = new DataView(new ArrayBuffer(30)), central = new DataView(new ArrayBuffer(46)), fin = new DataView(new ArrayBuffer(22));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, metodo, 2], [10, hora, 2], [12, dia, 2], [14, crc, 4],
+     [18, cuerpo.length, 4], [22, datos.length, 4], [26, n.length, 2], [28, 0, 2]]
+      .forEach(([o, v, t]) => t === 4 ? local.setUint32(o, v, true) : local.setUint16(o, v, true));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, metodo, 2], [12, hora, 2], [14, dia, 2],
+     [16, crc, 4], [20, cuerpo.length, 4], [24, datos.length, 4], [28, n.length, 2], [30, 0, 2], [32, 0, 2],
+     [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, 0, 4]]
+      .forEach(([o, v, t]) => t === 4 ? central.setUint32(o, v, true) : central.setUint16(o, v, true));
+    [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, 1, 2], [10, 1, 2], [12, 46 + n.length, 4],
+     [16, 30 + n.length + cuerpo.length, 4], [20, 0, 2]]
+      .forEach(([o, v, t]) => t === 4 ? fin.setUint32(o, v, true) : fin.setUint16(o, v, true));
+    return new Blob([local, n, cuerpo, central, n, fin], { type: 'application/vnd.google-earth.kmz' });
   }
 
   // ── Excel de la clasificación ─────────────────────────────────────────

@@ -312,6 +312,11 @@ button, input, select { font: inherit; }
 .ruta-detalle-cab p { font-size: 13px; color: var(--tinta2); margin-top: 2px; }
 .ruta-etiqueta { background: none; border: 0; }
 .ruta-etiqueta span { display: inline-block; transform: translate(-50%, -50%); padding: 2px 6px; font-size: 11px; font-weight: 800; white-space: nowrap; border: 1px solid rgba(255,255,255,.9); box-shadow: 0 1px 4px rgba(0,0,0,.35); font-variant-numeric: tabular-nums; }
+/* Polígonos: muestra del relleno de cada nivel (--a = opacidad) */
+.poli-sw { width: 14px; height: 14px; flex: none; grid-row: 1 / span 2; background: rgba(244, 0, 0, var(--a, .3)); border: 1.5px solid var(--coke); }
+.poli-pt { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--negro); box-shadow: 0 0 0 1.5px var(--blanco), 0 0 0 2.5px var(--negro); }
+.poli-grupo { padding: 12px 6px 6px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--negro); }
+.poli-grupo span { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--tinta3); margin-left: 4px; }
 @media (max-width: 860px) {
   .rutas-cuerpo { grid-template-columns: minmax(0, 1fr); }
   .rutas-lista { height: 360px; border-left: 0; border-top: 1px solid var(--gris-marca); }
