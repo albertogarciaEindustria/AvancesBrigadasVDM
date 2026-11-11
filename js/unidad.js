@@ -1,11 +1,12 @@
-/* Página de una unidad operativa (estilo KOF): información, mapa de clientes,
+/* Página de una unidad operativa (manual de marca: rojo Coke plano, negro y
+ * blanco; sin adornos sobre la cabecera): información, mapa de clientes,
  * rutas activas del día, polígonos de clientes fáciles y descargas para
  * Google My Maps (js/descargas.js). */
 const Unidad = (function () {
   'use strict';
   const { esc, num, pct } = Util;
 
-  let D = null, opc = {}, mapaC = null, mapaR = null, mapaP = null, mosaicoVivo = false, buscadorListo = false,
+  let D = null, opc = {}, mapaC = null, mapaR = null, mapaP = null, buscadorListo = false,
     descargasListas = false;
 
   // Jefaturas: paleta categórica en orden fijo (sin el verde, que es "trabajado")
@@ -88,7 +89,6 @@ const Unidad = (function () {
     raiz.hidden = false;
     raiz.innerHTML = `
       <header class="kof-cabecera">
-        <canvas class="kof-mosaico" aria-hidden="true"></canvas>
         <div class="kof-cab-contenido">
           <p class="kof-marca">${cuadritos()} BRIGADAS VDM · EPICA</p>
           <h1>Unidad ${esc(D.unidad)}</h1>
@@ -113,6 +113,7 @@ const Unidad = (function () {
       <div class="kof-panel kof-panel-mapa" id="panel-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
       <div class="kof-panel kof-panel-mapa" id="panel-poligonos" role="tabpanel" aria-labelledby="tab-poligonos" hidden></div>
       <div class="kof-panel" id="panel-descargas" role="tabpanel" aria-labelledby="tab-descargas" hidden></div>
+      <footer class="kof-pie-marca"><span>Brigadas VDM · EPICA</span><span>Uso interno</span></footer>
       <div class="ficha" id="ficha" hidden></div>`;
 
     raiz.querySelector('[data-accion="salir"]').addEventListener('click', () => opc.salir && opc.salir());
@@ -132,11 +133,9 @@ const Unidad = (function () {
 
     informacion();
     window.scrollTo(0, 0);
-    iniciarMosaico(raiz.querySelector('.kof-mosaico'));
   }
 
   function detener() {
-    mosaicoVivo = false;
     Graficas.Tip.hide();
   }
 
@@ -993,7 +992,7 @@ const Unidad = (function () {
       const color = colorRuta(i), coords = r.puntos.map(p => [p[0], p[1]]);
       const g = { linea: L.polyline(coords, { renderer: rend, color, weight: 2.5, opacity: 0.85 }), puntos: L.layerGroup(),
                   halos: L.layerGroup(), visible: true };
-      g.linea.bindTooltip(`${r.codigo} · ${r.puntos.length} clientes`, { sticky: true });
+      g.linea.bindTooltip(`${esc(r.codigo)} · ${r.puntos.length} clientes`, { sticky: true });
       for (const p of r.puntos) {
         const [lat, lon, sap, nombre, zpv, trab, brig, ice] = p;
         const etiquetasPop = [brig ? 'cliente brigadista' : '', ice ? 'evaluable ICE' : ''].filter(Boolean).join(' · ');
@@ -1097,57 +1096,6 @@ const Unidad = (function () {
       });
     });
     return mapaR;
-  }
-
-  // ── Mosaico de cuadros rojos de la cabecera ───────────────────────────
-  function iniciarMosaico(lienzo) {
-    const ctx = lienzo.getContext('2d');
-    const TONOS = ['#ff5a5f', '#f7323a', '#e41e2b', '#c8102e', '#9e0b14', '#ffffff'];
-    const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let celdas = [], cols = 0, filas = 0, lado = 14, hueco = 3, W = 0, H = 0, ultimo = 0;
-    const medir = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = lienzo.clientWidth; H = lienzo.clientHeight;
-      lienzo.width = W * dpr; lienzo.height = H * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      lado = W < 640 ? 10 : 14;
-      cols = Math.ceil(W / (lado + hueco)); filas = Math.ceil(H / (lado + hueco));
-      celdas = Array.from({ length: cols * filas }, () => nueva());
-    };
-    const nueva = () => ({ c: TONOS[(Math.random() * (TONOS.length - 1)) | 0], a: 0, meta: Math.random() < 0.55 ? Math.random() * 0.9 : 0 });
-    const dibujar = () => {
-      ctx.clearRect(0, 0, W, H);
-      for (let i = 0; i < celdas.length; i++) {
-        const x = (i % cols), y = (i / cols) | 0, z = celdas[i];
-        z.a += (z.meta - z.a) * 0.18;
-        const desvanecido = Math.max(0, (x / cols - 0.25) / 0.75);   // aparecen hacia la derecha
-        const alfa = z.a * desvanecido * (z.c === '#ffffff' ? 0.5 : 1);
-        if (alfa < 0.02) continue;
-        ctx.globalAlpha = alfa;
-        ctx.fillStyle = z.c;
-        ctx.fillRect(x * (lado + hueco) + 2, y * (lado + hueco) + 2, lado, lado);
-      }
-      ctx.globalAlpha = 1;
-    };
-    const bucle = t => {
-      if (!mosaicoVivo || !lienzo.isConnected) return;
-      requestAnimationFrame(bucle);
-      if (document.hidden || t - ultimo < (reducido ? 2000 : 90)) return;
-      ultimo = t;
-      const n = Math.max(1, celdas.length * 0.035 | 0);
-      for (let k = 0; k < n; k++) {
-        const z = celdas[(Math.random() * celdas.length) | 0];
-        if (Math.random() < 0.5) z.c = TONOS[(Math.random() * TONOS.length) | 0];
-        z.meta = Math.random() < 0.55 ? 0.25 + Math.random() * 0.75 : 0;
-      }
-      dibujar();
-    };
-    medir();
-    for (const z of celdas) z.a = z.meta;
-    dibujar();
-    mosaicoVivo = true;
-    requestAnimationFrame(bucle);
-    window.addEventListener('resize', () => { if (lienzo.isConnected) { medir(); dibujar(); } });
   }
 
   return { render, detener, botonUbicacion, rutasEnPanel };

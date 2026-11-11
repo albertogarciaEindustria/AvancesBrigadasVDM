@@ -4,7 +4,8 @@
  *     navegador puede; si no, guardados tal cual)
  *   - Excel .xlsx de una hoja, listo para importar en Google My Maps
  *   - KML de los polígonos de concentración (Programas/poligonos_ice.py), que
- *     se descarga como KMZ (un ZIP con doc.kml) */
+ *     se descarga como KMZ (un ZIP con doc.kml), y KMZ por carpetas para los
+ *     polígonos del sitio ICE (jefaturas, concentración y zonas que restan) */
 const Archivos = (function () {
   'use strict';
   const { esc, num } = Util;
@@ -136,6 +137,48 @@ ${n.poligonos.map((q, k) => `<Placemark>
     return zip([{ nombre: 'doc.kml', datos: kmlPoligonos(R, opciones) }], 'application/vnd.google-earth.kmz');
   }
 
+  // ── KMZ por carpetas (jefaturas, concentración y zonas que restan) ────
+  /** Color KML (aabbggrr) de un '#RRGGBB' y su opacidad 0–1. */
+  function colorKml(hex, alfa = 1) {
+    const h = hex.replace('#', '');
+    return Math.round(alfa * 255).toString(16).padStart(2, '0') + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2);
+  }
+
+  /** KMZ (Blob) con una carpeta por grupo. carpetas = [{nombre, marcas:
+   *  [{nombre, descripcion, color '#RRGGBB', relleno 0–1, ancho, datos: {k: v},
+   *    poligonos: [[exterior, huecos...]] con vértices [lat, lon]}]}] */
+  function kmzCarpetas(titulo, descripcion, carpetas) {
+    const anillo = a => [...a, a[0]].map(([lat, lon]) => `${lon},${lat},0`).join(' ');
+    const poligono = q => `<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${anillo(q[0])}</coordinates></LinearRing></outerBoundaryIs>${q.slice(1).map(h => `<innerBoundaryIs><LinearRing><coordinates>${anillo(h)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>`;
+    const estilos = new Map();
+    const estilo = m => {
+      const clave = `${colorKml(m.color, 1)}|${colorKml(m.color, m.relleno)}|${m.ancho || 2}`;
+      if (!estilos.has(clave)) estilos.set(clave, `e${estilos.size}`);
+      return estilos.get(clave);
+    };
+    const cuerpo = carpetas.map(c => `<Folder>
+<name>${esc(c.nombre)}</name>
+${c.marcas.map(m => `<Placemark>
+<name>${esc(m.nombre)}</name>
+<description>${esc(m.descripcion || '')}</description>
+<styleUrl>#${estilo(m)}</styleUrl>
+<ExtendedData>${Object.entries(m.datos || {}).map(([k, v]) => `<Data name="${esc(k)}"><value>${esc(v)}</value></Data>`).join('')}</ExtendedData>
+${m.poligonos.length === 1 ? poligono(m.poligonos[0]) : `<MultiGeometry>${m.poligonos.map(poligono).join('')}</MultiGeometry>`}
+</Placemark>`).join('\n')}
+</Folder>`).join('\n');
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<name>${esc(titulo)}</name>
+<description>${esc(descripcion)}</description>
+${[...estilos].map(([clave, id]) => { const [linea, relleno, ancho] = clave.split('|'); return `<Style id="${id}"><LineStyle><color>${linea}</color><width>${ancho}</width></LineStyle><PolyStyle><color>${relleno}</color></PolyStyle></Style>`; }).join('\n')}
+${cuerpo}
+</Document>
+</kml>
+`;
+    return zip([{ nombre: 'doc.kml', datos: kml }], 'application/vnd.google-earth.kmz');
+  }
+
   // ── Descarga ──────────────────────────────────────────────────────────
   /** Descarga el blob con un nombre sin acentos ni caracteres raros. */
   function descargar(blob, nombre) {
@@ -152,5 +195,5 @@ ${n.poligonos.map((q, k) => `<Placemark>
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  return { NIVELES, zip, xlsx, kmlPoligonos, kmz, descargar };
+  return { NIVELES, zip, xlsx, kmlPoligonos, kmz, kmzCarpetas, descargar };
 })();

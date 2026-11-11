@@ -788,3 +788,132 @@ body.modo-lider .chip svg { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .cuadritos i, .cursor, .yo-punto::after, .ctl-ubicacion button.buscando svg { animation: none; }
 }
+
+/* ══ Manual de marca ═══════════════════════════════════════════════════
+   Vista del brigadista (página de unidad y tablero del líder) según el
+   "Manual Uso de Marca" (Brand standards, Coca-Cola):
+     · Paleta: Coke Red #F40000, negro #000000 y blanco; el gris solo de
+       apoyo. Colores planos, sin degradados ni adornos sobre la marca.
+     · Tipografía Gotham (aquí Montserrat, su equivalente libre): Medium para
+       el texto principal, Book para el cuerpo y Bold para el énfasis.
+     · Titulares en mayúsculas y negrita: rojos sobre blanco, blancos sobre
+       rojo o negro. Cuerpo siempre en negro o en blanco según el fondo.
+     · Espacio limpio alrededor del texto, esquinas rectas y pies con línea
+       fina y texto espaciado (como la portada y el reporte ICE).
+   Los colores de estado (verde, ámbar, rojo) y los de las series de las
+   gráficas se conservan porque son información, no decoración. */
+:root { --sans: var(--marca); --mono: var(--marca); --critico: #F40000; }
+body.modo-unidad, body.modo-lider { font-family: var(--marca); font-weight: 500; }
+body.modo-unidad :focus-visible, body.modo-lider :focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
+
+/* ── Unidad: blanco, rojo y negro ── */
+body.modo-unidad, .tema-kof {
+  --kof-rojo: #F40000; --kof-rojo-osc: #C40000; --kof-rojo-suave: #FFC2C2;
+  --fondo: #FFFFFF; --tarjeta: #FFFFFF; --tinta: #000000; --tinta2: #4D4D4D; --borde: #C8C8C8;
+  --g-tinta: #000000; --g-tinta2: #4D4D4D; --g-muted: #6E6E6E; --g-grid: #ECECEC; --g-eje: #8C8C8C;
+  --g-superficie: #FFFFFF; --g-objetivo: #000000;
+}
+.kof-cabecera { background: #F40000; padding: 30px clamp(16px, 4vw, 48px) 26px; align-items: flex-end; flex-wrap: wrap; }
+.kof-cabecera::after, .kof-mosaico, .kof-marca .cuadritos { display: none; }
+.kof-marca { font-size: 11.5px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; opacity: 1; }
+.kof-cabecera h1 { font-size: clamp(30px, 4.6vw, 52px); font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; line-height: 1.04; margin: 8px 0 8px; }
+.kof-cab-sub { font-size: 13.5px; opacity: 1; font-weight: 500; }
+.kof-btn-cab { background: #FFFFFF; color: #F40000; border: 2px solid #FFFFFF; border-radius: 0; padding: 10px 20px; font-size: 12.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; min-height: 42px; }
+.kof-btn-cab:hover { background: #000000; border-color: #000000; color: #FFFFFF; }
+.kof-pestanas { gap: 4px; padding: 0 clamp(16px, 4vw, 48px); background: #FFFFFF; border-bottom: 1px solid #C8C8C8; }
+.kof-pestanas [role="tab"] { padding: 15px 14px 12px; font-size: 12.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #000000; border-bottom-width: 4px; }
+.kof-pestanas [role="tab"]:hover { color: #F40000; }
+.kof-panel { padding: 24px clamp(16px, 4vw, 48px) 48px; }
+.kof-panel-mapa { padding: 0; }
+.kof-kpis { gap: 12px; }
+.kof-kpi { background: #F4F4F4; border: 0; border-top: 4px solid #000000; border-radius: 0; padding: 14px 16px 16px; }
+.kof-kpi:first-child { border-top-color: #F40000; }
+.kpi-etiqueta { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #4D4D4D; }
+.kpi-valor { font-size: 30px; font-weight: 800; letter-spacing: -.01em; }
+.kpi-sub { color: #4D4D4D; }
+.kpi-medidor, .op-barra, .barra-mala { background: #E6E6E6; border-radius: 0; }
+.kpi-medidor > span, .op-barra > span { border-radius: 0; }
+.kof-seccion { background: #FFFFFF; border: 0; border-radius: 0; padding: 0; margin-top: 36px; }
+.kof-sec-cab { gap: 14px; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid #C8C8C8; }
+.kof-sec-cab .cuadritos { display: block; width: 6px; height: 26px; margin-top: 1px; background: #F40000; gap: 0; }
+.kof-sec-cab .cuadritos i { display: none; }
+.kof-sec-cab h2 { font-size: 19px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.kof-sec-cab p { font-size: 13.5px; color: #4D4D4D; margin-top: 4px; line-height: 1.5; }
+.kof-nota { color: #6E6E6E; }
+.kof-tabla th, .kof-tabla td { border-bottom-color: #E6E6E6; }
+.kof-tabla thead th { background: #FFFFFF; color: #000000; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; border-bottom: 2px solid #000000; }
+.kof-tabla tbody tr:nth-child(even) > * { background: #F7F7F7; }
+.kof-tabla tfoot > tr > * { background: #FFFFFF; font-weight: 800; border-top: 2px solid #000000; border-bottom: 0; }
+.nombre-btn { font-weight: 700; }
+.clave { color: #6E6E6E; letter-spacing: .06em; }
+.tag-vacante, .tag-rep { border-radius: 0; background: #E6E6E6; }
+.pill { border-radius: 0; }
+.pill.critico { background: #F40000; color: #FFFFFF; }
+.delta.mal, .rojo { color: #C40000; }
+.tabla-dias .total { background: #F4F4F4 !important; }
+.tabla-dias .domingo, .leyenda-dias i.domingo { background: repeating-linear-gradient(45deg, #F4F4F4 0 4px, #E0E0E0 4px 8px) !important; }
+.leyenda-dias i, .es-leyenda i, .poli-sw, .ruta-sw, .tip-sw { border-radius: 0; }
+.rk-pos { border-radius: 0; background: #E6E6E6; color: #000000; }
+.rk-pos.oro { background: #F40000; color: #FFFFFF; }
+.rk-pos.plata { background: #000000; color: #FFFFFF; }
+.rk-pos.bronce { background: #6E6E6E; color: #FFFFFF; }
+.tabla-ranking tr.mia > * { background: #FFE9E9 !important; }
+body.modo-unidad .chip, .vista-lider .tema-kof .chip { border-radius: 0; font-weight: 700; }
+body.modo-unidad .chip.on, .vista-lider .tema-kof .chip.on { border-color: #000000; }
+body.modo-unidad input, body.modo-unidad select, body.modo-unidad button, body.modo-lider input, body.modo-lider select, body.modo-lider button { font-family: var(--marca); }
+body.modo-unidad input[type="search"], body.modo-unidad input[type="text"], body.modo-unidad select, .bus-campo input { border-radius: 0; border-color: #000000; }
+.bus-bloque, .bus-mapa, .desc-grupo, .mini, .ficha-caja, .busca-res button, .ruta-ir, .es-inc span { border-radius: 0; }
+.bus-hist, .bchip, .badge, .btn-google { border-radius: 0; }
+.pc-btn { border-radius: 0; letter-spacing: .08em; text-transform: uppercase; }
+body.modo-unidad .leaflet-popup-content-wrapper, .tema-kof .leaflet-popup-content-wrapper { border-radius: 0; }
+body.modo-unidad .tooltip { border-radius: 0; border-color: #000000; color: #000000; }
+body.modo-unidad .mapa .leaflet-tile-pane, .tema-kof .leaflet-tile-pane { filter: grayscale(1) contrast(.92) brightness(1.06); }
+.kof-pie-marca { display: flex; justify-content: space-between; gap: 16px; margin: 8px clamp(16px, 4vw, 48px) 26px; padding-top: 10px; border-top: 1px solid #8C8C8C;
+  font-size: 10.5px; font-weight: 500; letter-spacing: .32em; text-transform: uppercase; color: #4D4D4D; }
+
+/* ── Líder: negro, blanco y rojo ── */
+body.modo-lider {
+  --ld-panel: #000000; --ld-borde: #3A3A3A; --ld-tinta: #FFFFFF; --ld-tinta2: #D0D0D0; --ld-muted: #9A9A9A;
+  --g-tinta: #FFFFFF; --g-tinta2: #D0D0D0; --g-muted: #9A9A9A; --g-grid: #2A2A2A; --g-eje: #4D4D4D;
+  --g-superficie: #000000; --g-objetivo: #FFFFFF;
+  background: #000000; background-image: none;
+}
+.vista-lider { padding: 0 clamp(16px, 4vw, 48px) 48px; }
+.ld-cab { align-items: flex-end; flex-wrap: wrap; padding: 30px 0 22px; border-top: 8px solid #F40000; border-bottom: 1px solid #4D4D4D; margin: 0 calc(-1 * clamp(16px, 4vw, 48px)); padding-left: clamp(16px, 4vw, 48px); padding-right: clamp(16px, 4vw, 48px); }
+.ld-kicker { font-size: 11.5px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: #D0D0D0; }
+.ld-cab h1 { font-size: clamp(30px, 4.6vw, 52px); font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; line-height: 1.04; margin: 8px 0 8px; color: #FFFFFF; }
+.ld-btn { background: #FFFFFF; color: #000000; border: 2px solid #FFFFFF; border-radius: 0; padding: 10px 20px; font-size: 12.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; min-height: 42px; }
+.ld-btn:hover { background: #F40000; border-color: #F40000; color: #FFFFFF; }
+.ld-pestanas [role="tab"] { font-size: 12.5px; font-weight: 800; letter-spacing: .14em; }
+.ld-hero-num, .ld-tile, .ld-bloque, .ld-jcf-mapa { border-radius: 0; }
+.ld-hero-num { background: #F40000; border-color: #F40000; color: #FFFFFF; }
+.ld-hero-num .ld-etq, .ld-hero-num .ld-hero-sub, .ld-hero-num .ld-hero-nota { color: #FFFFFF; }
+body.modo-lider .ld-hero-num .delta { color: #FFFFFF; }
+.ld-grande { font-weight: 800; }
+.ld-medidor { border-radius: 0; background: #C40000; }
+.ld-medidor span { border-radius: 0; background: #FFFFFF; }
+.ld-medidor i { background: #000000; }
+.ld-tile { border: 0; border-top: 4px solid #FFFFFF; background: #1A1A1A; }
+.ld-etq { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.ld-valor { font-size: 28px; font-weight: 800; }
+.ld-bloque { border: 0; border-top: 1px solid #4D4D4D; padding: 22px 0 6px; margin-top: 22px; }
+.ld-grid { gap: 14px 36px; }
+.ld-grid .ld-bloque { margin-top: 8px; }
+.ld-bloque > header { padding-left: 20px; position: relative; }
+.ld-bloque > header::before { content: ''; position: absolute; left: 0; top: 1px; width: 6px; height: 24px; background: #F40000; }
+.ld-bloque h2 { font-size: 18px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.ld-tabla th, .ld-tabla td { border-bottom-color: #2A2A2A; }
+.ld-tabla thead th { color: #FFFFFF; font-weight: 700; letter-spacing: .1em; border-bottom: 2px solid #FFFFFF; }
+.ld-tabla tr.total > * { background: #000000; font-weight: 800; border-top: 2px solid #FFFFFF; }
+.ld-tabla tbody tr:hover > * { background: #1A1A1A; }
+.ld-calor td, .ld-escala i, .ld-mini-barra, .ld-mini-barra > span { border-radius: 0; }
+body.modo-lider .chip { border-radius: 0; font-weight: 700; }
+body.modo-lider .tooltip { border-radius: 0; }
+body.modo-lider .delta.mal { color: #FF6B6B; }
+.ld-pie { letter-spacing: .02em; }
+.ld-pestanas [role="tab"][aria-selected="true"] { color: #FFFFFF; border-bottom-color: #F40000; }
+.ld-unidad { border-radius: 0; }
+.ld-abrir { font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.ld-tabla th, .ld-tabla td { padding: 9px 8px; }
+.ld-tabla thead th { font-size: 10.5px; letter-spacing: .05em; }
+body.modo-unidad button:not(.ficha-cerrar), body.modo-lider button:not(.ficha-cerrar) { border-radius: 0; }

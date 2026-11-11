@@ -341,3 +341,54 @@ button, input, select { font: inherit; }
 @media print {
   .ice-pestanas, .ice-cab-acciones, .mapa-controles { display: none; }
 }
+
+/* ── Polígonos: tipos, descargas y rutas que cruzan ──────────────────── */
+.poli-descargas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.poli-descargas .ice-btn { min-height: 38px; padding: 7px 14px; font-size: 12.5px; }
+.poli-descargas .ice-btn:disabled { cursor: not-allowed; }
+.segmento button:disabled { color: var(--gris-3); cursor: not-allowed; }
+.poli-sw.negro { background: rgba(0, 0, 0, var(--a, .3)); border-color: var(--negro); }
+.poli-sw.jef { background: color-mix(in srgb, var(--c) 28%, #fff); border: 3px solid var(--c); }
+.jef-etiqueta span { font-size: 12px; font-weight: 800; padding: 2px 7px; letter-spacing: .04em; box-shadow: 0 0 0 2px #fff; }
+.pc-rutas { margin-top: 8px; border-top: 1px solid var(--gris-2); }
+.pc-rutas-tit { padding: 9px 14px 4px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.pc-rutas ul { list-style: none; margin: 0; padding: 0 14px; max-height: 190px; overflow: auto; }
+.pc-rutas li { display: grid; grid-template-columns: 12px auto 1fr auto; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--gris-2); font-size: 12px; }
+.pc-rutas li .ruta-sw { width: 12px; height: 12px; }
+.pc-rutas li span { color: var(--tinta2); }
+.pc-rutas li .pc-dias { font-weight: 800; color: var(--negro); letter-spacing: .08em; white-space: nowrap; }
+
+/* ── Administrador (js/ice-admin.js) ─────────────────────────────────── */
+.adm-unidades { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 clamp(16px, 4vw, 48px) 14px; }
+.adm-estado { font-size: 13px; font-weight: 700; margin-left: 6px; }
+.adm-sw { display: inline-block; width: 12px; height: 12px; flex: none; margin-right: 8px; vertical-align: -1px; }
+.chip .adm-sw { margin-right: 0; }
+.adm-sw.redondo { border-radius: 50%; }
+.adm-controles { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.adm-sub { font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin: 26px 0 8px; }
+.adm-nota { font-size: 13px; line-height: 1.55; color: var(--tinta2); max-width: 980px; margin: 8px 0 12px; }
+.adm-nota b { color: var(--negro); }
+.adm-hipotesis { border-left: 6px solid var(--negro); background: var(--gris-1); padding: 14px 18px; margin: 4px 0 16px; max-width: 980px; }
+.adm-hipotesis p { font-size: 14px; line-height: 1.55; }
+.adm-hipotesis p + p { margin-top: 6px; }
+.adm-decision { border-top: 4px solid var(--negro); background: var(--gris-1); padding: 14px 18px 16px; margin: 16px 0 4px; max-width: 980px; }
+.adm-decision.rechaza { border-top-color: var(--coke); }
+.adm-decision-tit { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; margin-bottom: 6px; }
+.adm-decision.rechaza .adm-decision-tit { color: var(--coke); }
+.adm-decision p { font-size: 14px; line-height: 1.6; }
+.ice-tabla td.izq, .ice-tabla th.izq { white-space: normal; }
+.adm-ns > * { color: var(--tinta3); }
+.adm-calor td.adm-celda { text-align: center; padding: 7px 8px; border: 2px solid var(--blanco); min-width: 86px; }
+.adm-celda b { display: block; font-size: 14px; }
+.adm-celda span { display: block; font-size: 10.5px; opacity: .9; }
+.adm-calor tbody tr:hover > td.adm-celda { background: inherit; }
+.adm-frases { list-style: none; margin: 0; padding: 0; max-width: 980px; }
+.adm-frases li { display: flex; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--gris-2); font-size: 14px; line-height: 1.5; }
+.adm-frases li .adm-sw { margin-top: 5px; }
+.adm-frases p { font-size: 13.5px; color: var(--tinta2); margin-top: 2px; }
+.adm-frases p b { color: var(--negro); }
+.adm-favor, .adm-contra { font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; color: var(--negro); }
+.adm-contra { color: var(--coke-osc); }
+.mapa-admin { height: max(520px, calc(100vh - 210px)); }
+@media (max-width: 860px) { .mapa-admin { height: 68vh; } }
+.g-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
