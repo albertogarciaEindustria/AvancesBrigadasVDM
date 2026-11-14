@@ -19,18 +19,20 @@ const Descargas = (function () {
     for (const c of B.clientes) {
       porSap[c[0]] = { nombre: c[1], calle: c[2], colonia: d.col[c[3]], ciudad: d.ciu[c[4]], cp: c[5], lat: c[6], lon: c[7],
         ruta: d.ruta[c[8]], canal: d.can[c[9]], subcanal: d.sub[c[10]], segmento: d.seg[c[11]], nivel: d.niv[c[12]],
-        jefatura: d.jef[c[13]], zpv: d.zpv[c[14]], brigadista: !!(c[15] & 1), ice: !!(c[15] & 2) };
+        jefatura: d.jef[c[13]], zpv: d.zpv[c[14]], brigadista: !!(c[15] & 1), ice: !!(c[15] & 2),
+        tipo: d.tipo ? d.tipo[c[16]] : '' };
     }
     return porSap;
   }
 
-  const COLS_INICIO = [['Nombre', 34], ['SAP', 12], ['Latitud', 11], ['Longitud', 11]];
-  const COLS_CLIENTE = [['Dirección', 34], ['Colonia', 24], ['Ciudad', 16], ['CP', 8], ['Ruta', 10], ['Jefatura', 14],
+  // Latitude y Longitude en inglés: así Google My Maps reconoce solo las columnas para colocar los marcadores
+  const COLS_INICIO = [['Nombre', 34], ['SAP', 12], ['Latitude', 11], ['Longitude', 11]];
+  const COLS_CLIENTE = [['Traditional / On Premise', 13], ['Dirección', 34], ['Colonia', 24], ['Ciudad', 16], ['CP', 8], ['Ruta', 10], ['Jefatura', 14],
     ['Frecuencia ZPV', 11], ['Canal', 14], ['Subcanal', 20], ['Segmento', 12], ['Nivel', 10], ['Cliente brigadista', 11],
     ['Evaluable ICE', 10]];
   const columnas = (...grupos) => grupos.flat().map(([titulo, ancho]) => ({ titulo, ancho }));
   const comoLlegar = (lat, lon) => lat == null ? null : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
-  const datosCliente = c => [c.calle, c.colonia, c.ciudad, c.cp, c.ruta, c.jefatura || 'Sin jefatura', c.zpv, c.canal,
+  const datosCliente = c => [c.tipo || 'Sin dato', c.calle, c.colonia, c.ciudad, c.cp, c.ruta, c.jefatura || 'Sin jefatura', c.zpv, c.canal,
     c.subcanal, c.segmento, c.nivel, SI(c.brigadista), SI(c.ice)];
 
   /** Los tres grupos de archivos de la unidad: [{id, titulo, descripcion,
@@ -105,10 +107,10 @@ const Descargas = (function () {
       'Cómo importarlos:',
       '1. Entra a https://www.google.com/mymaps y crea un mapa nuevo.',
       '2. En la capa, elige "Importar" y sube uno de los archivos .xlsx.',
-      '3. Para colocar los marcadores elige las columnas "Latitud" y "Longitud".',
+      '3. My Maps reconoce solo las columnas "Latitude" y "Longitude" para colocar los marcadores (si pregunta, elígelas).',
       '4. Como título de los marcadores elige "Nombre".',
       '5. Agrega una capa por cada archivo (un mapa admite hasta 10 capas; si hay más archivos, usa otro mapa).',
-      '6. En "Estilo" puedes agrupar por "Jefatura", "Ruta" o "Días con ÉPICA" para darles color.', '',
+      '6. En "Estilo" puedes agrupar por "Traditional / On Premise", "Jefatura", "Ruta" o "Días con ÉPICA" para darles color.', '',
       'Archivos:', ...lista.map(x => `- ${limpioNombre(x.nombre)}: ${x.titulo}, clientes ${x.desde.toLocaleString('es-MX')} a ${x.hasta.toLocaleString('es-MX')}`), ''].join('\r\n');
   }
 
@@ -127,7 +129,7 @@ const Descargas = (function () {
     const lista = grupos(D), todas = lista.flatMap(g => partes(D, g).map(p => ({ ...p, g })));
     const vacio = g => !g.filas.length;
     panel.innerHTML = seccion('Descargas para Google My Maps',
-      `Excel con los clientes de ${esc(D.unidad)} listos para importar en My Maps: cada archivo trae hasta ${num(MAX_FILAS)} clientes (lo que My Maps importa por capa), con Latitud y Longitud para colocarlos y Nombre como título, más todos sus datos y el enlace "Cómo llegar".`,
+      `Excel con los clientes de ${esc(D.unidad)} listos para importar en My Maps: cada archivo trae hasta ${num(MAX_FILAS)} clientes (lo que My Maps importa por capa), con <b>Latitude</b> y <b>Longitude</b> (en inglés, para que My Maps las reconozca solas) y Nombre como título, si es <b>Traditional u On Premise</b>, todos sus datos y el enlace "Cómo llegar".`,
       `<div class="desc-todo">
         <button type="button" class="kof-btn" id="descZip">Descargar todo en ZIP (${num(todas.filter(x => x.filas.length).length)} archivos)</button>
         <p class="desc-estado" id="descEstado" role="status" aria-live="polite"></p>
@@ -143,8 +145,8 @@ const Descargas = (function () {
       <ol class="desc-pasos">
         <li>Entra a <b>google.com/mymaps</b> y crea un mapa nuevo.</li>
         <li>En la capa, elige <b>Importar</b> y sube un archivo.</li>
-        <li>Para colocar los marcadores elige <b>Latitud</b> y <b>Longitud</b>; como título, <b>Nombre</b>.</li>
-        <li>Una capa por archivo: un mapa admite hasta 10 capas. En <b>Estilo</b> puedes agrupar por Jefatura, Ruta o Días con ÉPICA.</li>
+        <li>My Maps reconoce solo <b>Latitude</b> y <b>Longitude</b> para colocar los marcadores (si pregunta, elígelas); como título, <b>Nombre</b>.</li>
+        <li>Una capa por archivo: un mapa admite hasta 10 capas. En <b>Estilo</b> puedes agrupar por Traditional / On Premise, Jefatura, Ruta o Días con ÉPICA.</li>
       </ol>`);
     const estado = panel.querySelector('#descEstado');
     const ocupado = async (boton, texto, tarea) => {
