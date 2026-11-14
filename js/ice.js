@@ -1,5 +1,6 @@
 /* Reporte ICE (ice.html): acceso con usuario + contraseña y las secciones de
- * la unidad (resumen con el Excel de la clasificación, mapa, semanas del mes,
+ * la unidad (resumen con el Excel de la clasificación y la hoja «Mis clientes
+ * ICE», mapa, semanas del mes, cinética de los auditores (js/ice-extra.js),
  * rutas con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
  * js/ice-admin.js (todas las unidades) y desde ahí abre cualquier unidad.
@@ -183,12 +184,13 @@ const Ice = (function () {
   }
 
   // ── Reporte ───────────────────────────────────────────────────────────
-  let D = null, mapaM = null, mapaR = null, mapaP = null, porSapCliente = {}, porSapEval = {};
+  let D = null, mapaM = null, mapaR = null, mapaP = null, mapaC = null, cineticaLista = false, porSapCliente = {}, porSapEval = {};
 
   function render(datos, volver) {
     // Al cambiar de unidad (administrador) los mapas se vuelven a crear
-    for (const m of [mapaM, mapaR, mapaP, mapaS]) if (m) m.remove();
-    mapaM = mapaR = mapaP = mapaS = null;
+    for (const m of [mapaM, mapaR, mapaP, mapaS, mapaC]) if (m) m.remove();
+    mapaM = mapaR = mapaP = mapaS = mapaC = null;
+    cineticaLista = false;
     diaSel = 'hoy';
     rutaSel = null;
     D = datos;
@@ -201,7 +203,7 @@ const Ice = (function () {
     v.hidden = false;
     const c = D.corte;
     const pestanas = [['resumen', 'Resumen'], ['mapa', 'Mapa'], ['semanas', 'Semanas'], ['rutas', 'Rutas'],
-                      ['poligonos', 'Polígonos']];
+                      ['poligonos', 'Polígonos'], ['cinetica', 'Cinética']];
     v.innerHTML = `
       <header class="ice-cab">
         <div>
@@ -225,6 +227,7 @@ const Ice = (function () {
       <div class="ice-panel ice-panel-mapa" id="p-semanas" role="tabpanel" aria-labelledby="tab-semanas" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-poligonos" role="tabpanel" aria-labelledby="tab-poligonos" hidden></div>
+      <div class="ice-panel ice-panel-mapa" id="p-cinetica" role="tabpanel" aria-labelledby="tab-cinetica" hidden></div>
       <footer class="ice-pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>`;
     v.querySelector('[data-accion="salir"]').addEventListener('click', () => location.reload());
     if (volver) v.querySelector('[data-accion="volver"]').addEventListener('click', () => { Graficas.Tip.hide(); volver(); });
@@ -248,12 +251,20 @@ const Ice = (function () {
       t.setAttribute('aria-selected', activa);
       t.tabIndex = activa ? 0 : -1;
     }
-    for (const p of ['resumen', 'mapa', 'semanas', 'rutas', 'poligonos']) $('p-' + p).hidden = p !== cual;
+    for (const p of ['resumen', 'mapa', 'semanas', 'rutas', 'poligonos', 'cinetica']) $('p-' + p).hidden = p !== cual;
     Graficas.Tip.hide();
     if (cual === 'mapa') mapa();
     if (cual === 'semanas') semanas();
     if (cual === 'rutas') rutas();
     if (cual === 'poligonos') poligonos();
+    if (cual === 'cinetica') cinetica();
+  }
+
+  // Cinética de los auditores (js/ice-extra.js): se arma la primera vez que se abre
+  function cinetica() {
+    if (cineticaLista) { if (mapaC) setTimeout(() => mapaC.invalidateSize(), 50); return; }
+    cineticaLista = true;
+    mapaC = IceExtra.cinetica($('p-cinetica'), D, { capaBase, botonUbicacion, limitesRobustos });
   }
 
   // Cambio contra el corte anterior: ▲ sube, ▼ baja (negro si mejora, rojo si
@@ -305,6 +316,10 @@ const Ice = (function () {
         ${R.por_canal.map(c => `<span class="ice-canal"><i style="background:${COLOR_CANAL[c.canal]}"></i>${esc(c.canal)}
           <b>${dec1(c.promedio)}</b>${flecha(c.d_promedio)} <span class="muted">· ${plural(c.n, 'evaluado')} · ${esc(MA.mes)}: ${dec1(c.mes_anterior)}</span></span>`).join('')}
       </div>
+      <div class="ice-descargas">
+        <button type="button" class="ice-btn rojo" id="btnHoja">${svgIcono('descarga')}Descargar «Mis clientes ICE» (HTML)</button>
+        <span>Un archivo que se abre en el celular o la computadora, sin contraseña: <b>eliges tu jefatura y tu ruta</b> y te dice qué clientes ICE te tocan hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y mañana, por prioridad 1, prioridad 2 y aleatorios, con su nombre, SAP y lo que les faltó en su última evaluación. Los aleatorios que nunca se han evaluado van en otra pestaña. Es una foto de esta publicación: descárgalo cada día.</span>
+      </div>
       ${D.excel ? `<div class="ice-descargas">
         <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
         <span>Los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}: prioridad, semana del mes en que suelen evaluarse, visitas, datos del cliente, si ya se evaluó en ICE en ${esc(D.mes)}, la submétrica que más le quitó en su última evaluación y su ÉPICA de ${esc(D.mes)} separada en brigadistas, preventa y farmers.</span>
@@ -318,6 +333,7 @@ const Ice = (function () {
         '<div class="grafica" id="gDia"></div>')}
       ${seccionEstimacion()}
       ${seccionZonas()}
+      ${seccionViolinesZona()}
       ${seccionDesglose()}
       <p class="ice-nota">Universo ICE: clientes de BaseDeDatos/UniversoICE.db. <b>Prioridad 1</b>: evaluados en ${esc(D.prioridad.mes_anterior)} y con ${num(D.prioridad.min_visitas)} o más visitas en los meses anteriores; <b>prioridad 2</b>: evaluados en ${esc(D.prioridad.mes_anterior)} sin esa recurrencia; <b>aleatorios</b>: el resto del universo. La clasificación es del mes y se rehace al cambiar de mes.</p>`;
 
@@ -340,6 +356,8 @@ const Ice = (function () {
     graficaDiaria($('gDia'));
     if ($('gMeses')) graficaMeses($('gMeses'));
     if ($('btnExcel')) $('btnExcel').addEventListener('click', descargarExcel);
+    $('btnHoja').addEventListener('click', () => IceExtra.descargarHoja(D));
+    graficasViolinesZona();
     graficasPerdidos();
   }
 
@@ -489,6 +507,46 @@ const Ice = (function () {
         <tfoot><tr><th scope="row">Unidad</th><td>${num(R.n)} ${flecha(R.d_n, 0)}</td><td>${celdaBarra(R.promedio, R.d_promedio, null)}</td>
           <td>${dec1(canal('Traditional'))}</td><td>${dec1(canal('On Premise'))}</td><td>${num(R.prioridad.p1_eval)} / ${num(R.prioridad.p1)}</td><td>${dec1(R.mes_anterior.promedio)}</td></tr></tfoot>
       </table></div>`);
+  }
+
+  // Violines por jefatura: una gráfica por canal con un violín por cada
+  // jefatura que tiene evaluaciones del mes en ese canal
+  const MIN_VIOLIN = 3;      // con menos evaluaciones no hay distribución que dibujar
+  function seriesZona(ci) {
+    const porZona = {};
+    for (const e of D.evaluados) if (e[4] === ci && e[6] != null) (porZona[D.zonas[e[10]]] = porZona[D.zonas[e[10]]] || []).push(e[6]);
+    const zonas = D.zonas.filter(z => porZona[z]);
+    return { con: zonas.filter(z => porZona[z].length >= MIN_VIOLIN).map(z => ({ nombre: z, valores: porZona[z] })),
+             pocas: zonas.filter(z => porZona[z].length < MIN_VIOLIN).map(z => `${z} (${porZona[z].length})`) };
+  }
+
+  function seccionViolinesZona() {
+    if (!D.evaluados.length) return '';
+    return seccion('Distribución por jefatura', `Un violín por jefatura y canal con la calificación ICE de sus clientes evaluados en ${esc(D.mes)}: la caja va del cuartil 1 al 3, el círculo es la mediana y la raya horizontal, el promedio. La línea punteada es el promedio de la unidad en ese canal. Solo se dibujan las jefaturas con ${MIN_VIOLIN} o más evaluaciones en el canal.`,
+      D.canales.map((c, i) => `<figure class="violin-zona"><figcaption>${esc(c)} · violín por jefatura</figcaption>
+        <div class="g-scroll"><div class="grafica" id="gViolinZona${i}"></div></div><p class="mapa-ayuda" id="gViolinZonaNota${i}"></p></figure>`).join(''));
+  }
+
+  function graficasViolinesZona() {
+    D.canales.forEach((c, i) => {
+      const cont = $('gViolinZona' + i);
+      if (!cont) return;
+      const { con, pocas } = seriesZona(i);
+      const prom = (D.resumen.por_canal.find(x => x.canal === c) || {}).promedio;
+      if (con.length) {
+        // El eje se ajusta a los datos del canal: con todo arriba de 80 los violines no quedan aplastados
+        const todos = con.flatMap(s => s.valores);
+        const piso = Math.max(0, Math.floor((Math.min(...todos) - 5) / 10) * 10), techo = Math.max(110, Math.ceil(Math.max(...todos) / 5) * 5);
+        Graficas.violin(cont, {
+          dominio: [piso, techo], alto: 340, minAncho: con.length * 96 + 60, titulo: `Calificaciones ICE de ${c} por jefatura`,
+          series: con.map(s => ({ ...s, color: COLOR_CANAL[c] })),
+          objetivo: prom == null ? null : { valor: prom, etiqueta: `Unidad ${dec1(prom)}` },
+        });
+      } else {
+        cont.innerHTML = `<p class="muted">Ninguna jefatura tiene ${MIN_VIOLIN} o más evaluaciones de ${esc(c)} en ${esc(D.mes)}.</p>`;
+      }
+      $('gViolinZonaNota' + i).textContent = pocas.length ? `Con menos de ${MIN_VIOLIN} evaluaciones (sin violín): ${pocas.join(', ')}.` : '';
+    });
   }
 
   // ── Desglose por submétrica ───────────────────────────────────────────

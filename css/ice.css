@@ -392,3 +392,23 @@ button, input, select { font: inherit; }
 .mapa-admin { height: max(520px, calc(100vh - 210px)); }
 @media (max-width: 860px) { .mapa-admin { height: 68vh; } }
 .g-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Violines por jefatura (Resumen) */
+.violin-zona + .violin-zona { margin-top: 26px; }
+.violin-zona figcaption { margin-bottom: 6px; }
+.ice-descargas + .ice-descargas { margin-top: 10px; }
+
+/* Cinética: barra de días y auditores */
+.cin-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cin-barra input[type="range"] { flex: 1 1 260px; min-width: 180px; height: 40px; accent-color: var(--coke); cursor: pointer; }
+.cin-paso { min-width: 44px; padding-left: 0; padding-right: 0; justify-content: center; }
+.cin-fecha { flex: 0 0 auto; min-width: 230px; font-size: 15px; }
+.cin-fecha b { font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.cin-dias { display: flex; align-items: flex-end; gap: 2px; height: 34px; padding: 0 2px; border-bottom: 2px solid var(--negro); }
+.cin-dias span { flex: 1; display: flex; align-items: flex-end; height: 100%; }
+.cin-dias i { display: block; width: 100%; background: var(--gris-marca); }
+.cin-dias span.on i { background: var(--coke); }
+.cin-dias span.on { box-shadow: 0 3px 0 var(--coke); }
+.cin-item .ruta-info { display: block; font-size: 12px; line-height: 1.45; color: var(--tinta2); }
+@media (max-width: 640px) { .cin-fecha { min-width: 0; flex-basis: 100%; } }
+.cin-item .ruta-info { grid-column: auto; white-space: normal; overflow: visible; }
