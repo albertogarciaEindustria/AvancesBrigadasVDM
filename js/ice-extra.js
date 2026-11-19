@@ -1,15 +1,19 @@
-/* Reporte ICE: pestaña Cinética y hoja descargable "Mis clientes ICE".
+/* Reporte ICE: información del sistema, pestaña Cinética y hoja descargable
+ * "Mis clientes ICE".
  *
- * Cinética: con una barra deslizable se recorren los días del mes y el mapa
- * muestra, por auditor, los clientes que evaluó ese día, su trayectoria y el
- * polígono de la zona que cubrió. El reporte ICE solo trae la fecha de la
- * encuesta (no la hora): el orden de la trayectoria se estima por cercanía.
+ * Información del sistema: cuándo se actualizó la página y hasta qué fecha llegan
+ * los datos ICE (la usan la unidad y el administrador).
+ *
+ * Cinética: botones con los evaluadores que pasaron por la unidad; al elegir uno
+ * se ven los clientes que visitó, con flechas para recorrer sus días o todas las
+ * zonas del mes a la vez. El reporte ICE solo trae la fecha de la encuesta (no la
+ * hora): el orden del recorrido se estima por cercanía.
  *
  * Hoja "Mis clientes ICE": un archivo HTML suelto (sin contraseña: quien lo
  * tiene lo ve) con los clientes ICE de las rutas de hoy y de mañana; se elige
- * jefatura y ruta y lista prioridad 1, prioridad 2 y aleatorios con lo que les
- * faltó en su última evaluación; los aleatorios que nunca se han evaluado van
- * en otra pestaña. Se arma en el navegador con los datos ya descifrados. */
+ * jefatura y ruta y lista prioridad 1, 2 y 3 con lo que les faltó en su última
+ * evaluación; los no prioritarios (nunca evaluados) van en otra pestaña. Se arma
+ * en el navegador con los datos ya descifrados. */
 const IceExtra = (function () {
   'use strict';
   const { esc, num } = Util;
@@ -22,7 +26,6 @@ const IceExtra = (function () {
   const TACTIL = window.matchMedia('(pointer: coarse)').matches;
   const dec1 = v => v == null ? '—' : num(v, 1);
   const plural = (n, s, p) => `${num(n)} ${n === 1 ? s : (p || s + 's')}`;
-  const iso = (a, m, d) => `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
   // ── Geometría ─────────────────────────────────────────────────────────
   const KM_LAT = 111.32;
@@ -77,56 +80,95 @@ const IceExtra = (function () {
     return Math.abs(s) / 2;
   }
 
+  // ── Información del sistema (unidad y administrador) ──────────────────
+  // Sirve para saber de un vistazo si la página y los datos ICE están al día
+  function htmlInfo(D) {
+    const aFecha = t => {
+      const [f, h = '00:00'] = String(t || '').split(' '), [a, m, d] = f.split('-').map(Number), [hh, mm] = h.split(':').map(Number);
+      return d ? new Date(a, m - 1, d, hh || 0, mm || 0) : null;
+    };
+    const largo = (t, conHora = true) => {
+      const f = aFecha(t);
+      if (!f) return '—';
+      const hora = conHora && String(t).includes(' ') ? `, ${String(f.getHours()).padStart(2, '0')}:${String(f.getMinutes()).padStart(2, '0')}` : '';
+      return `${DIAS[f.getDay()].toLowerCase()} ${f.getDate()} de ${MESES[f.getMonth()]} de ${f.getFullYear()}${hora}`;
+    };
+    const horasDesde = t => { const f = aFecha(t); return f ? (Date.now() - f) / 3600000 : null; };
+    const hace = t => {
+      const h = horasDesde(t);
+      if (h == null) return '';
+      if (h < 1) return 'hace menos de una hora';
+      if (h < 36) return `hace ${plural(Math.round(h), 'hora')}`;
+      return `hace ${plural(Math.round(h / 24), 'día')}`;
+    };
+    const estado = (ok, siOk, siNo) => `<span class="info-estado ${ok ? 'ok' : 'alerta'}">${esc(ok ? siOk : siNo)}</span>`;
+    const C = D.corte, F = D.fuentes || {}, hPag = horasDesde(D.generado), hIce = C ? horasDesde(C.clave) : null;
+    const detalle = D.detalle_canal || {};
+    const filas = [
+      ['Esta página', largo(D.generado), hace(D.generado)],
+      ...(C ? C.cortes.map(t => { const [canal, ...r] = t.split(' · '); return [`Corte ICE cargado · ${canal === 'Traditional' ? 'Home Market (Traditional)' : canal}`, r.join(' · '), '']; }) : []),
+      ...Object.entries(detalle).map(([, d]) => [`Última encuesta ICE · ${d.pestana}`, largo(d.encuestas_hasta), hace(d.encuestas_hasta)]),
+      ...(!D.detalle_canal && C && C.encuestas_hasta ? [['Última encuesta ICE', largo(C.encuestas_hasta), hace(C.encuestas_hasta)]] : []),
+      ...(F.epica ? [['ÉPICA', largo(F.epica), hace(F.epica)]] : []),
+      ...(F.universo ? [['Universo ICE cargado', largo(F.universo), hace(F.universo)]] : []),
+      ...(F.master ? [['Master Data cargada', largo(F.master), hace(F.master)]] : []),
+      ...(F.jefaturas ? [['Jefaturas y frecuencias cargadas', largo(F.jefaturas), hace(F.jefaturas)]] : []),
+    ];
+    return `<div class="ice-kpis info-kpis">
+        <div class="ice-kpi destacado"><p class="kpi-etiqueta">Página actualizada</p><p class="kpi-valor info-valor">${esc(largo(D.generado))}</p>
+          <p class="kpi-sub">${esc(hace(D.generado))} ${estado(hPag != null && hPag <= 26, 'Al día', 'Sin actualizar')}</p></div>
+        <div class="ice-kpi"><p class="kpi-etiqueta">Datos ICE hasta</p><p class="kpi-valor info-valor">${C && C.encuestas_hasta ? esc(largo(C.encuestas_hasta)) : 'Sin evaluaciones del mes'}</p>
+          <p class="kpi-sub">última encuesta registrada${C && C.encuestas_hasta ? ` · ${esc(hace(C.encuestas_hasta))}` : ''}</p></div>
+        <div class="ice-kpi"><p class="kpi-etiqueta">Último reporte ICE cargado</p><p class="kpi-valor info-valor">${C ? esc(C.texto) : '—'}</p>
+          <p class="kpi-sub">${C ? esc(hace(C.clave)) : ''} ${C ? estado(hIce != null && hIce <= 72, 'Reciente', 'Revisar: más de 3 días') : ''}</p></div>
+      </div>
+      <section class="ice-seccion"><header class="ice-sec-cab"><div><h2>Fecha de cada dato</h2>
+        <p>La página se publica sola todos los días a la 1:00 a. m. y cada vez que se manda /publicaavance. Los datos ICE llegan hasta el último reporte cargado con /addicedata; las encuestas suelen ir unos días atrás de la fecha del reporte.</p></div></header>
+        <div class="tabla-scroll"><table class="ice-tabla">
+          <thead><tr><th>Dato</th><th class="izq">Fecha</th><th class="izq">Antigüedad</th></tr></thead>
+          <tbody>${filas.map(([k, v, h]) => `<tr><th scope="row">${esc(k)}</th><td class="izq">${esc(v)}</td><td class="izq">${esc(h)}</td></tr>`).join('')}</tbody>
+        </table></div></section>`;
+  }
+
   // ── Cinética ──────────────────────────────────────────────────────────
-  // ctx = { capaBase, botonUbicacion, limitesRobustos }; devuelve el mapa
+  // Botones con los evaluadores que pasaron por la unidad: al elegir uno se
+  // ven los clientes que visitó; las flechas recorren sus días y «Ver todas
+  // las zonas» regresa a todo el mes. ctx = { capaBase, botonUbicacion,
+  // limitesRobustos }; devuelve el mapa
   function cinetica(panel, D, ctx) {
     const SIN = 'Sin auditor';
     const evs = D.evaluados.filter(e => e[5]).map(e => ({
-      sap: e[0], nombre: e[1], ll: e[2] != null && e[3] != null ? [e[2], e[3]] : null, canal: D.canales[e[4]],
+      sap: e[0], nombre: e[1], ll: e[2] != null && e[3] != null ? [e[2], e[3]] : null, canal: D.canales[e[4]] === 'Traditional' ? 'Home Market' : D.canales[e[4]],
       fecha: e[5], ice: e[6], zona: D.zonas[e[10]], auditor: e[13] || SIN,
     }));
     if (!evs.length) {
       panel.innerHTML = `<div class="mapa-barra"><p class="mapa-resumen">Aún no hay evaluaciones ICE de ${esc(D.mes)}: la cinética aparece con el primer corte del mes.</p></div>`;
       return null;
     }
-    // Días transcurridos: del 1 del mes a la última encuesta
-    const ultimo = evs.reduce((m, e) => e.fecha > m ? e.fecha : m, '');
-    const dias = [];
-    for (let d = 1; d <= Number(ultimo.slice(8, 10)); d++) dias.push(iso(D.anio, D.mes_num, d));
-    const porDia = {};
-    for (const e of evs) (porDia[e.fecha] = porDia[e.fecha] || []).push(e);
-    // Auditores por número de evaluaciones (el color es fijo en todo el mes)
     const cuenta = {};
     for (const e of evs) cuenta[e.auditor] = (cuenta[e.auditor] || 0) + 1;
     const auditores = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b));
     const color = Object.fromEntries(auditores.map((a, i) => [a, COLORES[i % COLORES.length]]));
-    const sinAuditor = auditores.length === 1 && auditores[0] === SIN;
     const textoDia = f => { const d = new Date(D.anio, D.mes_num - 1, Number(f.slice(8, 10))); return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`; };
+    const promedio = l => { const v = l.map(e => e.ice).filter(x => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+    const largoRuta = l => { let t = 0; for (let k = 1; k < l.length; k++) t += km(l[k - 1].ll, l[k].ll); return t; };
+    const agrupar = (l, f) => { const g = {}; for (const e of l) (g[f(e)] = g[f(e)] || []).push(e); return g; };
 
     panel.innerHTML = `
       <div class="mapa-barra">
-        <div class="cin-barra">
-          <button type="button" class="ice-btn rojo" id="cinPlay" aria-pressed="false">▶ Reproducir</button>
-          <button type="button" class="ice-btn sec cin-paso" id="cinAntes" aria-label="Día anterior">◀</button>
-          <input type="range" id="cinDia" min="0" max="${dias.length - 1}" step="1" value="${dias.length - 1}" aria-label="Día del mes">
-          <button type="button" class="ice-btn sec cin-paso" id="cinDespues" aria-label="Día siguiente">▶</button>
-          <output class="cin-fecha" id="cinFecha" for="cinDia"></output>
+        <div class="cin-fila"><span class="poli-rutas-tit">Evaluadores que pasaron:</span><div class="chips" id="cinAuditores" role="group" aria-label="Evaluadores"></div></div>
+        <div class="cin-nav" role="group" aria-label="Días del mes">
+          <button type="button" class="ice-btn sec cin-paso" id="cinAntes" aria-label="Día anterior" title="Día anterior">◀</button>
+          <output class="cin-fecha" id="cinFecha" aria-live="polite"></output>
+          <button type="button" class="ice-btn sec cin-paso" id="cinDespues" aria-label="Día siguiente" title="Día siguiente">▶</button>
+          <button type="button" class="ice-btn" id="cinTodas">Ver todas las zonas</button>
         </div>
-        <div class="cin-dias" id="cinDias" aria-hidden="true"></div>
-        <div class="mapa-controles">
-          <div class="segmento" id="cinModo" role="group" aria-label="Qué se dibuja">
-            <button type="button" data-modo="dia" aria-pressed="true">Solo ese día</button>
-            <button type="button" data-modo="estela" aria-pressed="false">Con la estela de los días anteriores</button>
-            <button type="button" data-modo="acumulado" aria-pressed="false">Acumulado del mes</button>
-          </div>
-        </div>
-        <div class="chips" id="cinAuditores" role="group" aria-label="Auditores en el mapa"></div>
         <p class="mapa-resumen" id="cinResumen" role="status"></p>
-        <p class="mapa-ayuda">Mueve la barra para recorrer los días de ${esc(D.mes)} que ya pasaron. Cada color es un auditor: los puntos son los clientes que evaluó ese día, la línea su trayectoria y el polígono la zona que cubrió. El reporte ICE trae la fecha de la encuesta pero no la hora, así que <b>el orden de la trayectoria es estimado</b> (del cliente más cercano al siguiente). «Acumulado del mes» junta en un polígono por auditor todo lo que lleva hasta ese día.${sinAuditor ? ' Este corte no trae el usuario del auditor: se muestran todas las evaluaciones juntas.' : ''}</p>
+        <p class="mapa-ayuda">Elige un evaluador para ver los clientes que visitó. Con las flechas pasas por sus días, uno por uno; <b>Ver todas las zonas</b> muestra a la vez las zonas de todo ${esc(D.mes)}. El reporte ICE trae la fecha de la encuesta pero no la hora, así que <b>el orden del recorrido de cada día es estimado</b> (del cliente más cercano al siguiente).</p>
       </div>
       <div class="rutas-cuerpo">
         <div id="mapaCinetica" class="mapa"></div>
-        <aside class="rutas-lista" aria-label="Auditores del día"><ul id="cinLista"></ul></aside>
+        <aside class="rutas-lista" aria-label="Evaluadores y clientes"><ul id="cinLista"></ul></aside>
       </div>`;
     const $ = id => document.getElementById(id);
 
@@ -142,143 +184,124 @@ const IceExtra = (function () {
     if (conCoord.length) mapa.fitBounds(ctx.limitesRobustos(conCoord.map(e => e.ll)).pad(0.08));
     else mapa.setView([19.36, -99.14], 11);
 
-    const estado = { i: dias.length - 1, modo: 'dia', ocultos: new Set() };
-    let limites = {}, reloj = null;
+    const estado = { auditor: null, dia: null };     // null = todos los evaluadores / todos los días
+    let marcas = new Map();
 
-    // Rayitas debajo de la barra: cuántas evaluaciones tuvo cada día
-    const maxDia = Math.max(1, ...dias.map(f => (porDia[f] || []).length));
-    $('cinDias').innerHTML = dias.map(f => {
-      const n = (porDia[f] || []).length;
-      return `<span title="${esc(textoDia(f))}: ${num(n)}"><i style="height:${n ? Math.max(8, Math.round(n / maxDia * 100)) : 0}%"></i></span>`;
-    }).join('');
+    const delEvaluador = () => estado.auditor ? evs.filter(e => e.auditor === estado.auditor) : evs;
+    const diasDisponibles = () => [...new Set(delEvaluador().map(e => e.fecha))].sort();
 
-    function zona(lls, c, opciones) {
-      // Con 1 o 2 clientes no hay polígono: un círculo o una franja
+    function zona(lls, c, opciones, tip) {
       if (!lls.length) return null;
       const h = envolvente(lls);
-      const estilo = Object.assign({ renderer: rendZonas, color: c, weight: 2, fillColor: c, fillOpacity: 0.16, interactive: false }, opciones);
-      if (h.length >= 3) return L.polygon(h, estilo);
-      if (h.length === 2) return L.polyline(h, Object.assign({}, estilo, { weight: 14, opacity: estilo.fillOpacity * 1.6, lineCap: 'round' }));
-      return L.circle(h[0], Object.assign({ radius: 160 }, estilo));
+      const estilo = Object.assign({ renderer: rendZonas, color: c, weight: 2, fillColor: c, fillOpacity: 0.16, interactive: !!tip }, opciones);
+      // Con 1 o 2 clientes no hay polígono: un círculo o una franja
+      const z = h.length >= 3 ? L.polygon(h, estilo)
+        : h.length === 2 ? L.polyline(h, Object.assign({}, estilo, { weight: 14, opacity: estilo.fillOpacity * 1.6, lineCap: 'round' }))
+        : L.circle(h[0], Object.assign({ radius: 160 }, estilo));
+      if (tip && !TACTIL) z.bindTooltip(tip, { sticky: true, opacity: 0.95 });
+      return z.addTo(capa);
     }
 
-    function pintar() {
-      const f = dias[estado.i], delDia = porDia[f] || [];
-      capa.clearLayers();
-      limites = {};
-      const grupos = {};
-      for (const e of delDia) (grupos[e.auditor] = grupos[e.auditor] || []).push(e);
-      const visibles = a => !estado.ocultos.has(a);
+    function punto(e, c, radio, parada) {
+      const m = L.circleMarker(e.ll, { renderer: rendPuntos, radius: radio, color: '#FFFFFF', weight: radio > 4 ? 2 : 1, fillColor: c, fillOpacity: 1 }).addTo(capa);
+      m.bindPopup(`<div class="pc"><div class="pc-cab"><b>${esc(e.nombre || 'Cliente sin nombre')}</b><span class="pc-sap">SAP <strong>${esc(e.sap)}</strong></span>
+        <span>ICE <b style="display:inline;font-size:13px">${dec1(e.ice)}</b> · ${esc(e.canal)}</span></div>
+        <dl class="pc-cuerpo"><dt>Evaluador</dt><dd>${esc(e.auditor)}</dd><dt>Fecha</dt><dd>${esc(textoDia(e.fecha))}</dd><dt>Jefatura</dt><dd>${esc(e.zona)}</dd>
+        ${parada ? `<dt>Parada</dt><dd>${esc(parada)} (orden estimado)</dd>` : ''}</dl></div>`, { maxWidth: 280 });
+      marcas.set(e, m);
+    }
 
-      // Días anteriores: estela atenuada o acumulado del mes
-      if (estado.modo === 'estela') {
-        for (let k = Math.max(0, estado.i - 6); k < estado.i; k++) {
-          const previos = {};
-          for (const e of porDia[dias[k]] || []) if (e.ll && visibles(e.auditor)) (previos[e.auditor] = previos[e.auditor] || []).push(e.ll);
-          const edad = estado.i - k;
-          for (const [a, lls] of Object.entries(previos)) {
-            const z = zona(lls, color[a], { weight: 1, opacity: Math.max(0.15, 0.55 - edad * 0.07), fillOpacity: Math.max(0.03, 0.1 - edad * 0.012), dashArray: '4 4' });
-            if (z) z.addTo(capa);
-          }
+    function pintar(encuadrar) {
+      const { auditor, dia } = estado;
+      const visibles = delEvaluador().filter(e => !dia || e.fecha === dia);
+      capa.clearLayers();
+      marcas = new Map();
+      const conLl = visibles.filter(e => e.ll);
+      if (dia) {
+        // Un día: zona, recorrido y clientes de cada evaluador
+        for (const [a, lista] of Object.entries(agrupar(conLl, e => e.auditor))) {
+          const orden = ordenar(lista), c = color[a];
+          zona(orden.map(e => e.ll), c, {});
+          if (orden.length > 1) L.polyline(orden.map(e => e.ll), { renderer: rendPuntos, color: c, weight: 3, opacity: 0.9, interactive: false }).addTo(capa);
+          orden.forEach((e, k) => punto(e, c, k === 0 ? 8 : 6, `${k + 1} de ${orden.length}`));
         }
-      } else if (estado.modo === 'acumulado') {
-        const previos = {};
-        for (let k = 0; k <= estado.i; k++)
-          for (const e of porDia[dias[k]] || []) if (e.ll && visibles(e.auditor)) (previos[e.auditor] = previos[e.auditor] || []).push(e);
-        for (const [a, lista] of Object.entries(previos)) {
-          const z = zona(lista.map(e => e.ll), color[a], { weight: 1.5, fillOpacity: 0.08, dashArray: '6 5' });
-          if (z) z.addTo(capa);
-          for (const e of lista) if (e.fecha !== f)
-            L.circleMarker(e.ll, { renderer: rendPuntos, radius: 3, color: color[a], weight: 0, fillColor: color[a], fillOpacity: 0.35, interactive: false }).addTo(capa);
+      } else if (auditor) {
+        // Un evaluador, todo el mes: la zona de cada uno de sus días
+        const c = color[auditor];
+        for (const [f, lista] of Object.entries(agrupar(conLl, e => e.fecha)))
+          zona(lista.map(e => e.ll), c, { weight: 1.5, fillOpacity: 0.12 }, `<b>${esc(textoDia(f))}</b> · ${plural(lista.length, 'cliente')}`);
+        conLl.forEach(e => punto(e, c, 5.5));
+      } else {
+        // Todos, todo el mes: la zona que cubrió cada evaluador
+        for (const [a, lista] of Object.entries(agrupar(conLl, e => e.auditor))) {
+          zona(lista.map(e => e.ll), color[a], { weight: 2, fillOpacity: 0.1 }, `<b>${esc(a)}</b> · ${plural(lista.length, 'cliente')}`);
+          lista.forEach(e => punto(e, color[a], 3.5));
         }
       }
+      if (encuadrar && conLl.length) mapa.fitBounds(L.latLngBounds(conLl.map(e => e.ll)).pad(0.15), { maxZoom: 16 });
 
-      // El día elegido: zona, trayectoria y clientes de cada auditor
-      const filas = auditores.filter(a => grupos[a]).map(a => {
-        const lista = grupos[a], con = ordenar(lista.filter(e => e.ll)), c = color[a];
-        let largo = 0;
-        for (let k = 1; k < con.length; k++) largo += km(con[k - 1].ll, con[k].ll);
-        const anillo = envolvente(con.map(e => e.ll));
-        const scores = lista.map(e => e.ice).filter(v => v != null);
-        const zonas = [...new Set(lista.map(e => e.zona))].sort();
-        if (visibles(a) && con.length) {
-          const z = zona(con.map(e => e.ll), c, {});
-          if (z) z.addTo(capa);
-          if (con.length > 1) L.polyline(con.map(e => e.ll), { renderer: rendPuntos, color: c, weight: 3, opacity: 0.9, interactive: false }).addTo(capa);
-          con.forEach((e, k) => {
-            const m = L.circleMarker(e.ll, { renderer: rendPuntos, radius: k === 0 ? 8 : 6, color: '#FFFFFF', weight: 2, fillColor: c, fillOpacity: 1 }).addTo(capa);
-            m.bindPopup(`<div class="pc"><p class="pc-nombre">${esc(e.nombre || 'Cliente ' + e.sap)}</p>
-              <dl class="pc-datos"><dt>SAP</dt><dd>${esc(e.sap)}</dd><dt>ICE</dt><dd><b>${dec1(e.ice)}</b> · ${esc(e.canal)}</dd>
-              <dt>Auditor</dt><dd>${esc(a)}</dd><dt>Jefatura</dt><dd>${esc(e.zona)}</dd>
-              <dt>Parada</dt><dd>${k + 1} de ${con.length} (orden estimado)</dd></dl></div>`, { maxWidth: 280 });
-          });
-          limites[a] = L.latLngBounds(con.map(e => e.ll));
+      // Controles
+      $('cinAuditores').innerHTML = `<button type="button" class="chip" data-auditor="" aria-pressed="${!auditor}">Todos · ${num(evs.length)}</button>` +
+        auditores.map(a => `<button type="button" class="chip" aria-pressed="${a === auditor}" data-auditor="${esc(a)}"><span class="adm-sw" style="background:${color[a]}"></span>${esc(a)} · ${num(cuenta[a])}</button>`).join('');
+      const dias = diasDisponibles();
+      $('cinFecha').innerHTML = dia ? `<b>${esc(textoDia(dia))}</b> <span class="muted">· día ${dias.indexOf(dia) + 1} de ${dias.length}</span>`
+        : `<b>Todos los días</b> <span class="muted">· ${plural(dias.length, 'día')} con evaluaciones</span>`;
+      $('cinTodas').disabled = !dia;
+      const sinLl = visibles.length - conLl.length;
+      $('cinResumen').innerHTML = `${auditor ? `<b>${esc(auditor)}</b>: ` : ''}<b>${plural(visibles.length, 'cliente evaluado', 'clientes evaluados')}</b>${auditor ? '' : ` por <b>${plural(new Set(visibles.map(e => e.auditor)).size, 'evaluador', 'evaluadores')}</b>`} · ICE promedio <b>${dec1(promedio(visibles))}</b>${sinLl ? ` · ${num(sinLl)} sin coordenadas no aparecen en el mapa` : ''}.`;
+
+      // Lista lateral: evaluadores o, con uno elegido, sus clientes por día
+      let html = '';
+      if (auditor) {
+        const porDia = agrupar(visibles, e => e.fecha);
+        for (const f of Object.keys(porDia).sort()) {
+          const lista = porDia[f], orden = ordenar(lista.filter(e => e.ll)).concat(lista.filter(e => !e.ll));
+          html += `<li class="cin-dia"><b>${esc(textoDia(f))}</b><span>${plural(lista.length, 'cliente')} · ICE ${dec1(promedio(lista))} · ~${num(largoRuta(orden.filter(e => e.ll)), 1)} km</span></li>`;
+          html += orden.map(e => `<li><button type="button" class="ruta-item cin-item" data-e="${evs.indexOf(e)}"${e.ll ? '' : ' disabled'}>
+            <span class="adm-sw" style="background:${color[auditor]}"></span>
+            <span><b>${esc(e.nombre || 'Cliente ' + e.sap)}</b><span class="ruta-info">SAP ${esc(e.sap)} · ${esc(e.zona)} · ${esc(e.canal)}${e.ll ? '' : ' · sin coordenadas'}</span></span>
+            <span class="poli-pct">${dec1(e.ice)}</span></button></li>`).join('');
         }
-        return { a, n: lista.length, sin: lista.length - con.length, largo, area: areaKm2(anillo), zonas,
-                 prom: scores.length ? scores.reduce((s, v) => s + v, 0) / scores.length : null };
-      });
-
-      // Textos
-      $('cinDia').value = estado.i;
-      $('cinFecha').innerHTML = `<b>${esc(textoDia(f))}</b>${delDia.length ? '' : ' · sin evaluaciones'}`;
-      [...$('cinDias').children].forEach((s, k) => s.classList.toggle('on', k === estado.i));
-      const scoresDia = delDia.map(e => e.ice).filter(v => v != null);
-      const acumulado = dias.slice(0, estado.i + 1).reduce((s, d) => s + (porDia[d] || []).length, 0);
-      $('cinResumen').innerHTML = delDia.length
-        ? `<b>${plural(delDia.length, 'evaluación', 'evaluaciones')}</b> de <b>${plural(filas.length, 'auditor', 'auditores')}</b> · ICE promedio del día <b>${dec1(scoresDia.length ? scoresDia.reduce((s, v) => s + v, 0) / scoresDia.length : null)}</b> · van <b>${num(acumulado)}</b> de ${num(evs.length)} evaluaciones del mes (día ${estado.i + 1} de ${dias.length}).`
-        : `Ese día no hubo evaluaciones ICE en ${esc(D.unidad)} · van <b>${num(acumulado)}</b> de ${num(evs.length)} del mes.`;
-      $('cinAuditores').innerHTML = auditores.map(a => `<button type="button" class="chip" aria-pressed="${visibles(a)}" data-auditor="${esc(a)}"><span class="adm-sw" style="background:${color[a]}"></span>${esc(a)} · ${num(cuenta[a])}</button>`).join('');
-      $('cinLista').innerHTML = filas.length ? filas.map(r => `<li><button type="button" class="ruta-item cin-item" data-auditor="${esc(r.a)}"${visibles(r.a) ? '' : ' style="opacity:.45"'}>
-          <span class="adm-sw" style="background:${color[r.a]}"></span>
-          <span><b>${esc(r.a)}</b><span class="ruta-info">${plural(r.n, 'cliente')} · ICE ${dec1(r.prom)} · ~${num(r.largo, 1)} km${r.area >= 0.01 ? ` · ${num(r.area, 2)} km²` : ''}<br>${esc(r.zonas.join(', '))}${r.sin ? ` · ${num(r.sin)} sin coordenadas` : ''}</span></span>
-          <span class="poli-pct">${num(r.n)}</span></button></li>`).join('')
-        : '<li class="muted" style="padding:12px 6px;font-size:13px">Sin evaluaciones ese día.</li>';
+      } else {
+        const porAud = agrupar(visibles, e => e.auditor);
+        html = auditores.filter(a => porAud[a]).map(a => {
+          const l = porAud[a], zonas = [...new Set(l.map(e => e.zona))].sort();
+          return `<li><button type="button" class="ruta-item cin-item" data-auditor="${esc(a)}"><span class="adm-sw" style="background:${color[a]}"></span>
+            <span><b>${esc(a)}</b><span class="ruta-info">${plural(new Set(l.map(e => e.fecha)).size, 'día')} · ICE ${dec1(promedio(l))}<br>${esc(zonas.join(', '))}</span></span>
+            <span class="poli-pct">${num(l.length)}</span></button></li>`;
+        }).join('');
+      }
+      $('cinLista').innerHTML = html || '<li class="muted" style="padding:12px 6px;font-size:13px">Sin evaluaciones.</li>';
+      $('cinLista').scrollTop = 0;
     }
 
-    function ir(i) {
-      estado.i = Math.max(0, Math.min(dias.length - 1, i));
-      pintar();
+    // Flechas: Todos los días → primer día → … → último día → Todos los días
+    function paso(dir) {
+      const dias = diasDisponibles();
+      if (!estado.dia) estado.dia = dir > 0 ? dias[0] : dias[dias.length - 1];
+      else estado.dia = dias[dias.indexOf(estado.dia) + dir] || null;
+      pintar(true);
     }
-    function parar() {
-      clearInterval(reloj);
-      reloj = null;
-      $('cinPlay').textContent = '▶ Reproducir';
-      $('cinPlay').setAttribute('aria-pressed', 'false');
-    }
-    $('cinDia').addEventListener('input', ev => { parar(); ir(Number(ev.target.value)); });
-    $('cinAntes').addEventListener('click', () => { parar(); ir(estado.i - 1); });
-    $('cinDespues').addEventListener('click', () => { parar(); ir(estado.i + 1); });
-    $('cinPlay').addEventListener('click', () => {
-      if (reloj) return parar();
-      if (estado.i >= dias.length - 1) ir(0);
-      $('cinPlay').textContent = '❚❚ Pausa';
-      $('cinPlay').setAttribute('aria-pressed', 'true');
-      reloj = setInterval(() => {
-        // Si la pestaña ya no está a la vista, la animación se detiene
-        if (estado.i >= dias.length - 1 || panel.hidden || !document.body.contains(panel)) return parar();
-        ir(estado.i + 1);
-      }, 1300);
-    });
-    $('cinModo').addEventListener('click', ev => {
-      const b = ev.target.closest('button[data-modo]');
-      if (!b) return;
-      estado.modo = b.dataset.modo;
-      $('cinModo').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
-      pintar();
-    });
+    $('cinAntes').addEventListener('click', () => paso(-1));
+    $('cinDespues').addEventListener('click', () => paso(1));
+    $('cinTodas').addEventListener('click', () => { estado.dia = null; pintar(true); });
+    const elegir = a => {
+      estado.auditor = a && a !== estado.auditor ? a : null;
+      if (estado.dia && !diasDisponibles().includes(estado.dia)) estado.dia = null;
+      pintar(true);
+    };
     $('cinAuditores').addEventListener('click', ev => {
       const b = ev.target.closest('button[data-auditor]');
-      if (!b) return;
-      const a = b.dataset.auditor;
-      if (estado.ocultos.has(a)) estado.ocultos.delete(a); else estado.ocultos.add(a);
-      pintar();
+      if (b) elegir(b.dataset.auditor);
     });
     $('cinLista').addEventListener('click', ev => {
-      const b = ev.target.closest('button[data-auditor]');
-      if (b && limites[b.dataset.auditor]) mapa.fitBounds(limites[b.dataset.auditor].pad(0.25), { maxZoom: 16 });
+      const b = ev.target.closest('button');
+      if (!b) return;
+      if (b.dataset.auditor) return elegir(b.dataset.auditor);
+      const e = evs[+b.dataset.e], m = marcas.get(e);
+      if (m) { mapa.setView(e.ll, Math.max(mapa.getZoom(), 16)); m.openPopup(); }
     });
-    mapa.on('unload', parar);
-    pintar();
+    pintar(false);
     return mapa;
   }
 
@@ -339,7 +362,7 @@ button,select{font:inherit}
     var $ = function (id) { return document.getElementById(id); };
     var ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ESC[c]; }); };
-    var PRIO = { 1: 'Prioridad 1', 2: 'Prioridad 2', 3: 'Aleatorios' };
+    var PRIO = { 1: 'Prioridad 1', 2: 'Prioridad 2', 3: 'Prioridad 3' };
     var estado = { dia: 'hoy', jef: '', ruta: '', tab: 'ice' };
     var ddmm = function (f) { return f ? f.slice(8, 10) + '/' + f.slice(5, 7) + '/' + f.slice(0, 4) : ''; };
 
@@ -397,16 +420,16 @@ button,select{font:inherit}
       rutasDe().forEach(function (r) {
         if (todas || r.codigo === estado.ruta) r.clientes.forEach(function (c) { clientes.push(c.concat([r.codigo])); });
       });
-      // Los aleatorios que nunca se han evaluado van en su propia pestaña
-      var sinEval = clientes.filter(function (c) { return c[2] === 3 && !c[6]; });
-      var conIce = clientes.filter(function (c) { return !(c[2] === 3 && !c[6]); });
+      // Los no prioritarios (nunca evaluados antes de este mes) van en su propia pestaña
+      var sinEval = clientes.filter(function (c) { return c[2] === 4; });
+      var conIce = clientes.filter(function (c) { return c[2] !== 4; });
       var n = function (p) { return conIce.filter(function (c) { return c[2] === p; }).length; };
-      $('kpis').innerHTML = [['Prioridad 1', n(1), 1], ['Prioridad 2', n(2), 0], ['Aleatorios', n(3), 0], ['Aleatorios sin evaluación', sinEval.length, 0]]
+      $('kpis').innerHTML = [['Prioridad 1', n(1), 1], ['Prioridad 2', n(2), 0], ['Prioridad 3', n(3), 0], ['No prioritarios', sinEval.length, 0]]
         .map(function (k) { return '<div class="kpi' + (k[2] ? ' rojo' : '') + '"><p>' + k[0] + '</p><b>' + k[1] + '</b></div>'; }).join('');
       $('tabs').hidden = false;
       if (estado.tab === 'sin' && !sinEval.length) estado.tab = 'ice';
-      $('tabIce').textContent = 'Mis clientes ICE (' + conIce.length + ')';
-      $('tabSin').textContent = 'Aleatorios sin evaluación (' + sinEval.length + ')';
+      $('tabIce').textContent = 'Prioridad 1, 2 y 3 (' + conIce.length + ')';
+      $('tabSin').textContent = 'No prioritarios (' + sinEval.length + ')';
       $('tabSin').disabled = !sinEval.length;
       $('tabIce').setAttribute('aria-selected', estado.tab === 'ice');
       $('tabSin').setAttribute('aria-selected', estado.tab === 'sin');
@@ -421,10 +444,10 @@ button,select{font:inherit}
             + (ya ? ' · ' + ya + ' ya con ICE en ' + esc(D.mes) : '') + '</small></h2><ul class="lista">'
             + lista.map(function (c) { return tarjeta(c, todas); }).join('') + '</ul></section>';
         });
-        if (!html) html = '<p class="vacio">Esta ruta no tiene clientes ICE con evaluación previa para ese día.' + (sinEval.length ? ' Revisa la pestaña <b>Aleatorios sin evaluación</b>.' : '') + '</p>';
+        if (!html) html = '<p class="vacio">Esta ruta no tiene clientes prioridad 1, 2 o 3 para ese día.' + (sinEval.length ? ' Revisa la pestaña <b>No prioritarios</b>.' : '') + '</p>';
       } else {
-        html = '<section class="grupo"><h2>Aleatorios sin evaluación <small>' + sinEval.length + (sinEval.length === 1 ? ' cliente' : ' clientes')
-          + ' del universo ICE que nunca se han evaluado</small></h2><ul class="lista">'
+        html = '<section class="grupo"><h2>No prioritarios <small>' + sinEval.length + (sinEval.length === 1 ? ' cliente' : ' clientes')
+          + ' del universo ICE sin evaluaciones anteriores</small></h2><ul class="lista">'
           + sinEval.sort(orden).map(function (c) { return tarjeta(c, todas); }).join('') + '</ul></section>';
       }
       cuerpo.innerHTML = html;
@@ -501,7 +524,7 @@ button,select{font:inherit}
     <button type="button" role="tab" id="tabSin" aria-selected="false"></button>
   </div></div>
   <div id="lista"></div>
-  <p class="nota"><b>Prioridad 1</b>: clientes evaluados en ${esc(D.prioridad.mes_anterior)} y con ${esc(D.prioridad.min_visitas)} o más visitas en los meses anteriores. <b>Prioridad 2</b>: evaluados en ${esc(D.prioridad.mes_anterior)} sin esa recurrencia. <b>Aleatorios</b>: el resto del universo ICE. «Le faltó» es la submétrica que más puntos le quitó en su última evaluación ICE. Las rutas son las de la frecuencia de visita de ese día. Este archivo es una foto del ${esc(D.generado)}: descárgalo de nuevo cada día.</p>
+  <p class="nota"><b>Prioridad 1</b>: clientes evaluados en ${esc(D.prioridad.mes_anterior)} y con ${esc(D.prioridad.min_visitas)} o más visitas en los meses anteriores. <b>Prioridad 2</b>: evaluados en ${esc(D.prioridad.mes_anterior)} sin esa recurrencia. <b>Prioridad 3</b>: clientes aleatorios que no se evaluaron en ${esc(D.prioridad.mes_anterior)}, pero sí alguna vez antes. <b>No prioritarios</b>: clientes del universo ICE que nunca se han evaluado. «Le faltó» es la submétrica que más puntos le quitó en su última evaluación ICE. Las rutas son las de la frecuencia de visita de ese día. Este archivo es una foto del ${esc(D.generado)}: descárgalo de nuevo cada día.</p>
 </main>
 <footer class="pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>
 <script type="application/json" id="datos">${json}</script>
@@ -517,5 +540,5 @@ button,select{font:inherit}
     return html.length;
   }
 
-  return { cinetica, descargarHoja, htmlHoja };
+  return { cinetica, descargarHoja, htmlHoja, htmlInfo };
 })();

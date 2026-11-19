@@ -22,7 +22,7 @@ const IceAdmin = (function () {
   const NIVELES = { 50: 'Núcleo', 75: 'Zona alta', 90: 'Zona amplia' };
   const RELLENO = { 50: 0.42, 75: 0.24, 90: 0.12 };
   const TACTIL = window.matchMedia('(pointer: coarse)').matches;
-  const PESTANAS = [['comparativo', 'Comparativo y ANOVA'], ['submetricas', 'Submétricas'],
+  const PESTANAS = [['info', 'Información del sistema'], ['comparativo', 'Comparativo y ANOVA'], ['submetricas', 'Submétricas'],
                     ['jefaturas', 'Mapa de jefaturas'], ['p1', 'Mapa prioridad 1']];
 
   let D = null, OP = null, mapaJ = null, mapaP = null;
@@ -104,7 +104,8 @@ const IceAdmin = (function () {
       <nav class="ice-pestanas" role="tablist" aria-label="Secciones del administrador">
         ${PESTANAS.map(([id, t], i) => `<button type="button" role="tab" id="tab-${id}" aria-controls="p-${id}" aria-selected="${i === 0}"${i ? ' tabindex="-1"' : ''} data-pestana="${id}">${t}</button>`).join('')}
       </nav>
-      <div class="ice-panel" id="p-comparativo" role="tabpanel" aria-labelledby="tab-comparativo"></div>
+      <div class="ice-panel" id="p-info" role="tabpanel" aria-labelledby="tab-info"></div>
+      <div class="ice-panel" id="p-comparativo" role="tabpanel" aria-labelledby="tab-comparativo" hidden></div>
       <div class="ice-panel" id="p-submetricas" role="tabpanel" aria-labelledby="tab-submetricas" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-jefaturas" role="tabpanel" aria-labelledby="tab-jefaturas" hidden></div>
       <div class="ice-panel ice-panel-mapa" id="p-p1" role="tabpanel" aria-labelledby="tab-p1" hidden></div>
@@ -132,7 +133,7 @@ const IceAdmin = (function () {
         pestana(tabs[j].dataset.pestana);
       });
     });
-    comparativo();
+    $('p-info').innerHTML = IceExtra.htmlInfo(D);
     window.scrollTo(0, 0);
   }
 

@@ -1,6 +1,7 @@
 /* Reporte ICE (ice.html): acceso con usuario + contraseña y las secciones de
- * la unidad (resumen con el Excel de la clasificación y la hoja «Mis clientes
- * ICE», mapa, semanas del mes, cinética de los auditores (js/ice-extra.js),
+ * la unidad (información del sistema con las descargas, On Premise y Home
+ * Market con sus rankings, mapa, semanas del mes, cinética de los auditores
+ * (js/ice-extra.js), Mix de tipos de cliente,
  * rutas con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
  * js/ice-admin.js (todas las unidades) y desde ahí abre cualquier unidad.
@@ -27,7 +28,8 @@ const Ice = (function () {
     0: { nombre: 'No ICE', corto: '—', clase: 'p0' },
     1: { nombre: 'Prioridad 1', corto: 'P1', clase: 'p1', relleno: ROJO, borde: BLANCO, radio: 7.5, grosor: 2 },
     2: { nombre: 'Prioridad 2', corto: 'P2', clase: 'p2', relleno: NEGRO, borde: BLANCO, radio: 6.5, grosor: 2 },
-    3: { nombre: 'Aleatorio', corto: 'A', clase: 'p3', relleno: BLANCO, borde: GRIS_OSC, radio: 6, grosor: 2.5 },
+    3: { nombre: 'Prioridad 3', corto: 'P3', clase: 'p3', relleno: BLANCO, borde: GRIS_OSC, radio: 6, grosor: 2.5 },
+    4: { nombre: 'No prioritario', corto: 'NP', clase: 'p4', relleno: '#BDBDBD', borde: BLANCO, radio: 4.5, grosor: 1 },
   };
   const SAL = 'ICE-VDM:';        // igual que SAL_USUARIO de Programas/publica_ice.py
   const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -184,13 +186,18 @@ const Ice = (function () {
   }
 
   // ── Reporte ───────────────────────────────────────────────────────────
-  let D = null, mapaM = null, mapaR = null, mapaP = null, mapaC = null, cineticaLista = false, porSapCliente = {}, porSapEval = {};
+  let D = null, mapaM = null, mapaR = null, mapaP = null, mapaC = null, cineticaLista = false, canalesListos = {},
+      porSapCliente = {}, porSapEval = {};
+  const PESTANAS = [['info', 'Información del sistema'], ['onpremise', 'On Premise'], ['homemarket', 'Home Market'], ['mapa', 'Mapa'],
+                    ['semanas', 'Semanas'], ['rutas', 'Rutas'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
+  const PANELES_MAPA = new Set(['mapa', 'semanas', 'rutas', 'poligonos', 'cinetica']);
 
   function render(datos, volver) {
     // Al cambiar de unidad (administrador) los mapas se vuelven a crear
     for (const m of [mapaM, mapaR, mapaP, mapaS, mapaC]) if (m) m.remove();
     mapaM = mapaR = mapaP = mapaS = mapaC = null;
     cineticaLista = false;
+    canalesListos = {};
     diaSel = 'hoy';
     rutaSel = null;
     D = datos;
@@ -202,8 +209,6 @@ const Ice = (function () {
     const v = $('iceVista');
     v.hidden = false;
     const c = D.corte;
-    const pestanas = [['resumen', 'Resumen'], ['mapa', 'Mapa'], ['semanas', 'Semanas'], ['rutas', 'Rutas'],
-                      ['poligonos', 'Polígonos'], ['cinetica', 'Cinética']];
     v.innerHTML = `
       <header class="ice-cab">
         <div>
@@ -220,14 +225,9 @@ const Ice = (function () {
         </div>
       </header>
       <nav class="ice-pestanas" role="tablist" aria-label="Secciones del reporte">
-        ${pestanas.map(([id, t], i) => `<button type="button" role="tab" id="tab-${id}" aria-controls="p-${id}" aria-selected="${i === 0}"${i ? ' tabindex="-1"' : ''} data-pestana="${id}">${t}</button>`).join('')}
+        ${PESTANAS.map(([id, t], i) => `<button type="button" role="tab" id="tab-${id}" aria-controls="p-${id}" aria-selected="${i === 0}"${i ? ' tabindex="-1"' : ''} data-pestana="${id}">${t}</button>`).join('')}
       </nav>
-      <div class="ice-panel" id="p-resumen" role="tabpanel" aria-labelledby="tab-resumen"></div>
-      <div class="ice-panel ice-panel-mapa" id="p-mapa" role="tabpanel" aria-labelledby="tab-mapa" hidden></div>
-      <div class="ice-panel ice-panel-mapa" id="p-semanas" role="tabpanel" aria-labelledby="tab-semanas" hidden></div>
-      <div class="ice-panel ice-panel-mapa" id="p-rutas" role="tabpanel" aria-labelledby="tab-rutas" hidden></div>
-      <div class="ice-panel ice-panel-mapa" id="p-poligonos" role="tabpanel" aria-labelledby="tab-poligonos" hidden></div>
-      <div class="ice-panel ice-panel-mapa" id="p-cinetica" role="tabpanel" aria-labelledby="tab-cinetica" hidden></div>
+      ${PESTANAS.map(([id], i) => `<div class="ice-panel${PANELES_MAPA.has(id) ? ' ice-panel-mapa' : ''}" id="p-${id}" role="tabpanel" aria-labelledby="tab-${id}"${i ? ' hidden' : ''}></div>`).join('')}
       <footer class="ice-pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>`;
     v.querySelector('[data-accion="salir"]').addEventListener('click', () => location.reload());
     if (volver) v.querySelector('[data-accion="volver"]').addEventListener('click', () => { Graficas.Tip.hide(); volver(); });
@@ -241,7 +241,7 @@ const Ice = (function () {
         pestana(tabs[j].dataset.pestana);
       });
     });
-    resumen();
+    infoSistema();
     window.scrollTo(0, 0);
   }
 
@@ -251,13 +251,15 @@ const Ice = (function () {
       t.setAttribute('aria-selected', activa);
       t.tabIndex = activa ? 0 : -1;
     }
-    for (const p of ['resumen', 'mapa', 'semanas', 'rutas', 'poligonos', 'cinetica']) $('p-' + p).hidden = p !== cual;
+    for (const [p] of PESTANAS) $('p-' + p).hidden = p !== cual;
     Graficas.Tip.hide();
     if (cual === 'mapa') mapa();
     if (cual === 'semanas') semanas();
     if (cual === 'rutas') rutas();
     if (cual === 'poligonos') poligonos();
     if (cual === 'cinetica') cinetica();
+    if (PANELES_CANAL[cual]) panelCanal(cual);
+    if (cual === 'mix') mixPanel();
   }
 
   // Cinética de los auditores (js/ice-extra.js): se arma la primera vez que se abre
@@ -294,85 +296,110 @@ const Ice = (function () {
     </div>`;
   }
 
-  // ── Resumen ───────────────────────────────────────────────────────────
-  function resumen() {
-    const R = D.resumen, E = R.estimacion, P = R.prioridad, MA = R.mes_anterior;
-    const panel = $('p-resumen');
-    const difMes = R.promedio != null && MA.promedio != null ? Math.round((R.promedio - MA.promedio) * 10) / 10 : null;
-    panel.innerHTML = `
-      <div class="ice-kpis">
-        ${kpi(`Promedio ICE · ${D.mes}`, dec1(R.promedio) + flecha(R.d_promedio),
-              `${plural(R.n, 'cliente evaluado', 'clientes evaluados')} · mediana ${dec1(R.mediana)}`, true)}
-        ${kpi('Estimación de cierre', E ? dec1(E.valor) + flecha(E.d_valor) : '—',
-              E ? `rango probable <b>${dec1(E.bajo)} – ${dec1(E.alto)}</b>` : 'sin datos suficientes')}
-        ${kpi('Clientes evaluados', num(R.n) + flecha(R.d_n, 0),
-              E ? `de ~<b>${num(E.n_actual + E.n_restante)}</b> esperados en ${esc(D.mes)}` : 'en el mes')}
-        ${kpi('Prioridad 1 evaluados', `${num(P.p1_eval)}<small>/ ${num(P.p1)}</small>`,
-              `Prioridad 2: <b>${num(P.p2_eval)}/${num(P.p2)}</b> · aleatorios: <b>${num(P.aleatorio_eval)}/${num(P.aleatorio)}</b> · fuera del universo: <b>${num(P.fuera_universo)}</b>`)}
-        ${kpi(`Cierre de ${MA.mes}`, dec1(MA.promedio),
-              `${plural(MA.n, 'evaluación', 'evaluaciones')}${difMes == null ? '' : difMes === 0 ? ` · ${esc(D.mes)} va igual` : ` · ${esc(D.mes)} va ${difMes > 0 ? '+' : '−'}${num(Math.abs(difMes), 1)}`}`)}
-      </div>
-      <div class="ice-canales">
-        ${R.por_canal.map(c => `<span class="ice-canal"><i style="background:${COLOR_CANAL[c.canal]}"></i>${esc(c.canal)}
-          <b>${dec1(c.promedio)}</b>${flecha(c.d_promedio)} <span class="muted">· ${plural(c.n, 'evaluado')} · ${esc(MA.mes)}: ${dec1(c.mes_anterior)}</span></span>`).join('')}
-      </div>
-      <div class="ice-descargas">
-        <button type="button" class="ice-btn rojo" id="btnHoja">${svgIcono('descarga')}Descargar «Mis clientes ICE» (HTML)</button>
-        <span>Un archivo que se abre en el celular o la computadora, sin contraseña: <b>eliges tu jefatura y tu ruta</b> y te dice qué clientes ICE te tocan hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y mañana, por prioridad 1, prioridad 2 y aleatorios, con su nombre, SAP y lo que les faltó en su última evaluación. Los aleatorios que nunca se han evaluado van en otra pestaña. Es una foto de esta publicación: descárgalo cada día.</span>
-      </div>
-      ${D.excel ? `<div class="ice-descargas">
-        <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
-        <span>Los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}: prioridad, semana del mes en que suelen evaluarse, visitas, datos del cliente, si ya se evaluó en ICE en ${esc(D.mes)}, la submétrica que más le quitó en su última evaluación y su ÉPICA de ${esc(D.mes)} separada en brigadistas, preventa y farmers.</span>
-      </div>` : ''}
-      ${seccion('Distribución de calificaciones', `Calificación ICE de cada cliente evaluado en ${esc(D.mes)}. El histograma junta los dos canales; el violín los separa (la caja va del cuartil 1 al 3, el círculo es la mediana y la raya horizontal, el promedio).`,
-        `<div class="ice-dos">
-          <figure><figcaption>Histograma · todas las evaluaciones</figcaption><div class="grafica" id="gHist"></div></figure>
-          <figure><figcaption>Violín por canal</figcaption><div class="grafica" id="gViolin"></div></figure>
-        </div>`)}
-      ${seccion('Promedio y clientes evaluados por día', `Arriba, el promedio ICE de las encuestas de cada día; abajo, cuántos clientes se evaluaron ese día. La línea punteada es el promedio del mes.`,
-        '<div class="grafica" id="gDia"></div>')}
-      ${seccionEstimacion()}
-      ${seccionZonas()}
-      ${seccionViolinesZona()}
-      ${seccionDesglose()}
-      <p class="ice-nota">Universo ICE: clientes de BaseDeDatos/UniversoICE.db. <b>Prioridad 1</b>: evaluados en ${esc(D.prioridad.mes_anterior)} y con ${num(D.prioridad.min_visitas)} o más visitas en los meses anteriores; <b>prioridad 2</b>: evaluados en ${esc(D.prioridad.mes_anterior)} sin esa recurrencia; <b>aleatorios</b>: el resto del universo. La clasificación es del mes y se rehace al cambiar de mes.</p>`;
-
-    const todas = [...(D.distribucion['Traditional'] || []), ...(D.distribucion['On Premise'] || [])];
-    if (todas.length) {
-      Graficas.histograma($('gHist'), {
-        valores: todas, dominio: [0, 110], paso: 5, color: ROJO, colorLinea: NEGRO, alto: 300,
-        titulo: 'Histograma de calificaciones ICE',
-        lineas: [{ valor: R.promedio, etiqueta: `Promedio ${dec1(R.promedio)}`, color: NEGRO, punteada: true },
-                 E && { valor: E.valor, etiqueta: `Estimación ${dec1(E.valor)}`, color: GRIS }].filter(Boolean),
-      });
-      Graficas.violin($('gViolin'), {
-        dominio: [0, 110], alto: 340, titulo: 'Distribución de calificaciones por canal',
-        series: [...D.canales.map(c => ({ nombre: c, valores: D.distribucion[c] || [], color: COLOR_CANAL[c] })),
-                 { nombre: 'Todas', valores: todas, color: GRIS }],
-      });
-    } else {
-      $('gHist').innerHTML = $('gViolin').innerHTML = `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`;
-    }
-    graficaDiaria($('gDia'));
-    if ($('gMeses')) graficaMeses($('gMeses'));
-    if ($('btnExcel')) $('btnExcel').addEventListener('click', descargarExcel);
-    $('btnHoja').addEventListener('click', () => IceExtra.descargarHoja(D));
-    graficasViolinesZona();
-    graficasPerdidos();
+  // ── Tipos de cliente (la explicación se repite donde se mencionan) ─────
+  function tiposCliente(abierto) {
+    const ant = esc(D.prioridad.mes_anterior);
+    const lista = [
+      [1, `Evaluados en <b>${ant}</b> y con <b>${num(D.prioridad.min_visitas)} o más visitas</b> ICE en los meses anteriores.`],
+      [2, `Evaluados en <b>${ant}</b>, sin esa recurrencia.`],
+      [3, `Clientes aleatorios que no se evaluaron en ${ant}, pero <b>sí alguna vez antes</b>.`],
+      [4, `Clientes del universo ICE (UniversoICE.db) que <b>nunca se han evaluado</b>.`],
+    ].map(([p, t]) => `<div><dt><span class="prio ${PRIO[p].clase}">${PRIO[p].corto}</span>${esc(PRIO[p].nombre)}</dt><dd>${t}</dd></div>`).join('');
+    const cuerpo = `<dl class="tipos-lista">${lista}</dl>
+      <p class="tipos-nota">El tipo se fija al iniciar ${esc(D.mes)} con el histórico ICE anterior: un cliente que se evalúa por primera vez este mes sigue como No prioritario hasta el mes siguiente.</p>`;
+    return abierto ? `<div class="tipos-cliente"><h3>Qué es cada tipo de cliente</h3>${cuerpo}</div>`
+      : `<details class="tipos-cliente"><summary>¿Qué es cada tipo de cliente?</summary>${cuerpo}</details>`;
   }
 
-  // Dos paneles con el mismo eje de días: promedio (línea) y clientes (barras)
-  function graficaDiaria(cont) {
-    const filas = D.por_dia;
+  function bajarExcel(x) {
+    const bin = atob(x.datos), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    PDF.descargar(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), x.nombre);
+  }
+
+  // ── Información del sistema ───────────────────────────────────────────
+  function infoSistema() {
+    const R = D.resumen, E = R.estimacion;
+    $('p-info').innerHTML = `
+      ${IceExtra.htmlInfo(D)}
+      <p class="ice-nota">Total de ${esc(D.unidad)} con los dos canales: promedio ICE <b>${dec1(R.promedio)}</b> con ${plural(R.n, 'evaluación', 'evaluaciones')}${E ? ` · estimación de cierre <b>${dec1(E.valor)}</b>` : ''}. El detalle está en las pestañas On Premise y Home Market.</p>
+      ${seccion('Descargas de la unidad', '', `
+        <div class="ice-descargas">
+          <button type="button" class="ice-btn rojo" id="btnHoja">${svgIcono('descarga')}Descargar «Mis clientes ICE» (HTML)</button>
+          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: <b>eliges tu jefatura y tu ruta</b> y te dice qué clientes ICE te tocan hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y mañana, por prioridad 1, 2 y 3, con su nombre, SAP y lo que les faltó en su última evaluación. Los no prioritarios van en otra pestaña. Es una foto de esta publicación: descárgalo cada día.</span>
+        </div>
+        ${D.excel ? `<div class="ice-descargas">
+          <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
+          <span>Los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}: tipo de cliente, semana del mes en que suelen evaluarse, visitas, datos del cliente, si ya se evaluó en ICE en ${esc(D.mes)}, la submétrica que más le quitó en su última evaluación y su ÉPICA de ${esc(D.mes)} separada en brigadistas, preventa y farmers.</span>
+        </div>` : ''}`)}
+      ${tiposCliente(true)}`;
+    if ($('btnExcel')) $('btnExcel').addEventListener('click', () => bajarExcel(D.excel));
+    $('btnHoja').addEventListener('click', () => IceExtra.descargarHoja(D));
+  }
+
+  // ── Pestañas On Premise y Home Market ─────────────────────────────────
+  // "Home Market" es el canal Traditional del reporte ICE
+  const SIGUIENTE_PUBLICACION = '<p class="muted">Esta sección aparece a partir de la siguiente publicación del sitio.</p>';
+  const PANELES_CANAL = { onpremise: { canal: 'On Premise', k: 'op' }, homemarket: { canal: 'Traditional', k: 'hm' } };
+
+  function panelCanal(id) {
+    if (canalesListos[id]) return;
+    canalesListos[id] = true;
+    if (!D.detalle_canal) { $('p-' + id).innerHTML = SIGUIENTE_PUBLICACION; return; }
+    const { canal, k } = PANELES_CANAL[id], ci = D.canales.indexOf(canal);
+    const C = D.detalle_canal[canal], F = D.resumen.por_canal.find(x => x.canal === canal), E = F.estimacion, MA = D.resumen.mes_anterior;
+    const nombre = C.pestana, valores = D.distribucion[canal] || [], color = COLOR_CANAL[canal];
+    const aclara = nombre !== canal ? ` <span class="muted">(canal ${esc(canal)} del reporte ICE)</span>` : '';
+    $('p-' + id).innerHTML = `
+      <p class="canal-titulo">${esc(nombre)}${aclara}</p>
+      <div class="ice-kpis">
+        ${kpi(`Promedio ICE · ${nombre}`, dec1(F.promedio) + flecha(F.d_promedio), `${plural(C.clientes, 'cliente evaluado', 'clientes evaluados')} · mediana ${dec1(F.mediana)}`, true)}
+        ${kpi('Estimación de cierre', E ? dec1(E.valor) + flecha(E.d_valor) : '—', E ? `rango probable <b>${dec1(E.bajo)} – ${dec1(E.alto)}</b>` : 'sin datos suficientes')}
+        ${kpi('Clientes evaluados', num(C.clientes) + flecha(F.d_n, 0), E ? `de ~<b>${num(E.n_actual + E.n_restante)}</b> esperados en ${esc(D.mes)}` : 'en el mes')}
+        ${kpi('Prioridad 1 evaluados', `${num(C.p1_eval)}<small>/ ${num(C.p1)}</small>`, `clientes ${esc(nombre)} prioridad 1`)}
+        ${kpi(`Cierre de ${MA.mes}`, dec1(F.mes_anterior), plural(F.n_mes_anterior, 'evaluación', 'evaluaciones'))}
+      </div>
+      ${seccion('Distribución de calificaciones', `Calificación ICE de cada cliente de ${esc(nombre)} evaluado en ${esc(D.mes)}. En el violín, la caja va del cuartil 1 al 3, el círculo es la mediana y la raya horizontal, el promedio.`,
+        `<div class="ice-dos">
+          <figure><figcaption>Histograma</figcaption><div class="grafica" id="gHist${k}"></div></figure>
+          <figure><figcaption>Violín de la unidad</figcaption><div class="grafica" id="gViolin${k}"></div></figure>
+        </div>
+        <figure class="violin-zona"><figcaption>Violín por jefatura</figcaption>
+          <div class="g-scroll"><div class="grafica" id="gViolinZona${k}"></div></div><p class="mapa-ayuda" id="gViolinNota${k}"></p></figure>`)}
+      ${seccionEstimacion(F, nombre, k)}
+      ${seccionZonas(C, F, nombre)}
+      ${seccionRanking(C, nombre, k)}
+      ${seccion('Promedio y clientes evaluados por día', 'Arriba, el promedio ICE de las encuestas de cada día; abajo, cuántas evaluaciones hubo ese día. La línea punteada es el promedio del mes.', `<div class="grafica" id="gDia${k}"></div>`)}
+      ${seccionDesglose(canal, C, nombre, k)}
+      ${tiposCliente(false)}`;
+
+    if (valores.length) {
+      Graficas.histograma($(`gHist${k}`), {
+        valores, dominio: [0, 110], paso: 5, color, colorLinea: canal === 'On Premise' ? ROJO : NEGRO, alto: 300, titulo: `Histograma de calificaciones ICE de ${nombre}`,
+        lineas: [{ valor: F.promedio, etiqueta: `Promedio ${dec1(F.promedio)}`, color: canal === 'On Premise' ? ROJO : NEGRO, punteada: true },
+                 E && { valor: E.valor, etiqueta: `Estimación ${dec1(E.valor)}`, color: GRIS }].filter(Boolean),
+      });
+      Graficas.violin($(`gViolin${k}`), { dominio: [0, 110], alto: 340, titulo: `Distribución de calificaciones de ${nombre}`, series: [{ nombre, valores, color }] });
+    } else {
+      $(`gHist${k}`).innerHTML = $(`gViolin${k}`).innerHTML = `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`;
+    }
+    graficaViolinZona($(`gViolinZona${k}`), $(`gViolinNota${k}`), ci, canal, nombre, F.promedio);
+    graficaDiaria($(`gDia${k}`), C.por_dia, F.promedio, nombre);
+    if ($(`gMeses${k}`)) graficaMeses($(`gMeses${k}`), C.historico, E);
+    if ($(`gPerd${k}`)) graficaPerdidos($(`gPerd${k}`), canal, nombre);
+    $(`btnRanking${k}`).addEventListener('click', () => bajarExcel(C.excel));
+  }
+
+  // Dos paneles con el mismo eje de días: promedio (línea) y evaluaciones (barras)
+  function graficaDiaria(cont, filas, promMes, nombre) {
     if (!filas.length) { cont.innerHTML = `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`; return; }
     const porDia = Object.fromEntries(filas.map(f => [partes(f[0]).d, f]));
     const ultimo = Math.max(...Object.keys(porDia).map(Number));
     const dias = Array.from({ length: ultimo }, (_, i) => i + 1);
-    const promMes = D.resumen.promedio;
     A.montar(cont, (c, W, T) => {
       const m = { l: 42, r: 14, t: 26 }, H1 = 190, sep = 44, H2 = 120;
       const H = m.t + H1 + sep + H2 + 28;
-      const svg = A.svgBase(c, W, H, `Promedio ICE y clientes evaluados por día de ${D.mes}`);
+      const svg = A.svgBase(c, W, H, `Promedio ICE y evaluaciones por día de ${D.mes} en ${nombre}`);
       const banda = (W - m.l - m.r) / dias.length;
       const xc = i => m.l + banda * (i + 0.5);
       const proms = dias.map(d => porDia[d] ? porDia[d][2] : null);
@@ -391,7 +418,7 @@ const Ice = (function () {
         if (v != null) A.el('circle', { cx: xc(i), cy: y1(v), r: 4, fill: ROJO, stroke: T.sup, 'stroke-width': 2, 'pointer-events': 'none' }, svg);
       });
       const top2 = m.t + H1 + sep;
-      titulo(top2 - 12, 'CLIENTES EVALUADOS');
+      titulo(top2 - 12, 'EVALUACIONES');
       const maxN = Math.max(1, ...filas.map(f => f[1]));
       const tk = A.ticks(0, maxN, 3), hi2 = Math.max(maxN, tk[tk.length - 1]);
       const y2 = A.escala(0, hi2, top2 + H2, top2);
@@ -407,54 +434,38 @@ const Ice = (function () {
         if (i % cada && i !== dias.length - 1) return;
         A.texto(svg, xc(i), top2 + H2 + 18, dd, { 'text-anchor': 'middle', fill: T.muted, 'font-size': 11, class: 'g-num' });
       });
-      const marca = A.el('rect', { x: 0, y: m.t, width: banda, height: top2 + H2 - m.t, fill: NEGRO, 'fill-opacity': 0.06,
-                                  visibility: 'hidden', 'pointer-events': 'none' }, svg);
+      const marca = A.el('rect', { x: 0, y: m.t, width: banda, height: top2 + H2 - m.t, fill: NEGRO, 'fill-opacity': 0.06, visibility: 'hidden', 'pointer-events': 'none' }, svg);
       dias.forEach((dd, i) => {
         const f = porDia[dd];
         const hit = A.el('rect', { x: m.l + banda * i, y: m.t, width: banda, height: top2 + H2 - m.t, fill: 'transparent' }, svg);
         const iso = `${D.anio}-${String(D.mes_num).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
         Graficas.conTip(hit, `<b>${diaSemana(iso)} ${dd} de ${esc(D.mes)}</b>` + (f
-          ? `<table class="tip-tabla"><tr><td>Promedio ICE</td><td>${dec1(f[2])}</td></tr><tr><td>Clientes evaluados</td><td>${num(f[1])}</td></tr>
-             <tr><td>Traditional</td><td>${num(f[3])}</td></tr><tr><td>On Premise</td><td>${num(f[4])}</td></tr></table>`
-          : '<br>Sin evaluaciones'));
+          ? `<table class="tip-tabla"><tr><td>Promedio ICE</td><td>${dec1(f[2])}</td></tr><tr><td>Evaluaciones</td><td>${num(f[1])}</td></tr></table>` : '<br>Sin evaluaciones'));
         hit.addEventListener('pointerenter', () => { marca.setAttribute('x', m.l + banda * i); marca.setAttribute('visibility', 'visible'); });
         hit.addEventListener('pointerleave', () => marca.setAttribute('visibility', 'hidden'));
       });
     });
   }
 
-  // ── Estimación de cierre ──────────────────────────────────────────────
-  function seccionEstimacion() {
-    const R = D.resumen, E = R.estimacion;
-    if (!E) return seccion('Estimación de cierre del mes', '', `<p class="muted">Todavía no hay datos suficientes para estimar el cierre de ${esc(D.mes)}.</p>`);
-    const canales = R.por_canal.filter(c => c.estimacion);
-    const pendientes = canales.reduce((a, c) => a + c.estimacion.n_pendientes, 0);
+  // ── Estimación de cierre del canal ────────────────────────────────────
+  function seccionEstimacion(F, nombre, k) {
+    const E = F.estimacion, base = (D.resumen.estimacion || {}).meses_base || [];
+    const titulo = `Estimación de cierre · ${nombre}`;
+    if (!E) return seccion(titulo, '', `<p class="muted">Todavía no hay datos suficientes para estimar el cierre de ${esc(D.mes)}.</p>`);
     const total = E.n_actual + E.n_restante;
     const paso2 = E.n_restante
-      ? `<li><b>¿Cómo saldrían?</b> Primero cuentan los <b>${num(pendientes)}</b> clientes prioridad 1 y 2 que aún no se evalúan (los que el auditor tiene más probabilidad de visitar), cada uno con su promedio ICE de los últimos meses; si no alcanzan, el resto se califica con el promedio que lleva ${esc(D.mes)}. Así, las que faltan saldrían en <b>${dec1(E.prom_restante)}</b> en promedio.</li>`
+      ? `<li><b>¿Cómo saldrían?</b> Primero cuentan los <b>${num(E.n_pendientes)}</b> clientes prioridad 1 y 2 de ${esc(nombre)} que aún no se evalúan (los que el auditor tiene más probabilidad de visitar), cada uno con su promedio ICE de los últimos meses; si no alcanzan, el resto se califica con el promedio que lleva ${esc(D.mes)}. Así, las que faltan saldrían en <b>${dec1(E.prom_restante)}</b> en promedio.</li>`
       : `<li><b>Ya se alcanzó el volumen habitual del mes</b>, así que la estimación es el promedio que lleva ${esc(D.mes)}.</li>`;
-    const pasos = `<ol class="est-pasos">
-      <li><b>¿Cuántas evaluaciones faltan?</b> En ${esc(E.meses_base.join(', ').replace(/, ([^,]*)$/, ' y $1'))} la unidad tuvo en promedio <b>${num(E.n_esperado)}</b> evaluaciones al mes; van <b>${num(E.n_actual)}</b>, así que se esperan <b>${num(E.n_restante)}</b> más.</li>
-      ${paso2}
-      <li><b>Cierre estimado</b> = (suma de las calificaciones del mes + las que faltan) ÷ ${num(total)} = <b>${dec1(E.valor)}</b>${flecha(E.d_valor)}. El rango probable (<b>${dec1(E.bajo)} – ${dec1(E.alto)}</b>, 95%) refleja cuánto varían las calificaciones. Se calcula por canal y se junta.</li>
-    </ol>`;
-    const tabla = `<div class="tabla-scroll"><table class="ice-tabla">
-      <thead><tr><th>Canal</th><th>Evaluadas</th><th>Promedio actual</th><th>Esperadas en el mes</th><th>Faltan</th><th>Promedio de las que faltan</th><th>Estimación</th><th>Rango probable</th></tr></thead>
-      <tbody>${canales.map(c => { const e = c.estimacion; return `<tr>
-        <th scope="row"><span class="ice-canal"><i style="background:${COLOR_CANAL[c.canal]}"></i>${esc(c.canal)}</span></th>
-        <td>${num(e.n_actual)}</td><td>${dec1(e.prom_actual)}</td><td>${num(e.n_actual + e.n_restante)}</td><td>${num(e.n_restante)}</td>
-        <td>${dec1(e.prom_restante)}</td><td><b>${dec1(e.valor)}</b> ${flecha(e.d_valor)}</td><td>${dec1(e.bajo)} – ${dec1(e.alto)}</td></tr>`; }).join('')}</tbody>
-      <tfoot><tr><th scope="row">Unidad</th><td>${num(E.n_actual)}</td><td>${dec1(R.promedio)}</td><td>${num(total)}</td><td>${num(E.n_restante)}</td>
-        <td>${dec1(E.prom_restante)}</td><td>${dec1(E.valor)} ${flecha(E.d_valor)}</td><td>${dec1(E.bajo)} – ${dec1(E.alto)}</td></tr></tfoot>
-    </table></div>`;
-    return seccion('Estimación de cierre del mes', `Cómo podría cerrar ${esc(D.mes)} la unidad ${esc(D.unidad)} si el resto del mes se comporta como los datos indican.`,
-      `<div class="est-cuerpo"><div>${pasos}</div>
-        <figure><figcaption>Promedio ICE por mes y estimación de ${esc(D.mes)}</figcaption><div class="grafica" id="gMeses"></div></figure></div>
-       <div style="margin-top:18px">${tabla}</div>`);
+    return seccion(titulo, `Cómo podría cerrar ${esc(D.mes)} ${esc(nombre)} en ${esc(D.unidad)} si el resto del mes se comporta como indican los datos.`,
+      `<div class="est-cuerpo"><div><ol class="est-pasos">
+        <li><b>¿Cuántas evaluaciones faltan?</b> ${base.length ? `En ${esc(base.join(', ').replace(/, ([^,]*)$/, ' y $1'))} hubo` : 'Se esperan'} en promedio <b>${num(E.n_esperado)}</b> evaluaciones al mes; van <b>${num(E.n_actual)}</b>, así que faltan <b>${num(E.n_restante)}</b>.</li>
+        ${paso2}
+        <li><b>Cierre estimado</b> = (suma de las calificaciones del mes + las que faltan) ÷ ${num(total)} = <b>${dec1(E.valor)}</b>${flecha(E.d_valor)}. El rango probable (<b>${dec1(E.bajo)} – ${dec1(E.alto)}</b>, 95%) refleja cuánto varían las calificaciones.</li>
+      </ol></div>
+      <figure><figcaption>Promedio ICE por mes y estimación de ${esc(D.mes)}</figcaption><div class="grafica" id="gMeses${k}"></div></figure></div>`);
   }
 
-  function graficaMeses(cont) {
-    const H_ = D.resumen.historico, E = D.resumen.estimacion;
+  function graficaMeses(cont, H_, E) {
     A.montar(cont, (c, W, T) => {
       const H = 250, m = { l: 36, r: 10, t: 22, b: 28 };
       const svg = A.svgBase(c, W, H, 'Promedio ICE por mes');
@@ -473,7 +484,7 @@ const Ice = (function () {
         if (h.actual && E) {
           A.el('line', { x1: x - bw / 2 - 6, x2: x + bw / 2 + 6, y1: y(E.valor), y2: y(E.valor), stroke: NEGRO, 'stroke-width': 2.5, 'stroke-dasharray': '5 3', 'pointer-events': 'none' }, svg);
           A.el('rect', { x: x - 2, y: y(E.alto), width: 4, height: Math.max(1, y(E.bajo) - y(E.alto)), fill: NEGRO, 'pointer-events': 'none' }, svg);
-          A.texto(svg, x, Math.min(y(E.alto), y(h.promedio == null ? E.valor : h.promedio)) - 20, `est. ${dec1(E.valor)}`,
+          A.texto(svg, x, Math.max(12, Math.min(y(E.alto), y(h.promedio == null ? E.valor : h.promedio)) - 20), `est. ${dec1(E.valor)}`,
                   { 'text-anchor': 'middle', fill: T.tinta, 'font-size': 11, 'font-weight': 800, class: 'g-num' });
         }
         const hit = A.el('rect', { x: m.l + banda * i, y: m.t, width: banda, height: H - m.t - m.b, fill: 'transparent' }, svg);
@@ -487,69 +498,67 @@ const Ice = (function () {
                                 { nombre: 'Estimación de cierre y su rango', color: NEGRO, forma: 'linea', punteada: true }]);
   }
 
-  // ── Por zona ──────────────────────────────────────────────────────────
+  // ── Jefaturas y rankings del canal ────────────────────────────────────
   function celdaBarra(v, delta, referencia) {
     if (v == null) return '<span class="muted">—</span>';
     const bajo = referencia != null && v < referencia;
     return `<div class="celda-barra"><span class="pista" title="Escala de 0 a 110"><span class="${bajo ? 'bajo' : ''}" style="width:${Math.min(100, v / 110 * 100).toFixed(1)}%"></span></span><b>${dec1(v)}</b>${flecha(delta)}</div>`;
   }
 
-  function seccionZonas() {
-    const R = D.resumen, Z = D.por_zona;
-    if (!Z.length) return '';
-    const canal = n => (R.por_canal.find(c => c.canal === n) || {}).promedio;
-    return seccion('Calificación por zona', `Zona = jefatura de ventas del cliente. Barra roja: zona debajo del promedio de la unidad (${dec1(R.promedio)}). Prioridad 1 evaluados: cuántos de los clientes prioridad 1 de la zona ya tienen ICE en ${esc(D.mes)}.`,
+  function seccionZonas(C, F, nombre) {
+    if (!C.zonas.length) return '';
+    return seccion(`Calificación por jefatura · ${nombre}`, `Jefatura de ventas del cliente. Barra roja: jefatura debajo del promedio de ${esc(nombre)} en la unidad (${dec1(F.promedio)}). Prioridad 1 evaluados: cuántos de sus clientes prioridad 1 de este canal ya tienen ICE en ${esc(D.mes)}.`,
       `<div class="tabla-scroll"><table class="ice-tabla">
-        <thead><tr><th>Zona</th><th>Evaluados</th><th>Promedio ICE</th><th>Traditional</th><th>On Premise</th><th>Prioridad 1 evaluados</th><th>Cierre de ${esc(R.mes_anterior.mes)}</th></tr></thead>
-        <tbody>${Z.map(z => `<tr><th scope="row">${esc(z.zona)}</th><td>${num(z.n)} ${flecha(z.d_n, 0)}</td>
-          <td>${celdaBarra(z.promedio, z.d_promedio, R.promedio)}</td><td>${dec1(z.trad)}</td><td>${dec1(z.op)}</td>
-          <td>${num(z.p1_eval)} / ${num(z.p1)}</td><td>${dec1(z.mes_anterior)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><th scope="row">Unidad</th><td>${num(R.n)} ${flecha(R.d_n, 0)}</td><td>${celdaBarra(R.promedio, R.d_promedio, null)}</td>
-          <td>${dec1(canal('Traditional'))}</td><td>${dec1(canal('On Premise'))}</td><td>${num(R.prioridad.p1_eval)} / ${num(R.prioridad.p1)}</td><td>${dec1(R.mes_anterior.promedio)}</td></tr></tfoot>
+        <thead><tr><th>Jefatura</th><th>Clientes evaluados</th><th>Promedio ICE</th><th>Prioridad 1 evaluados</th><th>Cierre de ${esc(D.resumen.mes_anterior.mes)}</th></tr></thead>
+        <tbody>${C.zonas.filter(z => z.n || z.p1 || z.mes_anterior != null).map(z => `<tr><th scope="row">${esc(z.zona)}</th><td>${num(z.clientes)} ${flecha(z.d_n, 0)}</td>
+          <td>${celdaBarra(z.promedio, z.d_promedio, F.promedio)}</td><td>${num(z.p1_eval)} / ${num(z.p1)}</td><td>${dec1(z.mes_anterior)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><th scope="row">Unidad</th><td>${num(C.clientes)} ${flecha(F.d_n, 0)}</td><td>${celdaBarra(F.promedio, F.d_promedio, null)}</td>
+          <td>${num(C.p1_eval)} / ${num(C.p1)}</td><td>${dec1(F.mes_anterior)}</td></tr></tfoot>
       </table></div>`);
   }
 
-  // Violines por jefatura: una gráfica por canal con un violín por cada
-  // jefatura que tiene evaluaciones del mes en ese canal
+  function tablaRanking(filas, clave, cabecera) {
+    if (!filas.length) return `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`;
+    return `<div class="tabla-scroll ranking-scroll"><table class="ice-tabla tabla-ranking">
+      <thead><tr><th>#</th><th class="izq">${esc(cabecera)}</th><th>Calificación ICE</th><th>Clientes evaluados</th></tr></thead>
+      <tbody>${filas.map(f => `<tr><td>${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
+        <td class="rk-valor${f.rojo ? ' rojo' : ''}">${dec1(f.promedio)}</td><td>${num(f.clientes)}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  function seccionRanking(C, nombre, k) {
+    return seccion(`Ranking · ${nombre}`, `De mayor a menor calificación ICE de ${esc(D.mes)}; la mitad inferior va en rojo. Clientes evaluados: los de ${esc(nombre)} con ICE este mes. Solo entran jefaturas y rutas con al menos una evaluación.`,
+      `<div class="ice-descargas ranking-descarga">
+        <button type="button" class="ice-btn rojo" id="btnRanking${k}">${svgIcono('excel')}Descargar ranking en Excel</button>
+        <span>Jefaturas y rutas de preventa de ${esc(nombre)}, una por hoja.</span>
+      </div>
+      <div class="ranking-doble">
+        <figure><figcaption>Jefaturas (${num(C.ranking_jefaturas.length)})</figcaption>${tablaRanking(C.ranking_jefaturas, 'jefatura', 'Jefatura')}</figure>
+        <figure><figcaption>Rutas de preventa (${num(C.ranking_rutas.length)})</figcaption>${tablaRanking(C.ranking_rutas, 'ruta', 'Ruta')}</figure>
+      </div>`);
+  }
+
+  // Violín por jefatura del canal
   const MIN_VIOLIN = 3;      // con menos evaluaciones no hay distribución que dibujar
-  function seriesZona(ci) {
+  function graficaViolinZona(cont, nota, ci, canal, nombre, prom) {
     const porZona = {};
     for (const e of D.evaluados) if (e[4] === ci && e[6] != null) (porZona[D.zonas[e[10]]] = porZona[D.zonas[e[10]]] || []).push(e[6]);
     const zonas = D.zonas.filter(z => porZona[z]);
-    return { con: zonas.filter(z => porZona[z].length >= MIN_VIOLIN).map(z => ({ nombre: z, valores: porZona[z] })),
-             pocas: zonas.filter(z => porZona[z].length < MIN_VIOLIN).map(z => `${z} (${porZona[z].length})`) };
+    const con = zonas.filter(z => porZona[z].length >= MIN_VIOLIN).map(z => ({ nombre: z, valores: porZona[z], color: COLOR_CANAL[canal] }));
+    const pocas = zonas.filter(z => porZona[z].length < MIN_VIOLIN).map(z => `${z} (${porZona[z].length})`);
+    if (con.length) {
+      // El eje se ajusta a los datos: con todo arriba de 80 los violines no quedan aplastados
+      const todos = con.flatMap(s => s.valores);
+      const piso = Math.max(0, Math.floor((Math.min(...todos) - 5) / 10) * 10), techo = Math.max(110, Math.ceil(Math.max(...todos) / 5) * 5);
+      Graficas.violin(cont, { dominio: [piso, techo], alto: 340, minAncho: con.length * 96 + 60, titulo: `Calificaciones ICE de ${nombre} por jefatura`,
+                              series: con, objetivo: prom == null ? null : { valor: prom, etiqueta: `Unidad ${dec1(prom)}` } });
+    } else {
+      cont.innerHTML = `<p class="muted">Ninguna jefatura tiene ${MIN_VIOLIN} o más evaluaciones de ${esc(nombre)} en ${esc(D.mes)}.</p>`;
+    }
+    nota.textContent = pocas.length ? `Con menos de ${MIN_VIOLIN} evaluaciones (sin violín): ${pocas.join(', ')}.` : '';
   }
 
-  function seccionViolinesZona() {
-    if (!D.evaluados.length) return '';
-    return seccion('Distribución por jefatura', `Un violín por jefatura y canal con la calificación ICE de sus clientes evaluados en ${esc(D.mes)}: la caja va del cuartil 1 al 3, el círculo es la mediana y la raya horizontal, el promedio. La línea punteada es el promedio de la unidad en ese canal. Solo se dibujan las jefaturas con ${MIN_VIOLIN} o más evaluaciones en el canal.`,
-      D.canales.map((c, i) => `<figure class="violin-zona"><figcaption>${esc(c)} · violín por jefatura</figcaption>
-        <div class="g-scroll"><div class="grafica" id="gViolinZona${i}"></div></div><p class="mapa-ayuda" id="gViolinZonaNota${i}"></p></figure>`).join(''));
-  }
-
-  function graficasViolinesZona() {
-    D.canales.forEach((c, i) => {
-      const cont = $('gViolinZona' + i);
-      if (!cont) return;
-      const { con, pocas } = seriesZona(i);
-      const prom = (D.resumen.por_canal.find(x => x.canal === c) || {}).promedio;
-      if (con.length) {
-        // El eje se ajusta a los datos del canal: con todo arriba de 80 los violines no quedan aplastados
-        const todos = con.flatMap(s => s.valores);
-        const piso = Math.max(0, Math.floor((Math.min(...todos) - 5) / 10) * 10), techo = Math.max(110, Math.ceil(Math.max(...todos) / 5) * 5);
-        Graficas.violin(cont, {
-          dominio: [piso, techo], alto: 340, minAncho: con.length * 96 + 60, titulo: `Calificaciones ICE de ${c} por jefatura`,
-          series: con.map(s => ({ ...s, color: COLOR_CANAL[c] })),
-          objetivo: prom == null ? null : { valor: prom, etiqueta: `Unidad ${dec1(prom)}` },
-        });
-      } else {
-        cont.innerHTML = `<p class="muted">Ninguna jefatura tiene ${MIN_VIOLIN} o más evaluaciones de ${esc(c)} en ${esc(D.mes)}.</p>`;
-      }
-      $('gViolinZonaNota' + i).textContent = pocas.length ? `Con menos de ${MIN_VIOLIN} evaluaciones (sin violín): ${pocas.join(', ')}.` : '';
-    });
-  }
-
-  // ── Desglose por submétrica ───────────────────────────────────────────
+  // ── Desglose por submétrica del canal ─────────────────────────────────
   function colorCalor(v) {
     // 100% = blanco, 0% = rojo Coke (una sola tinta, de claro a intenso)
     const t = Math.max(0, Math.min(1, (100 - v) / 100)) ** 0.85;
@@ -557,38 +566,19 @@ const Ice = (function () {
     return `rgb(${mezcla(255, 244)},${mezcla(255, 0)},${mezcla(255, 0)})`;
   }
 
-  function seccionDesglose() {
-    const G = D.desglose, mets = D.metricas, canales = D.canales;
-    const filas = mets.map((m, i) => ({ m, i })).filter(({ i }) => [...canales, 'Total'].some(c => G.canal[c] && G.canal[c].prom[i] != null));
+  function seccionDesglose(canal, C, nombre, k) {
+    const G = D.desglose, g = G.canal[canal] || { prom: [], d: [], perdidos: [] }, mets = D.metricas;
+    const filas = mets.map((m, i) => ({ m, i })).filter(({ i }) => g.prom[i] != null);
     if (!filas.length) return '';
-    const maxPerd = {};
-    for (const c of canales) {
-      const p = (G.canal[c] && G.canal[c].perdidos) || [];
-      maxPerd[c] = p.reduce((a, v, i) => (v != null && (a == null || v > p[a]) ? i : a), null);
-    }
-    const pesos = canales.map(c => {
-      const w = G.pesos[c] || [];
-      const txt = mets.map((m, i) => w[i] != null ? `${m.nombre} ${num(w[i] * 100, 0)}` : null).filter(Boolean).join(', ');
-      return txt ? `<b>${esc(c)}</b>: ${esc(txt)} (estimado con ${num(G.n_pesos[c])} evaluaciones)` : '';
-    }).filter(Boolean).join('. ');
-    const tabla = `<div class="tabla-scroll"><table class="ice-tabla">
-      <thead><tr><th>Submétrica</th>
-        ${canales.map(c => `<th>${esc(c)} · promedio</th><th>${esc(c)} · puntos que quita</th>`).join('')}<th>Todas · promedio</th></tr></thead>
-      <tbody>${filas.map(({ m, i }) => `<tr>
-        <th scope="row"><span class="metrica-nombre"><span class="icono-metrica">${svgIcono(m.id)}</span>${esc(m.nombre)}</span></th>
-        ${canales.map(c => {
-          const g = G.canal[c] || { prom: [], d: [], perdidos: [] };
-          const v = g.prom[i], p = (g.perdidos || [])[i];
-          return `<td>${v == null ? '<span class="muted">—</span>' : `${num(v, 1)}% ${flecha(g.d[i])}`}</td>
-                  <td>${p == null ? '<span class="muted">—</span>' : `−${num(p, 1)}${maxPerd[c] === i ? '<span class="mas-impacto">más impacto</span>' : ''}`}</td>`;
-        }).join('')}
-        <td>${G.canal.Total.prom[i] == null ? '<span class="muted">—</span>' : `${num(G.canal.Total.prom[i], 1)}% ${flecha(G.canal.Total.d[i])}`}</td></tr>`).join('')}</tbody>
-    </table></div>`;
-    const usadas = filas.filter(({ i }) => G.zonas.some(z => z.prom[i] != null));
-    const calor = G.zonas.length ? `<h3 class="ice-subtitulo" style="margin-top:26px">Promedio de cada submétrica por zona (%)</h3>
+    const p = g.perdidos || [];
+    const mayor = p.reduce((a, v, i) => (v != null && (a == null || v > p[a]) ? i : a), null);
+    const w = G.pesos[canal] || [];
+    const pesos = mets.map((m, i) => w[i] != null ? `${m.nombre} ${num(w[i] * 100, 0)}` : null).filter(Boolean).join(', ');
+    const usadas = filas.filter(({ i }) => C.metricas_zona.some(z => z.prom[i] != null));
+    const calor = C.metricas_zona.length ? `<h3 class="ice-subtitulo" style="margin-top:26px">Promedio de cada submétrica por jefatura (%)</h3>
       <div class="tabla-scroll"><table class="ice-tabla tabla-calor">
-        <thead><tr><th>Zona</th><th>Evaluados</th>${usadas.map(({ m }) => `<th>${esc(m.nombre)}</th>`).join('')}</tr></thead>
-        <tbody>${G.zonas.map(z => `<tr><th scope="row">${esc(z.zona)}</th><td>${num(z.n)}</td>${usadas.map(({ i }) => {
+        <thead><tr><th>Jefatura</th><th>Evaluados</th>${usadas.map(({ m }) => `<th>${esc(m.nombre)}</th>`).join('')}</tr></thead>
+        <tbody>${C.metricas_zona.map(z => `<tr><th scope="row">${esc(z.zona)}</th><td>${num(z.n)}</td>${usadas.map(({ i }) => {
           const v = z.prom[i];
           if (v == null) return '<td class="vacio">—</td>';
           const fondo = colorCalor(v);
@@ -596,31 +586,62 @@ const Ice = (function () {
         }).join('')}</tr>`).join('')}</tbody>
       </table></div>
       <p class="escala-calor"><span>0%</span><i aria-hidden="true"></i><span>100%</span></p>` : '';
-    return seccion('Desglose de la calificación', `Submétricas del ICE en ${esc(D.mes)}: promedio de cumplimiento y cuántos puntos de la calificación se pierden en promedio por cada una (peso aproximado × lo que le falta para el 100%). La que más quita es donde más conviene trabajar.`,
-      `${tabla}
-       <div class="ice-dos" style="margin-top:22px">
-         ${canales.map((c, k) => `<figure><figcaption>Puntos que quita cada submétrica · ${esc(c)}</figcaption><div class="grafica" id="gPerd${k}"></div></figure>`).join('')}
-       </div>
-       ${calor}
-       <p class="ice-nota">Peso aproximado de cada submétrica (puntos que aporta al 100%; con el bono el máximo es 110): ${pesos}. El reporte no trae la fórmula: los pesos se estiman con las evaluaciones recientes y sirven para comparar, no son oficiales.</p>`);
+    return seccion(`Desglose de la calificación · ${nombre}`, `Submétricas del ICE en ${esc(D.mes)}: promedio de cumplimiento y cuántos puntos se pierden en promedio por cada una (peso aproximado × lo que le falta para el 100%). La que más quita es donde más conviene trabajar.`,
+      `<div class="ice-dos">
+        <div class="tabla-scroll"><table class="ice-tabla">
+          <thead><tr><th>Submétrica</th><th>Promedio</th><th>Puntos que quita</th></tr></thead>
+          <tbody>${filas.map(({ m, i }) => `<tr>
+            <th scope="row"><span class="metrica-nombre"><span class="icono-metrica">${svgIcono(m.id)}</span>${esc(m.nombre)}</span></th>
+            <td>${num(g.prom[i], 1)}% ${flecha(g.d[i])}</td>
+            <td>${p[i] == null ? '<span class="muted">—</span>' : `−${num(p[i], 1)}${mayor === i ? '<span class="mas-impacto">más impacto</span>' : ''}`}</td></tr>`).join('')}</tbody>
+        </table></div>
+        <figure><figcaption>Puntos que quita cada submétrica</figcaption><div class="grafica" id="gPerd${k}"></div></figure>
+      </div>
+      ${calor}
+      ${pesos ? `<p class="ice-nota">Peso aproximado de cada submétrica (puntos que aporta al 100%; con el bono el máximo es 110): ${esc(pesos)}, estimado con ${num(G.n_pesos[canal])} evaluaciones. El reporte no trae la fórmula: los pesos sirven para comparar, no son oficiales.</p>` : ''}`);
   }
 
-  function graficasPerdidos() {
-    const G = D.desglose;
-    const max = Math.max(1, ...D.canales.flatMap(c => ((G.canal[c] || {}).perdidos || []).filter(v => v != null)));
-    D.canales.forEach((c, k) => {
-      const cont = $('gPerd' + k);
-      if (!cont) return;
-      const g = G.canal[c] || {};
-      const filas = D.metricas.map((m, i) => ({ m, i, p: (g.perdidos || [])[i], v: (g.prom || [])[i] }))
-        .filter(x => x.p != null).sort((a, b) => b.p - a.p);
-      if (!filas.length) { cont.innerHTML = '<p class="muted">Sin datos.</p>'; return; }
-      Graficas.barras(cont, {
-        titulo: `Puntos que quita cada submétrica en ${c}`, max, anchoEtiqueta: 170, margenDerecho: 70, altoFila: 32,
-        filas: filas.map((x, j) => ({ etiqueta: x.m.nombre, valor: x.p, color: j === 0 ? ROJO : NEGRO, texto: `−${num(x.p, 1)} pts`,
-                                      tip: `<b>${esc(x.m.nombre)} · ${esc(c)}</b><br>Promedio ${num(x.v, 1)}% · quita ${num(x.p, 1)} puntos en promedio` })),
-      });
+  function graficaPerdidos(cont, canal, nombre) {
+    const g = D.desglose.canal[canal] || {};
+    const filas = D.metricas.map((m, i) => ({ m, p: (g.perdidos || [])[i], v: (g.prom || [])[i] })).filter(x => x.p != null).sort((a, b) => b.p - a.p);
+    if (!filas.length) { cont.innerHTML = '<p class="muted">Sin datos.</p>'; return; }
+    Graficas.barras(cont, {
+      titulo: `Puntos que quita cada submétrica en ${nombre}`, max: Math.max(1, ...filas.map(x => x.p)), anchoEtiqueta: 170, margenDerecho: 70, altoFila: 32,
+      filas: filas.map((x, j) => ({ etiqueta: x.m.nombre, valor: x.p, color: j === 0 ? ROJO : NEGRO, texto: `−${num(x.p, 1)} pts`,
+                                    tip: `<b>${esc(x.m.nombre)} · ${esc(nombre)}</b><br>Promedio ${num(x.v, 1)}% · quita ${num(x.p, 1)} puntos en promedio` })),
     });
+  }
+
+  // ── Mix ───────────────────────────────────────────────────────────────
+  function mixPanel() {
+    const panel = $('p-mix');
+    if (panel.dataset.listo === D.unidad) return;
+    panel.dataset.listo = D.unidad;
+    if (!D.mix) { panel.innerHTML = SIGUIENTE_PUBLICACION; return; }
+    const M = D.mix, conFuera = M.total.fuera > 0;
+    const pct = (n, t) => t ? `${num(n / t * 100, 1)}%` : '—';
+    const cabTipos = M.tipos.map((t, i) => `<th colspan="2" class="centro mix-tipo"><span class="prio ${PRIO[i + 1].clase}">${PRIO[i + 1].corto}</span> ${esc(t)}</th>`).join('');
+    const tabla = (clave, llave, fuera) => {
+      const celdas = f => {
+        const t = f[llave], par = n => `<td class="mix-n">${num(n)}</td><td class="mix-p">${pct(n, t)}</td>`;
+        return f[clave].map(par).join('') + (fuera ? par(f.fuera) : '') + `<td class="mix-total">${num(t)}</td>`;
+      };
+      return `<div class="tabla-scroll"><table class="ice-tabla tabla-mix">
+        <thead><tr><th rowspan="2">Jefatura</th>${cabTipos}${fuera ? '<th colspan="2" class="centro mix-tipo">Fuera del universo</th>' : ''}<th rowspan="2">Total</th></tr>
+          <tr>${[...M.tipos, ...(fuera ? [''] : [])].map(() => '<th>Clientes</th><th>%</th>').join('')}</tr></thead>
+        <tbody>${M.filas.filter(f => f[llave]).map(f => `<tr><th scope="row">${esc(f.zona)}</th>${celdas(f)}</tr>`).join('')}</tbody>
+        <tfoot><tr><th scope="row">Unidad</th>${celdas(M.total)}</tr></tfoot>
+      </table></div>`;
+    };
+    panel.innerHTML = `
+      <div class="ice-descargas">
+        <button type="button" class="ice-btn rojo" id="btnMix">${svgIcono('excel')}Descargar Mix en Excel</button>
+        <span>Las dos tablas de esta pestaña, una por hoja, con el estilo de marca.</span>
+      </div>
+      ${seccion('Mix de clientes evaluados', `Clientes evaluados en ${esc(D.mes)} por jefatura y tipo. El % es sobre el total de evaluados de cada jefatura.`, tabla('evaluados', 'total_evaluados', conFuera))}
+      ${seccion('Clientes de cada tipo', `Cuántos clientes de cada tipo hay en el universo ICE de cada jefatura. El % es sobre el total de clientes de la jefatura.`, tabla('universo', 'total_universo', false))}
+      ${tiposCliente(true)}`;
+    $('btnMix').addEventListener('click', () => bajarExcel(M.excel));
   }
 
   // ── Mapa ──────────────────────────────────────────────────────────────
@@ -779,7 +800,7 @@ const Ice = (function () {
   function popupEvaluado(e) {
     const [sap, nombre, lat, lon, ci, fecha, score, , , , zi, prio, ubic] = e;
     const peor = e[8] != null ? D.metricas[e[8]].nombre : null;
-    return `<div class="pc"><div class="pc-cab ${prio === 1 ? 'p1' : prio === 3 ? 'p3' : ''}"><b>${esc(nombre || 'Cliente sin nombre')}</b>
+    return `<div class="pc"><div class="pc-cab ${prio === 1 ? 'p1' : prio >= 3 ? 'p3' : ''}"><b>${esc(nombre || 'Cliente sin nombre')}</b>
         <span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
         <span>ICE <b style="display:inline;font-size:13px">${dec1(score)}</b> · ${esc(D.canales[ci])} · ${esc(fechaCorta(fecha))}</span></div>
       ${enlacesMapa(lat, lon)}
@@ -800,10 +821,11 @@ const Ice = (function () {
     const conEval = D.clientes.filter(c => c[17]).length;
     panel.innerHTML = `
       <div class="mapa-barra">
-        <p class="mapa-resumen">Universo ICE de ${esc(D.unidad)}: <b>${num(D.clientes.length)}</b> clientes · <b>prioridad 1</b> ${num(P.p1)} (evaluados en ${esc(D.prioridad.mes_anterior)} y con ${num(D.prioridad.min_visitas)}+ visitas antes) · <b>prioridad 2</b> ${num(P.p2)} (evaluados en ${esc(D.prioridad.mes_anterior)}, sin esa recurrencia) · <b>aleatorios</b> ${num(P.aleatorio)}. Evaluados en ${esc(D.mes)}: <b>${num(D.evaluados.length)}</b>${sinCoordEv + sinCoordU ? ` (${num(sinCoordEv + sinCoordU)} sin coordenadas no aparecen en el mapa)` : ''}.</p>
+        <p class="mapa-resumen">Universo ICE de ${esc(D.unidad)}: <b>${num(D.clientes.length)}</b> clientes · <b>prioridad 1</b> ${num(P.p1)} · <b>prioridad 2</b> ${num(P.p2)} · <b>prioridad 3</b> ${num(P.p3)} · <b>no prioritarios</b> ${num(P.no_prioritario)}. Evaluados en ${esc(D.mes)}: <b>${num(D.evaluados.length)}</b>${sinCoordEv + sinCoordU ? ` (${num(sinCoordEv + sinCoordU)} sin coordenadas no aparecen en el mapa)` : ''}.</p>
+        ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="chips">
-            ${[1, 2, 3].map(p => `<button type="button" class="chip on" aria-pressed="true" data-p="${p}"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre} · ${num(hechos[p] || 0)}/${num(total[p] || 0)} evaluados</button>`).join('')}
+            ${[1, 2, 3, 4].map(p => `<button type="button" class="chip on" aria-pressed="true" data-p="${p}"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre} · ${num(hechos[p] || 0)}/${num(total[p] || 0)} evaluados</button>`).join('')}
             <button type="button" class="chip" aria-pressed="false" id="mapaPendientes">Solo sin ICE en ${esc(D.mes)}</button>
           </div>
           <div class="campo-busca"><input type="search" id="buscaMapa" placeholder="Buscar SAP o cliente" aria-label="Buscar SAP o cliente" autocomplete="off"><ul id="buscaMapaRes" class="busca-res" hidden></ul></div>
@@ -828,7 +850,7 @@ const Ice = (function () {
     const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
     const capa = L.layerGroup().addTo(mapaM);
     // modo: null = solo prioridad, 'evaluados' = capa de los evaluados del mes, 'falto' = lo que les faltó
-    const estado = { prios: new Set([1, 2, 3]), pendientes: false, modo: null };
+    const estado = { prios: new Set([1, 2, 3, 4]), pendientes: false, modo: null };
     const marcadores = [], marcadorDe = {}, indice = [], limites = [];
     const marcaDiv = (html, tam, z) => ({ keyboard: false, zIndexOffset: z, riseOnHover: true,
       icon: L.divIcon({ className: 'ev-icono', html, iconSize: [tam, tam], iconAnchor: [tam / 2, tam / 2], popupAnchor: [0, -tam / 2] }) });
@@ -837,12 +859,12 @@ const Ice = (function () {
       marcadores.length = 0;
       for (const k of Object.keys(marcadorDe)) delete marcadorDe[k];
       const falto = estado.modo === 'falto', lista = [];
-      // Aleatorios abajo y prioridad 1 encima
+      // No prioritarios abajo y prioridad 1 encima
       for (const c of [...D.clientes].sort((a, b) => b[4] - a[4])) {
         const [sap, nombre, lat, lon, prio, , , , , , , , , , , , , ult] = c;
         const hecho = !!porSapEval[sap];
         if (lat == null || !estado.prios.has(prio) || (estado.pendientes && hecho)) continue;
-        const s = PRIO[prio], z = (4 - prio) * 100;
+        const s = PRIO[prio], z = (5 - prio) * 100;
         let m;
         if (falto && ult) {
           lista.push(c);
@@ -859,7 +881,7 @@ const Ice = (function () {
       }
       if (falto) {
         const pend = lista.filter(c => !porSapEval[c[0]]).length;
-        $('leyendaFalto').innerHTML = `<p class="leyenda-texto">Símbolo = submétrica que más puntos le quitó a cada cliente en su última evaluación ICE (prioridad 1, 2 y aleatorios que alguna vez se evaluaron; color = prioridad). <b>${num(lista.length)}</b> en el mapa${lista.length > pend ? `, <b>${num(pend)}</b> aún sin ICE en ${esc(D.mes)}; <span class="visto-mini" aria-hidden="true">${svgIcono('ok')}</span> = ya evaluado (su evaluación de ${esc(D.mes)})` : `, todos aún sin ICE en ${esc(D.mes)}`}:</p>${leyendaSimbolos(contar(lista, c => idPeor(c[17])))}`;
+        $('leyendaFalto').innerHTML = `<p class="leyenda-texto">Símbolo = submétrica que más puntos le quitó a cada cliente en su última evaluación ICE (prioridad 1, 2 y 3; los no prioritarios nunca se han evaluado; color = tipo de cliente). <b>${num(lista.length)}</b> en el mapa${lista.length > pend ? `, <b>${num(pend)}</b> aún sin ICE en ${esc(D.mes)}; <span class="visto-mini" aria-hidden="true">${svgIcono('ok')}</span> = ya evaluado (su evaluación de ${esc(D.mes)})` : `, todos aún sin ICE en ${esc(D.mes)}`}:</p>${leyendaSimbolos(contar(lista, c => idPeor(c[17])))}`;
       }
     };
     pintar();
@@ -1438,12 +1460,6 @@ const Ice = (function () {
   }
 
   // ── Excel de la clasificación ─────────────────────────────────────────
-  function descargarExcel() {
-    const bin = atob(D.excel.datos), bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    PDF.descargar(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), D.excel.nombre);
-  }
-
   // ── Semanas del mes ───────────────────────────────────────────────────
   // Semana 1 = días 1–7, 2 = 8–14, 3 = 15–21, 4 = del 22 al fin de mes
   // (igual que Programas/prioridad_ice.py)
@@ -1462,6 +1478,7 @@ const Ice = (function () {
     panel.innerHTML = `
       <div class="mapa-barra">
         <p class="mapa-resumen">Clientes <b>prioridad 1 y 2</b> según la semana del mes en que más veces los ha evaluado el auditor (todo su histórico ICE; si hay empate, la de su visita más reciente): <b>semana 1</b> = días 1–7, <b>2</b> = 8–14, <b>3</b> = 15–21 y <b>4</b> = del 22 al fin de mes. Hoy, ${hoy.getDate()} de ${MESES[hoy.getMonth()]}, es la <b>semana ${sHoy}</b>; la próxima es la <b>semana ${sSig}</b>${sHoy === 4 ? ` de ${esc(mesSig)}` : ''}.</p>
+        ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="chips" role="group" aria-label="Semana del mes" id="botonesSemana">
             <button type="button" class="chip grande" data-s="${sHoy},${sSig}" aria-pressed="true">Esta semana y la próxima (${num(cuenta[sHoy] + cuenta[sSig])})</button>
@@ -1600,18 +1617,22 @@ const Ice = (function () {
           <div class="rutas-acciones">
             <button type="button" class="ice-btn rojo" data-pdf="hoy">${svgIcono('imprimir')}Impresión Hoy Rutas</button>
             <button type="button" class="ice-btn" data-pdf="manana">${svgIcono('imprimir')}Impresión Mañana Rutas</button>
-            <button type="button" class="ice-btn" data-pdf="epica">${svgIcono('imprimir')}Clientes ICE pendientes de EPICA de preventa</button>
           </div>
-          <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en las rutas impresas</label>
+          <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en las impresiones de hoy y mañana</label>
         </div>
-        <p class="mapa-ayuda">Las impresiones de rutas de hoy y de mañana solo traen a los clientes ICE que alguna vez se han evaluado y que aún no tienen ICE en ${esc(D.mes)}, dicen qué submétrica le quitó más puntos a cada uno en su última evaluación y van por jefatura: cada jefatura empieza en hoja nueva. En los tres PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
+        <div class="rutas-acciones rutas-semana" role="group" aria-label="Listas de preventa por día de la semana">
+          <span class="poli-rutas-tit">Lista de preventa por día:</span>
+          ${(D.rutas_semana ? D.rutas_semana.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : ''}</button>`).join('')}
+        </div>
+        <p class="mapa-ayuda">Cada botón de día imprime, por jefatura y ruta, los clientes <b>prioridad 1, 2 y 3</b> que preventa visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación. Los no prioritarios no se imprimen porque nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
+        ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de las rutas">
             <button type="button" data-dia="hoy" aria-pressed="true">Hoy · ${esc(H.dia)} ${esc(fechaCorta(H.fecha))}</button>
             <button type="button" data-dia="manana" aria-pressed="false">Mañana · ${esc(M.dia)} ${esc(fechaCorta(M.fecha))}</button>
           </div>
           <div class="chips" aria-label="Simbología">
-            ${[1, 2, 3].map(p => `<span class="chip" style="cursor:default"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</span>`).join('')}
+            ${[1, 2, 3, 4].map(p => `<span class="chip" style="cursor:default"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</span>`).join('')}
             <span class="chip" style="cursor:default"><span class="punto-prio p0" aria-hidden="true"></span>No ICE (color de la ruta)</span>
           </div>
         </div>
@@ -1643,7 +1664,7 @@ const Ice = (function () {
     $('buscaRuta').addEventListener('input', filtrarLista);
     $('soloIce').addEventListener('change', filtrarLista);
     $('etiquetasRuta').addEventListener('change', pintarEtiquetas);
-    panel.querySelectorAll('[data-pdf]').forEach(b => b.addEventListener('click', () => imprimir(b)));
+    panel.querySelectorAll('[data-pdf], [data-pdf-dia]').forEach(b => b.addEventListener('click', () => imprimir(b)));
   }
 
   function filtrarLista() {
@@ -1690,7 +1711,7 @@ const Ice = (function () {
       }
       grupos.push(g);
     });
-    // Los clientes ICE van encima de todo: aleatorios, prioridad 2 y prioridad 1
+    // Los clientes ICE van encima de todo, con la prioridad 1 hasta arriba
     ice.sort((a, b) => b.p[4] - a.p[4]).forEach(({ p, r }) => {
       const s = PRIO[p[4]];
       const m = L.circleMarker([p[0], p[1]], { renderer: rend, radius: s.radio, color: s.borde, weight: s.grosor, fillColor: s.relleno, fillOpacity: 1 })
@@ -1705,13 +1726,13 @@ const Ice = (function () {
     toqueCercano(mapaR, marcadores);
     pintarEtiquetas();
 
-    $('rutasResumen').innerHTML = `Rutas que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ZPV <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> rutas · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> aleatorios. Las líneas unen a los clientes de cada ruta; al acercar el mapa aparece la etiqueta con el código de cada ruta.`;
+    $('rutasResumen').innerHTML = `Rutas que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ZPV <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> rutas · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2, <b>${num(tipos[3] || 0)}</b> prioridad 3 y <b>${num(tipos[4] || 0)}</b> no prioritarios. Las líneas unen a los clientes de cada ruta; al acercar el mapa aparece la etiqueta con el código de cada ruta.`;
     $('listaRutas').innerHTML = R.rutas.map((r, i) => {
       const t = cuentaTipos(r.puntos);
       return `<li><button type="button" class="ruta-item" data-i="${i}">
         <span class="ruta-sw" style="background:${grupos[i].color}" aria-hidden="true"></span>
         <span class="ruta-cod">${esc(r.codigo)}</span>
-        <span class="ruta-conteo">${[1, 2, 3].map(p => t[p] ? `<span class="prio p${p}" title="${PRIO[p].nombre}">${PRIO[p].corto} ${t[p]}</span>` : '').join('')}</span>
+        <span class="ruta-conteo">${[1, 2, 3, 4].map(p => t[p] ? `<span class="prio p${p}" title="${PRIO[p].nombre}">${PRIO[p].corto} ${t[p]}</span>` : '').join('')}</span>
         <span class="ruta-info">${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')}</span></button></li>`;
     }).join('');
     document.querySelectorAll('#listaRutas .ruta-item').forEach(b => b.addEventListener('click', () => elegirRuta(+b.dataset.i)));
@@ -1758,7 +1779,7 @@ const Ice = (function () {
     const cont = $('rutaDetalle');
     cont.innerHTML = `<div class="ruta-detalle-cab"><div>
         <h3>Ruta ${esc(r.codigo)}</h3>
-        <p>${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')} ${diaSel === 'hoy' ? 'hoy' : 'mañana'} · ICE: ${num(t[1] || 0)} P1, ${num(t[2] || 0)} P2, ${num(t[3] || 0)} aleatorios</p></div>
+        <p>${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')} ${diaSel === 'hoy' ? 'hoy' : 'mañana'} · ICE: ${num(t[1] || 0)} P1, ${num(t[2] || 0)} P2, ${num(t[3] || 0)} P3, ${num(t[4] || 0)} NP</p></div>
         ${otros.length ? `<button type="button" class="ice-btn sec" id="verOtros" aria-expanded="false">Ver los ${num(otros.length)} clientes no ICE</button>` : ''}</div>
       <div class="tabla-scroll"><table class="ice-tabla">
         <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>Último ICE</th><th>ICE ${esc(D.mes)}</th><th class="izq">ÉPICA del mes</th></tr></thead>
@@ -1846,7 +1867,7 @@ const Ice = (function () {
 
   function insigniaPdf(doc, x, y, tipo) {
     const s = PRIO[tipo];
-    if (tipo) doc.circulo(x + 4, y - 3, 3.6, { relleno: s.relleno, borde: tipo === 3 ? GRIS_OSC : s.relleno, grosor: 1.2 });
+    if (tipo) doc.circulo(x + 4, y - 3, 3.6, { relleno: s.relleno, borde: tipo >= 3 ? GRIS_OSC : s.relleno, grosor: 1.2 });
     doc.texto(x + 11, y, s.corto, { tam: 7.5, negrita: true, color: NEGRO });
   }
 
@@ -1895,12 +1916,21 @@ const Ice = (function () {
     return { texto: `${dec1(e[1])} · ${ddmm(e[0])}${e[2] ? ' · NoGeo' : ''}${e[3] ? ' · FdF' : ''}`, negrita: !!(e[2] || e[3]), color: e[2] || e[3] ? ROJO : NEGRO };
   }
 
-  // Rutas de preventa del día: solo clientes ICE que alguna vez se evaluaron y aún no tienen ICE en el
-  // mes (los que nunca se han evaluado no traen nada que trabajar), una jefatura por hoja
-  function pdfRutas(dia) {
-    const R = D.rutas[dia], todos = $('pdfTodos').checked;
+  // Día de la semana (índice en rutas_semana.dias) con la forma de D.rutas.hoy: sus clientes P1, P2 y P3
+  function rutasDeSemana(i) {
+    const d = D.rutas_semana.dias[i], base = partes(D.hoy);
+    let f = new Date(base.a, base.m - 1, base.d);
+    for (let k = 0; k < 7 && DIAS[f.getDay()] !== d.dia; k++) f.setDate(f.getDate() + 1);
+    const fecha = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+    return { dia: d.dia, letra: d.letra, fecha, rutas: d.ice.map(([codigo, jefatura, total, saps]) => ({ codigo, jefatura, total,
+      puntos: saps.map(s => { const c = porSapCliente[s]; return [c ? c[2] : null, c ? c[3] : null, s, c ? c[1] : '', c ? c[4] : 3]; }) })) };
+  }
+
+  // Rutas de preventa: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en el mes (los no
+  // prioritarios nunca se han evaluado y no traen nada que trabajar), una jefatura por hoja
+  function pdfRutas(R, titulo, archivo, todos) {
     const evaluado = p => !!porSapEval[p[2]];
-    const nunca = p => p[4] && !evaluado(p) && !(porSapCliente[p[2]] || [])[17];
+    const nunca = p => p[4] === 4 && !evaluado(p);
     const quitados = R.rutas.reduce((a, r) => a + r.puntos.filter(evaluado).length, 0);
     const sinHistoria = R.rutas.reduce((a, r) => a + r.puntos.filter(nunca).length, 0);
     const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)) }))
@@ -1909,17 +1939,18 @@ const Ice = (function () {
     const porJefatura = {};
     for (const x of rutasPdf) (porJefatura[x.r.jefatura || SIN_JEFATURA] = porJefatura[x.r.jefatura || SIN_JEFATURA] || []).push(x);
     const jefaturas = Object.keys(porJefatura).sort((a, b) => (a === SIN_JEFATURA) - (b === SIN_JEFATURA) || a.localeCompare(b, 'es', { numeric: true }));
-    const ctx = documento(`Rutas de ${dia === 'hoy' ? 'hoy' : 'mañana'}`, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`,
-      `${plural(rutasPdf.length, 'ruta')} ${todos ? '' : 'con clientes ICE por evaluar '}en ${plural(jefaturas.length, 'jefatura')} (cada jefatura empieza en hoja nueva) · ICE por evaluar: ${num(tipos[1] || 0)} prioridad 1 (P1), ${num(tipos[2] || 0)} prioridad 2 (P2) y ${num(tipos[3] || 0)} aleatorios (A)` +
-      `${todos ? ` · se incluyen los ${num(tipos[0] || 0)} clientes no ICE` : ''}. Solo van clientes ICE que alguna vez se han evaluado: no se imprimen ${plural(quitados, 'cliente que ya tiene', 'clientes que ya tienen')} ICE en ${D.mes} ni ${plural(sinHistoria, 'cliente ICE que nunca se ha evaluado', 'clientes ICE que nunca se han evaluado')}. Orden: P1, P2, A${todos ? ' y después el resto en el orden de la ruta' : ''}. ` +
-      `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE (en la que conviene trabajar). ÉPICA preventa: la ÉPICA de ${D.mes} hecha por preventa${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`);
+    const ctx = documento(titulo, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`,
+      `${plural(rutasPdf.length, 'ruta')} ${todos ? '' : 'con clientes ICE por evaluar '}en ${plural(jefaturas.length, 'jefatura')} (cada jefatura empieza en hoja nueva) · ICE por evaluar: ${num(tipos[1] || 0)} prioridad 1 (P1), ${num(tipos[2] || 0)} prioridad 2 (P2) y ${num(tipos[3] || 0)} prioridad 3 (P3)` +
+      `${todos ? ` · se incluyen los ${num(tipos[0] || 0)} clientes no ICE` : ''}. No se imprimen ${plural(quitados, 'cliente que ya tiene', 'clientes que ya tienen')} ICE en ${D.mes}${sinHistoria ? ` ni ${plural(sinHistoria, 'cliente no prioritario', 'clientes no prioritarios')} (nunca evaluados)` : ''}. Orden: P1, P2 y P3. ` +
+      `Prioridad 1: evaluados en ${D.prioridad.mes_anterior} con ${D.prioridad.min_visitas} o más visitas antes; prioridad 2: evaluados en ${D.prioridad.mes_anterior} sin esa recurrencia; prioridad 3: aleatorios evaluados alguna vez antes. ` +
+      `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ÉPICA preventa: la ÉPICA de ${D.mes} hecha por preventa${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`);
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
                       { titulo: 'ÉPICA preventa', ancho: 86 }];
-    if (!rutasPdf.length) ctx.doc.texto(PDF_M, ctx.y + 10, `No hay rutas con clientes ICE por evaluar este día.`, { tam: 10, negrita: true });
+    if (!rutasPdf.length) ctx.doc.texto(PDF_M, ctx.y + 10, 'No hay rutas con clientes ICE por evaluar este día.', { tam: 10, negrita: true });
     jefaturas.forEach((jef, g) => {
       const grupo = porJefatura[jef], tj = cuentaTipos(grupo.flatMap(x => x.puntos));
-      seccionJefatura(ctx, jef, `${plural(grupo.length, 'ruta')} · ICE por evaluar: P1 ${tj[1] || 0} · P2 ${tj[2] || 0} · A ${tj[3] || 0}`, g === 0);
+      seccionJefatura(ctx, jef, `${plural(grupo.length, 'ruta')} · ICE por evaluar: P1 ${tj[1] || 0} · P2 ${tj[2] || 0} · P3 ${tj[3] || 0}`, g === 0);
       for (const { r, puntos: pendientes } of grupo) {
         const t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
         const ice = pendientes.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
@@ -1930,40 +1961,10 @@ const Ice = (function () {
                   u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(p[2]) : ''];
         });
         tablaPdf(ctx, columnas, filas, cont => bandaRuta(ctx, `RUTA ${r.codigo}${cont ? ' (cont.)' : ''}`,
-          `${plural(r.puntos.length, 'cliente')} en la ruta · por evaluar P1 ${t[1] || 0} · P2 ${t[2] || 0} · A ${t[3] || 0}${fuera ? ` · ${num(fuera)} ya con ICE en ${D.mes}` : ''}`));
+          `${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} en la ruta · por evaluar P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0}${fuera ? ` · ${num(fuera)} ya con ICE en ${D.mes}` : ''}`));
       }
     });
-    PDF.descargar(ctx.doc.blob(), `ICE_Rutas_${dia === 'hoy' ? 'Hoy' : 'Manana'}_${D.unidad}_${R.fecha}.pdf`);
-  }
-
-  function pdfPendientes() {
-    const R = D.rutas.hoy;
-    const conIce = R.rutas.filter(r => r.puntos.some(p => p[4]));
-    const ice = conIce.flatMap(r => r.puntos.filter(p => p[4]));
-    const hechas = ice.filter(p => epicaPv(p[2]));
-    const nogeo = hechas.filter(p => epicaPv(p[2])[2]).length, fdf = hechas.filter(p => epicaPv(p[2])[3]).length;
-    const ctx = documento('Clientes ICE pendientes de EPICA de preventa', `Rutas de hoy · ${R.dia} ${fechaLarga(R.fecha)} · ÉPICA de preventa de ${D.mes}${epicaAl() ? ` al ${fechaLarga(epicaAl())}` : ''}`,
-      `En las rutas de hoy hay ${plural(ice.length, 'cliente ICE', 'clientes ICE')}: ${num(ice.length - hechas.length)} pendientes de EPICA de preventa y ${num(hechas.length)} con EPICA de preventa en ${D.mes} ` +
-      `(${num(nogeo)} con NoGeo y ${num(fdf)} con foto de foto). Solo cuenta la EPICA hecha por preventa (claves de ruta), no la de brigadistas ni la de farmers. ` +
-      `En cada ruta van primero los pendientes. P1 = prioridad 1, P2 = prioridad 2, A = aleatorio; ` +
-      `NoGeo = cierre a más de ${D.no_geo_metros} m del cliente; FdF = foto de foto.`);
-    const columnas = [{ titulo: 'Estado', ancho: 62 }, { titulo: 'Tipo', ancho: 30 }, { titulo: 'SAP', ancho: 56 }, { titulo: 'Cliente', ancho: 136 },
-                      { titulo: 'Dirección', ancho: 122 }, { titulo: 'Calif.', ancho: 36, alinear: 'der' }, { titulo: 'NoGeo', ancho: 36 },
-                      { titulo: 'FdF', ancho: 30 }, { titulo: 'Fecha', ancho: 40 }];
-    if (!conIce.length) ctx.doc.texto(PDF_M, ctx.y + 10, 'Hoy no hay clientes ICE en las rutas.', { tam: 10, negrita: true });
-    for (const r of conIce) {
-      const lista = r.puntos.filter(p => p[4]).sort((a, b) => (!!epicaPv(a[2]) - !!epicaPv(b[2])) || a[4] - b[4]);
-      const pend = lista.filter(p => !epicaPv(p[2])).length;
-      const filas = lista.map(p => {
-        const e = epicaPv(p[2]), c = porSapCliente[p[2]];
-        return [e ? { texto: 'Hecha', negrita: true } : { texto: 'PENDIENTE', negrita: true, color: ROJO }, { tipo: p[4] }, p[2], p[3], c ? c[13] : '',
-                e ? dec1(e[1]) : '', e ? (e[2] ? { texto: 'SÍ', negrita: true, color: ROJO } : 'no') : '',
-                e ? (e[3] ? { texto: 'SÍ', negrita: true, color: ROJO } : 'no') : '', e ? ddmm(e[0]) : ''];
-      });
-      tablaPdf(ctx, columnas, filas, cont => bandaRuta(ctx, `RUTA ${r.codigo}${cont ? ' (cont.)' : ''}`,
-        `${r.jefatura || 'Sin jefatura'} · ${plural(lista.length, 'cliente ICE', 'clientes ICE')} · ${num(pend)} pendientes de EPICA de preventa`));
-    }
-    PDF.descargar(ctx.doc.blob(), `ICE_Pendientes_EPICA_Preventa_${D.unidad}_${R.fecha}.pdf`);
+    PDF.descargar(ctx.doc.blob(), archivo);
   }
 
   function imprimir(boton) {
@@ -1973,7 +1974,13 @@ const Ice = (function () {
     // Deja que el navegador pinte el aviso antes de armar el documento
     setTimeout(() => {
       try {
-        if (boton.dataset.pdf === 'epica') pdfPendientes(); else pdfRutas(boton.dataset.pdf);
+        if (boton.dataset.pdfDia != null) {
+          const R = rutasDeSemana(+boton.dataset.pdfDia);
+          pdfRutas(R, `Lista de preventa del ${R.dia.toLowerCase()}`, `ICE_Preventa_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
+        } else {
+          const dia = boton.dataset.pdf, R = D.rutas[dia];
+          pdfRutas(R, `Rutas de ${dia === 'hoy' ? 'hoy' : 'mañana'}`, `ICE_Rutas_${dia === 'hoy' ? 'Hoy' : 'Manana'}_${D.unidad}_${R.fecha}.pdf`, $('pdfTodos').checked);
+        }
         estado.textContent = 'PDF listo: revisa tus descargas.';
       } catch (e) {
         console.error(e);

@@ -398,17 +398,60 @@ button, input, select { font: inherit; }
 .violin-zona figcaption { margin-bottom: 6px; }
 .ice-descargas + .ice-descargas { margin-top: 10px; }
 
-/* Cinética: barra de días y auditores */
-.cin-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.cin-barra input[type="range"] { flex: 1 1 260px; min-width: 180px; height: 40px; accent-color: var(--coke); cursor: pointer; }
-.cin-paso { min-width: 44px; padding-left: 0; padding-right: 0; justify-content: center; }
-.cin-fecha { flex: 0 0 auto; min-width: 230px; font-size: 15px; }
+/* Cinética: evaluadores y flechas de días */
+.cin-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cin-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cin-paso { min-width: 46px; padding-left: 0; padding-right: 0; }
+.cin-fecha { min-width: 260px; font-size: 15px; text-align: center; }
 .cin-fecha b { font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
-.cin-dias { display: flex; align-items: flex-end; gap: 2px; height: 34px; padding: 0 2px; border-bottom: 2px solid var(--negro); }
-.cin-dias span { flex: 1; display: flex; align-items: flex-end; height: 100%; }
-.cin-dias i { display: block; width: 100%; background: var(--gris-marca); }
-.cin-dias span.on i { background: var(--coke); }
-.cin-dias span.on { box-shadow: 0 3px 0 var(--coke); }
-.cin-item .ruta-info { display: block; font-size: 12px; line-height: 1.45; color: var(--tinta2); }
-@media (max-width: 640px) { .cin-fecha { min-width: 0; flex-basis: 100%; } }
-.cin-item .ruta-info { grid-column: auto; white-space: normal; overflow: visible; }
+.cin-nav .ice-btn:disabled { cursor: default; opacity: .4; }
+.cin-item { grid-template-columns: 14px minmax(0, 1fr) auto; }
+.cin-item:disabled { cursor: default; opacity: .55; }
+.cin-item .ruta-info { display: block; grid-column: auto; font-size: 12px; line-height: 1.45; color: var(--tinta2); white-space: normal; overflow: visible; }
+.cin-dia { display: flex; flex-direction: column; gap: 2px; padding: 10px 6px 6px; border-bottom: 2px solid var(--negro) !important; font-size: 12.5px; background: var(--blanco); position: sticky; top: 0; z-index: 1; }
+.cin-dia b { font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.cin-dia span { color: var(--tinta2); font-size: 12px; }
+@media (max-width: 640px) { .cin-fecha { order: 3; flex-basis: 100%; min-width: 0; } }
+
+/* Tipos de cliente */
+.prio.p4 { background: var(--gris-2); border-color: var(--gris-2); color: var(--tinta2); }
+.punto-prio.p4 { width: 9px; height: 9px; background: #BDBDBD; }
+.falta-marca.p4, .visto-marca.p4 { background: #BDBDBD; color: var(--negro); }
+.tipos-cliente { font-size: 13px; line-height: 1.5; color: var(--tinta2); }
+.ice-panel > .tipos-cliente { margin-top: 26px; padding: 14px 16px; background: var(--gris-1); border-left: 6px solid var(--negro); }
+.tipos-cliente h3 { margin: 0 0 10px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--negro); }
+.tipos-cliente summary { cursor: pointer; font-weight: 700; color: var(--negro); }
+.tipos-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px 20px; margin: 8px 0 0; }
+.tipos-lista dt { display: flex; align-items: center; gap: 7px; font-weight: 800; color: var(--negro); }
+.tipos-lista dd { margin: 3px 0 0; }
+.tipos-nota { margin-top: 8px; font-size: 12px; color: var(--tinta3); }
+
+/* Información del sistema */
+.info-kpis { margin-bottom: 4px; }
+.info-valor { font-size: clamp(17px, 2vw, 21px) !important; line-height: 1.25; }
+.info-estado { display: inline-block; margin-left: 6px; padding: 1px 7px; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.info-estado.ok { background: var(--negro); color: var(--blanco); }
+.info-estado.alerta { background: var(--blanco); color: var(--coke); outline: 2px solid var(--coke); }
+
+/* Pestañas por canal: rankings */
+.canal-titulo { margin-bottom: 12px; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.canal-titulo .muted { font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.ranking-descarga { margin: 0 0 16px; }
+.ranking-doble { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 24px; align-items: start; }
+.ranking-doble figure { min-width: 0; }
+.ranking-scroll { max-height: 560px; overflow-y: auto; }
+.tabla-ranking thead th { position: sticky; top: 0; z-index: 1; background: var(--blanco); }
+.tabla-ranking th, .tabla-ranking td { border-left: 1px solid var(--gris-2); }
+.tabla-ranking th:first-child, .tabla-ranking td:first-child { border-left: 0; width: 44px; }
+.rk-valor { font-weight: 800; }
+.rk-valor.rojo { background: var(--coke) !important; color: var(--blanco); }
+
+/* Mix */
+.tabla-mix th, .tabla-mix td { border-left: 1px solid var(--gris-2); }
+.tabla-mix th:first-child, .tabla-mix tbody th, .tabla-mix tfoot th { border-left: 0; }
+.tabla-mix .mix-tipo { white-space: nowrap; border-bottom: 1px solid var(--gris-marca); }
+.tabla-mix .mix-p { color: var(--tinta2); border-left: 0; }
+.tabla-mix tfoot .mix-p { color: var(--negro); }
+.tabla-mix thead tr + tr th { text-align: right; }
+.tabla-mix .mix-total { font-weight: 800; }
+.rutas-semana { align-items: center; }
