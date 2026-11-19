@@ -469,3 +469,27 @@ button, input, select { font: inherit; }
 .tabla-mix thead tr + tr th { text-align: right; }
 .tabla-mix .mix-total { font-weight: 800; }
 .rutas-semana { align-items: center; }
+
+/* ÉPICAS Preventa (js/ice-preventa.js) */
+.tabla-pv th, .tabla-pv td { border-left: 1px solid var(--gris-2); }
+.tabla-pv th:first-child, .tabla-pv td:first-child { border-left: 0; }
+.tabla-pv tbody th small.pv-nota, .tabla-pv-dias small.pv-nota { display: block; font-size: 11px; font-weight: 600; color: var(--tinta3); }
+.pv-alerta { font-weight: 800; color: var(--coke-osc); }
+.pv-fig { margin-top: 22px; }
+.tabla-pv-dias { font-size: 12.5px; }
+.tabla-pv-dias th, .tabla-pv-dias td { padding: 7px 4px; text-align: center; border-left: 1px solid var(--gris-2); }
+.tabla-pv-dias th:first-child, .tabla-pv-dias td:first-child { text-align: left; padding-left: 10px; border-left: 0; min-width: 96px; }
+.tabla-pv-dias thead th.pv-dia { min-width: 30px; letter-spacing: 0; color: var(--negro); font-size: 12.5px; line-height: 1.15; }
+.tabla-pv-dias thead th.pv-dia small { display: block; font-size: 10px; font-weight: 600; color: var(--tinta3); }
+.tabla-pv-dias thead th.fut { color: #9A9A9A; }
+.tabla-pv-dias .dom { background: repeating-linear-gradient(135deg, #F2F0EC 0 4px, #DED9D1 4px 5px); }
+.tabla-pv-dias td.pv-c { font-weight: 700; }
+.tabla-pv-dias td.pv-c.v { background: #A8DDB1; }
+.tabla-pv-dias td.pv-c.a { background: #FFE07A; }
+.tabla-pv-dias td.pv-c.r { background: #F4A3A3; }
+.tabla-pv-dias tbody tr:hover > td.pv-c.v, .tabla-pv-dias tbody tr:hover > td.pv-c.a, .tabla-pv-dias tbody tr:hover > td.pv-c.r { filter: brightness(.95); }
+.pv-leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12.5px; color: var(--tinta2); }
+.pv-leyenda span { display: inline-flex; align-items: center; gap: 7px; }
+.pv-leyenda i { width: 14px; height: 14px; border: 1px solid var(--gris-marca); }
+.pv-leyenda i.vacio { background: var(--blanco); }
+.pv-leyenda i.dom { background: repeating-linear-gradient(135deg, #F2F0EC 0 3px, #DED9D1 3px 4px); }

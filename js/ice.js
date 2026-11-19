@@ -1,7 +1,7 @@
 /* Reporte ICE (ice.html): acceso con usuario + contraseña y las secciones de
  * la unidad (información del sistema con las descargas, On Premise y Home
  * Market con sus rankings, mapa, semanas del mes, cinética de los auditores
- * (js/ice-extra.js), Mix de tipos de cliente,
+ * (js/ice-extra.js), ÉPICAS de preventa (js/ice-preventa.js), Mix de tipos de cliente,
  * rutas con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
  * js/ice-admin.js (todas las unidades) y desde ahí abre cualquier unidad.
@@ -187,9 +187,9 @@ const Ice = (function () {
 
   // ── Reporte ───────────────────────────────────────────────────────────
   let D = null, mapaM = null, mapaR = null, mapaP = null, mapaC = null, cineticaLista = false, canalesListos = {},
-      porSapCliente = {}, porSapEval = {};
+      porSapCliente = {}, porSapEval = {}, preventaLista = false;
   const PESTANAS = [['info', 'Información del sistema'], ['onpremise', 'On Premise'], ['homemarket', 'Home Market'], ['mapa', 'Mapa'],
-                    ['semanas', 'Semanas'], ['rutas', 'Rutas'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
+                    ['semanas', 'Semanas'], ['rutas', 'Rutas'], ['preventa', 'ÉPICAS Preventa'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
   const PANELES_MAPA = new Set(['mapa', 'semanas', 'rutas', 'poligonos', 'cinetica']);
 
   function render(datos, volver) {
@@ -197,6 +197,7 @@ const Ice = (function () {
     for (const m of [mapaM, mapaR, mapaP, mapaS, mapaC]) if (m) m.remove();
     mapaM = mapaR = mapaP = mapaS = mapaC = null;
     cineticaLista = false;
+    preventaLista = false;
     canalesListos = {};
     diaSel = 'hoy';
     rutaSel = null;
@@ -258,6 +259,8 @@ const Ice = (function () {
     if (cual === 'rutas') rutas();
     if (cual === 'poligonos') poligonos();
     if (cual === 'cinetica') cinetica();
+    // ÉPICAS Preventa (js/ice-preventa.js): se arma la primera vez que se abre
+    if (cual === 'preventa' && !preventaLista) { preventaLista = true; IcePreventa.panel($('p-preventa'), D); }
     if (PANELES_CANAL[cual]) panelCanal(cual);
     if (cual === 'mix') mixPanel();
   }
