@@ -2,8 +2,8 @@
  * la unidad (información del sistema con las descargas, On Premise y Home
  * Market con sus rankings, mapa, semanas del mes, cinética de los auditores
  * (js/ice-extra.js), ÉPICAS de preventa (js/ice-preventa.js), Mix de tipos de cliente,
- * rutas de preventa y de farmers con sus impresiones en PDF y polígonos en
- * KMZ: concentración ICE,
+ * rutas de preventa y de farmers (con la zona de cada farmer y sus clientes
+ * cercanos) con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
  * js/ice-admin.js (todas las unidades) y desde ahí abre cualquier unidad.
  *
@@ -199,7 +199,8 @@ const Ice = (function () {
     mapaM = mapaP = mapaS = mapaC = null;
     for (const v of Object.values(vistasRuta)) v.quitar();
     // Pestañas Preventa (id 'rutas', antes Rutas) y Farmers: la misma vista con otros datos
-    vistasRuta = { rutas: crearVistaRuta('rutas'), farmers: crearVistaRuta('farmers') };
+    vistasRuta = { rutas: crearVistaRuta('rutas'), farmers: crearVistaRuta('farmers'), cercanos: crearVistaCercanos() };
+    farmersSub = 'recorridos';
     cineticaLista = false;
     preventaLista = false;
     canalesListos = {};
@@ -258,7 +259,8 @@ const Ice = (function () {
     Graficas.Tip.hide();
     if (cual === 'mapa') mapa();
     if (cual === 'semanas') semanas();
-    if (vistasRuta[cual]) vistasRuta[cual].abrir();
+    if (cual === 'rutas') vistasRuta.rutas.abrir();
+    if (cual === 'farmers') farmersPestana();
     if (cual === 'poligonos') poligonos();
     if (cual === 'cinetica') cinetica();
     // ÉPICAS Preventa (js/ice-preventa.js): se arma la primera vez que se abre
@@ -1695,8 +1697,13 @@ const Ice = (function () {
       tituloDia: dia => `Lista de farmers del ${dia}`, archivoDia: 'ICE_Farmers', listaDias: 'Lista de farmers por día',
       nota: ' Cada cliente va con su farmer y se visita los días de su frecuencia Farmer (clave y frecuencia Farmer de JefaturasFrecuencia, /addjefaturas); la jefatura de cada farmer es la de la mayoría de sus clientes.',
       sinDatos: 'Esta publicación no trae los recorridos de los farmers: la base de jefaturas (JefaturasFrecuencia) no tiene las columnas de clave y frecuencia Farmer. Hay que volver a mandar el Excel de OBJETIVOS con /addjefaturas y publicar de nuevo.',
+      panel: 'p-farmers-recorridos',      // dentro de la pestaña Farmers (farmersPestana)
     },
   };
+  // Farmers, vista Zona y cercanos (crearVistaCercanos): sus PDF agregan los cercanos
+  VISTAS_RUTA.cercanos = { ...VISTAS_RUTA.farmers, panel: 'p-farmers-cercanos', cercanos: true, nota: '',
+    botonHoy: 'Impresión Hoy Farmers y cercanos', tituloHoy: 'Farmers y cercanos de hoy', archivoHoy: 'ICE_Farmers_Cercanos_Hoy',
+    tituloDia: dia => `Farmers y cercanos del ${dia}`, archivoDia: 'ICE_Farmers_Cercanos', listaDias: 'Lista con cercanos por día' };
   let vistasRuta = {};
 
   // Un color por ruta (ángulo dorado), sin rojos: el rojo es prioridad 1
@@ -1707,6 +1714,18 @@ const Ice = (function () {
   }
 
   const cuentaTipos = puntos => puntos.reduce((a, p) => { a[p[4]] = (a[p[4]] || 0) + 1; return a; }, {});
+
+  // Fila de la tabla de clientes de una ruta (detalle de una ruta o de un farmer)
+  function filaClienteRuta(p, k) {
+    const [, , sap, nombre, tipo] = p;
+    const c = porSapCliente[sap];
+    const ev = porSapEval[sap];
+    const ultimo = c && c[10] ? `${dec1(c[11])} <span class="muted">(${esc(fechaCorta(c[10]))})</span>` : '<span class="muted">—</span>';
+    return `<tr><td class="izq">${k}</td><td class="izq"><span class="prio ${PRIO[tipo].clase}">${PRIO[tipo].corto}</span></td>
+      <td class="izq">${esc(sap)}</td><td class="izq">${esc(nombre)}</td><td class="izq">${c ? esc(c[13]) : ''}</td>
+      <td>${tipo ? ultimo : ''}</td><td>${ev ? dec1(ev[0][6]) : tipo ? '<span class="muted">—</span>' : ''}</td>
+      <td class="izq">${tipo ? textoEpica(sap) : ''}</td></tr>`;
+  }
 
   // Vista de la pestaña `id` ('rutas' = Preventa o 'farmers'): se arma la primera
   // vez que se abre; quitar() borra su mapa al cambiar de unidad (administrador)
@@ -1721,7 +1740,7 @@ const Ice = (function () {
     }
 
     function abrir() {
-      const panel = $('p-' + id);
+      const panel = (V.panel && $(V.panel)) || $('p-' + id);
       if (mapa) { setTimeout(() => mapa.invalidateSize(), 50); return; }
       const datos = V.datos();
       if (!datos) {
@@ -1878,17 +1897,6 @@ const Ice = (function () {
       detalleRuta(g.r);
     }
 
-    function filaClienteRuta(p, k) {
-      const [, , sap, nombre, tipo] = p;
-      const c = porSapCliente[sap];
-      const ev = porSapEval[sap];
-      const ultimo = c && c[10] ? `${dec1(c[11])} <span class="muted">(${esc(fechaCorta(c[10]))})</span>` : '<span class="muted">—</span>';
-      return `<tr><td class="izq">${k}</td><td class="izq"><span class="prio ${PRIO[tipo].clase}">${PRIO[tipo].corto}</span></td>
-        <td class="izq">${esc(sap)}</td><td class="izq">${esc(nombre)}</td><td class="izq">${c ? esc(c[13]) : ''}</td>
-        <td>${tipo ? ultimo : ''}</td><td>${ev ? dec1(ev[0][6]) : tipo ? '<span class="muted">—</span>' : ''}</td>
-        <td class="izq">${tipo ? textoEpica(sap) : ''}</td></tr>`;
-    }
-
     function detalleRuta(r) {
       const ice = r.puntos.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
       const otros = r.puntos.filter(p => !p[4]);
@@ -1910,6 +1918,236 @@ const Ice = (function () {
         $(I('Filas')).innerHTML = (ice.length ? ice.map((p, k) => filaClienteRuta(p, k + 1)).join('') : '') +
           (abierto ? '' : otros.map((p, k) => filaClienteRuta(p, ice.length + k + 1)).join(''));
       });
+    }
+
+    return { abrir, quitar() { if (mapa) mapa.remove(); mapa = null; } };
+  }
+
+  // ── Farmers: vistas Recorridos y Zona y cercanos ──────────────────────
+  // Recorridos = crearVistaRuta('farmers'). Zona y cercanos = crearVistaCercanos():
+  // por cada día de la semana, la zona del recorrido de cada farmer (polígono de sus
+  // clientes del día más un margen) y los clientes P1/P2 sin frecuencia Farmer que
+  // caen en ella (farmers_semana.dias[].zonas, _zonas_farmers en publica_ice.py).
+  let farmersSub = 'recorridos';
+
+  function farmersPestana() {
+    if (!D.farmers) { vistasRuta.farmers.abrir(); return; }   // aviso: la base no trae farmers
+    const p = $('p-farmers');
+    if (!$('farmersSub')) {
+      p.innerHTML = `<div class="ice-subpestanas"><div class="segmento" id="farmersSub" role="group" aria-label="Vista de la pestaña Farmers">
+          <button type="button" data-sub="recorridos" aria-pressed="true">Recorridos</button>
+          <button type="button" data-sub="cercanos" aria-pressed="false">Zona y clientes cercanos</button></div></div>
+        <div id="p-farmers-recorridos"></div><div id="p-farmers-cercanos" hidden></div>`;
+      $('farmersSub').addEventListener('click', e => {
+        const b = e.target.closest('[data-sub]');
+        if (b) { farmersSub = b.dataset.sub; farmersPestana(); }
+      });
+    }
+    $('farmersSub').querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === farmersSub));
+    $('p-farmers-recorridos').hidden = farmersSub !== 'recorridos';
+    $('p-farmers-cercanos').hidden = farmersSub !== 'cercanos';
+    vistasRuta[farmersSub === 'recorridos' ? 'farmers' : 'cercanos'].abrir();
+  }
+
+  const esCercano = p => p.length > 5;     // [lat, lon, sap, nombre, tipo, metros a la ruta]
+
+  function filaCercano(p, k) {
+    const [, , sap, nombre, tipo, metros] = p;
+    const c = porSapCliente[sap], u = c && c[17];
+    const ultimo = c && c[10] ? `${dec1(c[11])} <span class="muted">(${esc(fechaCorta(c[10]))})</span>` : '<span class="muted">—</span>';
+    return `<tr><td class="izq">C${k}</td><td class="izq"><span class="prio ${PRIO[tipo].clase}">${PRIO[tipo].corto}</span></td>
+      <td class="izq">${esc(sap)}</td><td class="izq">${esc(nombre)}</td><td class="izq">${c ? esc(c[13]) : ''}</td>
+      <td>${num(metros)} m</td><td>${ultimo}</td><td class="izq">${u ? esc(nombrePeor(u)) : '<span class="muted">—</span>'}</td>
+      <td class="izq">${textoEpica(sap)}</td></tr>`;
+  }
+
+  function crearVistaCercanos() {
+    const V = VISTAS_RUTA.cercanos, I = n => 'cercanos' + n;
+    let mapa = null, capa = null, capaEtiq = null, grupos = [], R = null;
+
+    function pintarEtiquetas() {
+      if ($(I('Etiquetas')).checked && mapa.getZoom() >= ZOOM_ETIQUETAS) capaEtiq.addTo(mapa);
+      else mapa.removeLayer(capaEtiq);
+    }
+
+    function abrir() {
+      const panel = $(V.panel);
+      if (mapa) { setTimeout(() => mapa.invalidateSize(), 50); return; }
+      const S = V.semana(), K = D.farmers_zonas_criterio;
+      if (!S || !S.dias.length || !S.dias.every(d => d.zonas) || !K) {
+        panel.innerHTML = seccion('Zona y clientes cercanos', '', '<p class="ice-nota">Esta publicación no trae las zonas de los farmers: no se pudieron armar. Se reintenta en la siguiente publicación.</p>');
+        return;
+      }
+      const iHoy = S.dias.findIndex(d => d.hoy), M = D.farmers.manana;
+      panel.innerHTML = `
+      <div class="mapa-barra">
+        ${iHoy >= 0 ? `<div class="mapa-controles"><div class="rutas-acciones">
+          <button type="button" class="ice-btn rojo" data-pdf="hoy">${svgIcono('imprimir')}${esc(V.botonHoy)}</button></div></div>` : ''}
+        <div class="rutas-acciones rutas-semana" role="group" aria-label="${esc(V.listaDias)} de la semana">
+          <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
+          ${S.dias.map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
+        </div>
+        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen de ${num(K.margen)} m alrededor; si dentro hay menos de ${num(K.min)} clientes para agregar, el margen crece de ${num(K.paso)} en ${num(K.paso)} m hasta ${num(K.margen_max)} m. En su zona se le agregan <b>hasta ${num(K.max)} clientes prioridad 1 y 2 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)}: los más cercanos al camino que une a sus clientes en orden (◆ en el mapa). Un cliente que cae en varias zonas va solo con el farmer que lo tiene más cerca. Cada PDF trae <b>una hoja por farmer</b> con sus clientes prioridad 1, 2 y 3 del día y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
+        ${tiposCliente(false)}
+        <div class="mapa-controles">
+          <div class="segmento dias" role="group" aria-label="Día en el mapa">
+            ${S.dias.map((d, i) => `<button type="button" data-dia="${i}" aria-pressed="${i === (iHoy >= 0 ? iHoy : 0)}">${esc(d.dia)}${d.hoy ? ' · hoy' : ''}</button>`).join('')}
+          </div>
+          <div class="chips" aria-label="Simbología">
+            ${[1, 2, 3].map(p => `<span class="chip" style="cursor:default"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</span>`).join('')}
+            <span class="chip" style="cursor:default"><span class="punto-cercano p1" aria-hidden="true"></span>Cercano P1</span>
+            <span class="chip" style="cursor:default"><span class="punto-cercano p2" aria-hidden="true"></span>Cercano P2</span>
+            <span class="chip" style="cursor:default"><span class="zona-muestra" aria-hidden="true"></span>Zona del recorrido</span>
+          </div>
+        </div>
+        <p class="mapa-resumen" id="${I('Resumen')}" role="status"></p>
+        <p class="mapa-ayuda" id="${I('PdfEstado')}" role="status" aria-live="polite"></p>
+      </div>
+      <div class="rutas-cuerpo">
+        <div id="${I('Mapa')}" class="mapa"></div>
+        <aside class="rutas-lista" aria-label="Farmers del día">
+          <input type="search" id="${I('Busca')}" placeholder="Buscar farmer o jefatura" aria-label="Buscar farmer o jefatura">
+          <label class="ice-check"><input type="checkbox" id="${I('Solo')}"> Solo farmers con clientes cercanos</label>
+          <label class="ice-check"><input type="checkbox" id="${I('Etiquetas')}" checked> Etiquetas de farmer (al acercar el mapa)</label>
+          <ul id="${I('Lista')}"></ul>
+        </aside>
+      </div>
+      <section class="ruta-detalle" id="${I('Detalle')}"></section>`;
+      mapa = L.map(I('Mapa'), { preferCanvas: true });
+      capaBase(mapa);
+      botonUbicacion(mapa);
+      capa = L.layerGroup().addTo(mapa);
+      capaEtiq = L.layerGroup();
+      pintarDia(iHoy >= 0 ? iHoy : 0);
+      mapa.on('zoomend', pintarEtiquetas);
+      panel.querySelectorAll('.segmento [data-dia]').forEach(b => b.addEventListener('click', () => {
+        panel.querySelectorAll('.segmento [data-dia]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        pintarDia(+b.dataset.dia);
+      }));
+      $(I('Busca')).addEventListener('input', filtrarLista);
+      $(I('Solo')).addEventListener('change', filtrarLista);
+      $(I('Etiquetas')).addEventListener('change', pintarEtiquetas);
+      panel.querySelectorAll('[data-pdf], [data-pdf-dia]').forEach(b => b.addEventListener('click', () =>
+        imprimir(V, b, $(I('PdfEstado')), false)));
+    }
+
+    function filtrarLista() {
+      const q = normalizar($(I('Busca')).value), solo = $(I('Solo')).checked;
+      document.querySelectorAll(`#${I('Lista')} li`).forEach((li, i) => {
+        const r = R.rutas[i];
+        if (!r) return;
+        li.hidden = (!!q && !normalizar(`${r.codigo} ${r.jefatura}`).includes(q)) || (solo && !r.cercanos.length);
+      });
+    }
+
+    function pintarDia(i) {
+      const S = V.semana(), d = S.dias[i];
+      R = rutasDeSemana(V, i);
+      capa.clearLayers();
+      capaEtiq.clearLayers();
+      grupos = [];
+      const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
+      // Recorrido completo de cada farmer ese día (todas sus paradas, en orden)
+      const lineas = {};
+      for (const [k, , orden] of d.rutas || []) lineas[S.rutas[k].codigo] = orden.map(j => S.rutas[k].puntos[j]);
+      const limites = [], marcadores = [], ice = [], cerc = [];
+      R.rutas.forEach((r, k) => {
+        const color = colorRuta(k), linea = lineas[r.codigo] || [];
+        const g = { r, color, limites: null };
+        if (r.poligono) {
+          const pol = L.polygon(r.poligono, { renderer: rend, color, weight: 1.6, opacity: 0.9, dashArray: '6 4', fillColor: color, fillOpacity: 0.1 })
+            .bindPopup(() => popupZona(r), { maxWidth: 300 }).addTo(capa);
+          g.limites = pol.getBounds();
+          for (const p of r.poligono) limites.push(p);
+        }
+        if (linea.length > 1) L.polyline(linea, { renderer: rend, color, weight: 2, opacity: 0.65, interactive: false }).addTo(capa);
+        for (const p of linea) L.circleMarker(p, { renderer: rend, radius: 2.5, color: BLANCO, weight: 0.8, fillColor: color, fillOpacity: 1, interactive: false }).addTo(capa);
+        for (const p of r.puntos) if (p[0] != null) ice.push({ p, r });
+        for (const p of r.cercanos) if (p[0] != null) cerc.push({ p, r, color });
+        const centro = linea.length ? linea : (r.poligono || []);
+        if (centro.length) {
+          const c = centro.reduce((a, p) => [a[0] + p[0] / centro.length, a[1] + p[1] / centro.length], [0, 0]);
+          L.marker(c, { interactive: false, keyboard: false,
+            icon: L.divIcon({ className: 'ruta-etiqueta', html: `<span style="background:${color};color:${Graficas.tintaSobre(color)}">${esc(r.codigo)}</span>`, iconSize: null }) })
+            .addTo(capaEtiq);
+        }
+        grupos.push(g);
+      });
+      // Clientes P1–P3 de los recorridos y, encima, los cercanos (◆)
+      ice.sort((a, b) => b.p[4] - a.p[4]).forEach(({ p, r }) => {
+        const s = PRIO[p[4]];
+        const m = L.circleMarker([p[0], p[1]], { renderer: rend, radius: s.radio, color: s.borde, weight: s.grosor, fillColor: s.relleno, fillOpacity: 1 })
+          .bindPopup(() => popupRecorrido(p, r), { maxWidth: 320 });
+        etiqueta(m, p[3], p[2]);
+        m.addTo(capa);
+        marcadores.push(m);
+      });
+      cerc.forEach(({ p, r, color }) => {
+        const m = L.marker([p[0], p[1]], { zIndexOffset: 1000, keyboard: false,
+          icon: L.divIcon({ className: 'cercano-icono', html: `<span class="cercano-rombo p${p[4]}" style="--c:${color}"></span>`, iconSize: [18, 18], iconAnchor: [9, 9] }) })
+          .bindPopup(() => popupCercano(p, r), { maxWidth: 320 });
+        etiqueta(m, p[3], p[2]);
+        m.addTo(capa);
+        marcadores.push(m);
+      });
+      if (limites.length) mapa.fitBounds(limitesRobustos(limites).pad(0.04));
+      else mapa.setView([19.38, -99.14], 11);
+      mapa.off('click');
+      toqueCercano(mapa, marcadores);
+      pintarEtiquetas();
+
+      const tipos = cuentaTipos(R.rutas.flatMap(r => r.puntos)), tc = cuentaTipos(R.rutas.flatMap(r => r.cercanos));
+      const nc = (tc[1] || 0) + (tc[2] || 0), con = R.rutas.filter(r => r.cercanos.length).length;
+      $(I('Resumen')).innerHTML = `Zonas de los farmers del <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia Farmer <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> farmers · ICE en sus recorridos: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> prioridad 3 · <b>${num(nc)}</b> clientes cercanos (<b>${num(tc[1] || 0)}</b> P1 y <b>${num(tc[2] || 0)}</b> P2) para <b>${num(con)}</b> de ellos. Las líneas punteadas son la zona de cada farmer y la línea continua su recorrido del día.`;
+      $(I('Lista')).innerHTML = R.rutas.map((r, k) => {
+        const t = cuentaTipos(r.puntos);
+        return `<li><button type="button" class="ruta-item" data-i="${k}">
+          <span class="ruta-sw" style="background:${grupos[k].color}" aria-hidden="true"></span>
+          <span class="ruta-cod">${esc(r.codigo)}</span>
+          <span class="ruta-conteo">${[1, 2, 3].map(p => t[p] ? `<span class="prio p${p}" title="${PRIO[p].nombre}">${PRIO[p].corto} ${t[p]}</span>` : '').join('')}${r.cercanos.length ? `<span class="prio cercano" title="Clientes cercanos a su ruta">◆ ${r.cercanos.length}</span>` : ''}</span>
+          <span class="ruta-info">${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.total, 'cliente')} · zona de +${num(r.margen)} m</span></button></li>`;
+      }).join('') || '<li class="muted" style="padding:9px 6px">No hay farmers este día.</li>';
+      document.querySelectorAll(`#${I('Lista')} .ruta-item`).forEach(b => b.addEventListener('click', () => elegir(+b.dataset.i)));
+      filtrarLista();
+      $(I('Detalle')).innerHTML = `<p class="muted">Elige un farmer de la lista para ver sus clientes del ${esc(R.dia.toLowerCase())} y los cercanos a su ruta.</p>`;
+    }
+
+    function popupZona(r) {
+      const t = cuentaTipos(r.puntos);
+      return `<div class="pc"><div class="pc-cab p3"><b>Zona de ${esc(r.codigo)}</b><span>${esc(R.dia)} · ${esc(nombreJefatura(r.jefatura || SIN_JEFATURA))}</span></div>
+        <dl class="pc-cuerpo">${fila('Recorrido del día', plural(r.total, 'cliente'))}${fila('Margen de la zona', `${num(r.margen)} m`)}
+          ${fila('ICE del recorrido', `P1 ${num(t[1] || 0)} · P2 ${num(t[2] || 0)} · P3 ${num(t[3] || 0)}`)}${fila('Clientes cercanos', num(r.cercanos.length))}</dl></div>`;
+    }
+
+    function popupRecorrido(p, r) {
+      const c = porSapCliente[p[2]];
+      if (c) return popupCliente(c).replace('<span class="pc-sap">', `<span>Farmer ${esc(r.codigo)}</span><span class="pc-sap">`);
+      return `<div class="pc"><div class="pc-cab p3"><b>${esc(p[3] || 'Cliente sin nombre')}</b><span class="pc-sap">SAP <strong>${esc(p[2])}</strong></span><span>Farmer ${esc(r.codigo)}</span></div>${enlacesMapa(p[0], p[1])}</div>`;
+    }
+
+    function popupCercano(p, r) {
+      const c = porSapCliente[p[2]];
+      const nota = `<p class="pc-nota"><b>Cercano a la ruta de ${esc(r.codigo)}</b> (a ${num(p[5])} m de su recorrido del ${esc(R.dia.toLowerCase())}): no está en su ruta, no tiene frecuencia Farmer.</p>`;
+      return c ? popupCliente(c, nota) : `<div class="pc"><div class="pc-cab p3"><b>${esc(p[3] || 'Cliente sin nombre')}</b><span class="pc-sap">SAP <strong>${esc(p[2])}</strong></span></div>${enlacesMapa(p[0], p[1])}${nota}</div>`;
+    }
+
+    function elegir(k) {
+      document.querySelectorAll(`#${I('Lista')} .ruta-item`).forEach(b => b.setAttribute('aria-current', +b.dataset.i === k ? 'true' : 'false'));
+      const g = grupos[k];
+      if (g.limites) mapa.fitBounds(g.limites.pad(0.08));
+      const r = g.r, ice = r.puntos.slice().sort((a, b) => a[4] - b[4]), t = cuentaTipos(r.puntos);
+      $(I('Detalle')).innerHTML = `<div class="ruta-detalle-cab"><div>
+          <h3>Farmer ${esc(r.codigo)}</h3>
+          <p>${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.total, 'cliente')} el ${esc(R.dia.toLowerCase())} · ICE: ${num(t[1] || 0)} P1, ${num(t[2] || 0)} P2, ${num(t[3] || 0)} P3 · ${plural(r.cercanos.length, 'cliente cercano', 'clientes cercanos')} · zona de +${num(r.margen)} m</p></div></div>
+        <div class="tabla-scroll"><table class="ice-tabla">
+          <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>Último ICE</th><th>ICE ${esc(D.mes)}</th><th class="izq">ÉPICA del mes</th></tr></thead>
+          <tbody>${ice.length ? ice.map((p, j) => filaClienteRuta(p, j + 1)).join('') : '<tr><td class="izq muted" colspan="8">Este farmer no tiene clientes prioridad 1, 2 o 3 este día.</td></tr>'}</tbody>
+        </table></div>
+        <h4 class="cercanos-tit">Clientes cercanos a su ruta (no están en ella)</h4>
+        <div class="tabla-scroll"><table class="ice-tabla">
+          <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>A su recorrido</th><th>Último ICE</th><th class="izq">Le faltó</th><th class="izq">ÉPICA del mes</th></tr></thead>
+          <tbody>${r.cercanos.length ? r.cercanos.map((p, j) => filaCercano(p, j + 1)).join('') : `<tr><td class="izq muted" colspan="9">No hay clientes prioridad 1 o 2 sin frecuencia Farmer en su zona (ni con ${num(D.farmers_zonas_criterio.margen_max)} m de margen).</td></tr>`}</tbody>
+        </table></div>`;
     }
 
     return { abrir, quitar() { if (mapa) mapa.remove(); mapa = null; } };
@@ -2026,15 +2264,16 @@ const Ice = (function () {
   const QR_COLUMNAS = 3, QR_ALTO = 80, QR_SEP = 6;
   const urlUbicacion = (lat, lon) => `https://www.google.com/maps/search/?api=1&query=${(+lat).toFixed(6)},${(+lon).toFixed(6)}`;
 
-  function ubicacionesPdf(ctx, puntos) {
+  // soloCercanos: solo los clientes cercanos a la ruta (Farmers, Zona y cercanos)
+  function ubicacionesPdf(ctx, puntos, soloCercanos = false) {
     const lista = puntos.filter(p => p[4] === 1 || p[4] === 2);
     if (!lista.length) return false;
     const { doc } = ctx, ancho = doc.W - 2 * PDF_M, filas = Math.ceil(lista.length / QR_COLUMNAS);
     let y = ctx.y + 18;
     if (y + 30 + filas * (QR_ALTO + QR_SEP) - QR_SEP > doc.H - 42) return false;
     doc.rect(PDF_M, y, 4, 13, { relleno: ROJO });
-    doc.texto(PDF_M + 10, y + 10.5, 'UBICACIÓN DE CLIENTES PRIORITARIOS', { tam: 10.5, negrita: true, color: NEGRO });
-    doc.texto(PDF_M, y + 24, 'Clientes prioridad 1 y 2 de esta hoja. Escanea el QR con la cámara del celular para abrir su ubicación en Google Maps.', { tam: 7, color: GRIS_OSC, max: ancho });
+    doc.texto(PDF_M + 10, y + 10.5, soloCercanos ? 'UBICACIÓN DE LOS CLIENTES CERCANOS' : 'UBICACIÓN DE CLIENTES PRIORITARIOS', { tam: 10.5, negrita: true, color: NEGRO });
+    doc.texto(PDF_M, y + 24, `${soloCercanos ? 'Clientes cercanos a tu ruta (no están en ella)' : `Clientes prioridad 1 y 2 de esta hoja${lista.some(esCercano) ? ' (los marcados CERCANO no están en tu ruta)' : ''}`}. Escanea el QR con la cámara del celular para abrir su ubicación en Google Maps.`, { tam: 7, color: GRIS_OSC, max: ancho });
     y += 30;
     const w = (ancho - (QR_COLUMNAS - 1) * QR_SEP) / QR_COLUMNAS, lado = QR_ALTO - 8;
     lista.forEach((p, k) => {
@@ -2048,6 +2287,7 @@ const Ice = (function () {
       }
       const tx = x + lado + 10, tw = w - lado - 14;
       insigniaPdf(doc, tx, yy + 15, p[4]);
+      if (esCercano(p)) doc.texto(tx + 27, yy + 15, 'CERCANO', { tam: 6.5, negrita: true, color: ROJO });
       const nombre = PDF.renglones(p[3] || 'Cliente sin nombre', tw, 8, true);
       nombre.slice(0, 3).forEach((linea, i) => {
         const resto = i === 2 && nombre.length > 3 ? nombre.slice(2).join(' ') : linea;
@@ -2128,8 +2368,44 @@ const Ice = (function () {
     let f = new Date(base.a, base.m - 1, base.d);
     for (let k = 0; k < 7 && DIAS[f.getDay()] !== d.dia; k++) f.setDate(f.getDate() + 1);
     const fecha = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
-    return { dia: d.dia, letra: d.letra, fecha, rutas: d.ice.map(([codigo, jefatura, total, saps]) => ({ codigo, jefatura, total,
-      puntos: saps.map(s => { const c = porSapCliente[s]; return [c ? c[2] : null, c ? c[3] : null, s, c ? c[1] : '', c ? c[4] : 3]; }) })) };
+    const punto = s => { const c = porSapCliente[s]; return [c ? c[2] : null, c ? c[3] : null, s, c ? c[1] : '', c ? c[4] : 3]; };
+    let rutas = d.ice.map(([codigo, jefatura, total, saps]) => ({ codigo, jefatura, total, puntos: saps.map(punto) }));
+    if (V.cercanos) {
+      // Vista Zona y cercanos: todos los farmers del día (aunque no traigan P1–P3), con
+      // su zona y sus cercanos [lat, lon, sap, nombre, tipo, metros a la ruta]
+      const por = Object.fromEntries(rutas.map(r => [r.codigo, r]));
+      for (const [codigo, jefatura, total, margen, poligono, cerc] of d.zonas || []) {
+        const r = por[codigo] || (por[codigo] = { codigo, jefatura, total, puntos: [] });
+        Object.assign(r, { margen, poligono, cercanos: cerc.map(([s, metros]) => punto(s).concat([metros])) });
+      }
+      rutas = Object.values(por).sort((a, b) => a.codigo < b.codigo ? -1 : a.codigo > b.codigo ? 1 : 0);
+      for (const r of rutas) r.cercanos = r.cercanos || [];
+    }
+    return { dia: d.dia, letra: d.letra, fecha, rutas };
+  }
+
+  // Clientes cercanos a la ruta que no están en ella (Farmers, vista Zona y cercanos): su
+  // propia tabla debajo de la de la ruta, con cortes de hoja como la principal
+  function cercanosPdf(ctx, R, h, cerc) {
+    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M;
+    const nota = PDF.renglones(`Clientes prioridad 1 y 2 sin frecuencia Farmer y sin ICE en ${D.mes} que quedan dentro de la zona de tu recorrido del ${R.dia.toLowerCase()} ` +
+      `(tus clientes del día más ${num(h.margen)} m alrededor). No están en tu ruta: son los más cercanos a ella. A tu ruta: distancia al camino que une a tus clientes en orden.`, ancho, 7);
+    const alto = 18 + 24 + (nota.length - 1) * 9 + 6 + 15 + PDF_FILA;
+    if (ctx.y + alto > doc.H - 42) hojaRuta(ctx, R, h, true);
+    const y = ctx.y + 18;
+    doc.rect(PDF_M, y, 4, 13, { relleno: ROJO });
+    doc.texto(PDF_M + 10, y + 10.5, 'CLIENTES CERCANOS A TU RUTA (NO ESTÁN EN ELLA)', { tam: 10.5, negrita: true, color: NEGRO });
+    nota.forEach((linea, i) => doc.texto(PDF_M, y + 24 + i * 9, linea, { tam: 7, color: GRIS_OSC }));
+    ctx.y = y + 24 + (nota.length - 1) * 9 + 6;
+    const columnas = [{ titulo: '#', ancho: 20 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 106 },
+                      { titulo: 'Dirección', ancho: 94 }, { titulo: 'A tu ruta', ancho: 48, alinear: 'der' }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' },
+                      { titulo: 'Más le quitó', ancho: 78 }, { titulo: V.colEpica, ancho: 86 }];
+    const filas = cerc.map((p, k) => {
+      const c = porSapCliente[p[2]], u = c && c[17];
+      return [`C${k + 1}`, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', `${num(p[5])} m`, c && c[11] != null ? dec1(c[11]) : '',
+              u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', epicaPdf(V, p[2])];
+    });
+    tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
   }
 
   // Rutas de preventa o de farmers: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en
@@ -2139,11 +2415,11 @@ const Ice = (function () {
     const evaluado = p => !!porSapEval[p[2]];
     const nunca = p => p[4] === 4 && !evaluado(p);
     const jefDe = x => x.r.jefatura || SIN_JEFATURA;
-    const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)) }))
-      .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]))
+    const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)), cerc: (r.cercanos || []).filter(p => !evaluado(p)) }))
+      .filter(x => (todos ? x.puntos.length : x.puntos.some(p => p[4])) || x.cerc.length)
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
     const ctx = documentoRutas(V, titulo);
-    let conQr = 0, conP3 = 0;
+    let conQr = 0, conP3 = 0, cercanos = 0;
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
                       { titulo: V.colEpica, ancho: 86 }];
@@ -2152,7 +2428,7 @@ const Ice = (function () {
       ctx.doc.texto(PDF_M, 56, `No hay ${V.varios} con clientes ICE por evaluar este día.`, { tam: 12, negrita: true, color: NEGRO });
     }
     for (const x of rutasPdf) {
-      const { r, puntos: pendientes } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
+      const { r, puntos: pendientes, cerc } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
       const ice = pendientes.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
       const puntos = todos ? ice.concat(pendientes.filter(p => !p[4])) : ice;
       const filas = puntos.map((p, k) => {
@@ -2160,18 +2436,24 @@ const Ice = (function () {
         return [k + 1, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', p[4] && c && c[11] != null ? dec1(c[11]) : '',
                 u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(V, p[2]) : ''];
       });
-      const h = { codigo: r.codigo, jefatura: jefDe(x),
+      const h = { codigo: r.codigo, jefatura: jefDe(x), margen: r.margen,
                   resumen: `Por evaluar: ${plural(ice.length, 'cliente ICE', 'clientes ICE')} (P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0})` +
                            `${todos && t[0] ? ` + ${plural(t[0], 'cliente no ICE', 'clientes no ICE')}` : ''}` +
                            ` de ${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} ${V.delUno}` +
                            `${fuera ? ` · ${plural(fuera, 'ya evaluado', 'ya evaluados')} en ${D.mes}, no se ${fuera === 1 ? 'imprime' : 'imprimen'}` : ''}` };
       hojaRuta(ctx, R, h, false);
-      tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
-      if (ubicacionesPdf(ctx, puntos)) conQr++;
+      if (filas.length) tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
+      else {
+        ctx.y += 12;
+        ctx.doc.texto(PDF_M, ctx.y, 'Ningún cliente prioridad 1, 2 o 3 de tu recorrido está pendiente este día.', { tam: 9, negrita: true, color: NEGRO });
+      }
+      if (cerc.length) { cercanosPdf(ctx, R, h, cerc); cercanos += cerc.length; }
+      if (ubicacionesPdf(ctx, puntos.concat(cerc))) conQr++;
+      else if (cerc.length && ubicacionesPdf(ctx, cerc, true)) conQr++;   // si no caben todos, los de los cercanos
       if (semanasP3Pdf(ctx, puntos, R)) conP3++;
     }
     PDF.descargar(ctx.doc.blob(), archivo);
-    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr, conP3 };
+    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr, conP3, cercanos };
   }
 
   // Botón de impresión de una vista: el de hoy (data-pdf) o el de un día de la semana (data-pdf-dia)
@@ -2185,11 +2467,14 @@ const Ice = (function () {
         if (boton.dataset.pdfDia != null) {
           const R = rutasDeSemana(V, +boton.dataset.pdfDia);
           hecho = pdfRutas(V, R, V.tituloDia(R.dia.toLowerCase()), `${V.archivoDia}_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
+        } else if (V.cercanos) {
+          const R = rutasDeSemana(V, V.semana().dias.findIndex(d => d.hoy));
+          hecho = pdfRutas(V, R, V.tituloHoy, `${V.archivoHoy}_${D.unidad}_${R.fecha}.pdf`, false);
         } else {
           const R = V.datos().hoy;
           hecho = pdfRutas(V, R, V.tituloHoy, `${V.archivoHoy}_${D.unidad}_${R.fecha}.pdf`, todos);
         }
-        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, V.uno, V.varios)} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3. Revisa tus descargas.`
+        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, V.uno, V.varios)} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}. Revisa tus descargas.`
           : `PDF listo: este día no hay ${V.varios} con clientes por evaluar.`;
       } catch (e) {
         console.error(e);
