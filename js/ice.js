@@ -517,21 +517,41 @@ const Ice = (function () {
       </table></div>`);
   }
 
+  // Mapa de calor de los rankings: el color sale del lugar entre las calificaciones
+  // distintas que se ven en la tabla (empates, mismo color), así un valor muy bajo
+  // no deja a todos los demás del mismo verde
+  const CALOR_RANKING = [[227, 0, 0], [255, 213, 74], [18, 161, 80]];   // rojo, amarillo, verde
+
+  // t: 0 = la calificación más baja, 1 = la más alta
+  function colorRanking(t) {
+    const [a, b, u] = t < 0.5 ? [CALOR_RANKING[0], CALOR_RANKING[1], t * 2] : [CALOR_RANKING[1], CALOR_RANKING[2], t * 2 - 1];
+    const c = a.map((v, i) => Math.round(v + (b[i] - v) * u));
+    const [r, g, n] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return { fondo: `rgb(${c.join(',')})`, tinta: 0.2126 * r + 0.7152 * g + 0.0722 * n > 0.179 ? NEGRO : BLANCO };
+  }
+
+  function calorRanking(filas) {
+    const valores = [...new Set([...filas].sort((a, b) => b.promedio - a.promedio).map(f => dec1(f.promedio)))];
+    return filas.map(f => colorRanking(valores.length > 1 ? 1 - valores.indexOf(dec1(f.promedio)) / (valores.length - 1) : 0.5));
+  }
+
   function tablaRanking(filas, clave, cabecera) {
     if (!filas.length) return `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`;
+    const calor = calorRanking(filas);
     return `<div class="tabla-scroll ranking-scroll"><table class="ice-tabla tabla-ranking">
       <thead><tr><th>#</th><th class="izq">${esc(cabecera)}</th><th>Calificación ICE</th><th>Clientes evaluados</th></tr></thead>
-      <tbody>${filas.map(f => `<tr><td>${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
-        <td class="rk-valor${f.rojo ? ' rojo' : ''}">${dec1(f.promedio)}</td><td>${num(f.clientes)}</td></tr>`).join('')}</tbody>
+      <tbody>${filas.map((f, i) => `<tr><td>${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
+        <td class="rk-valor" style="background:${calor[i].fondo};color:${calor[i].tinta}">${dec1(f.promedio)}</td><td>${num(f.clientes)}</td></tr>`).join('')}</tbody>
     </table></div>`;
   }
 
   function seccionRanking(C, nombre, k) {
-    return seccion(`Ranking · ${nombre}`, `De mayor a menor calificación ICE de ${esc(D.mes)}; la mitad inferior va en rojo. Clientes evaluados: los de ${esc(nombre)} con ICE este mes. Solo entran jefaturas y rutas con al menos una evaluación.`,
+    return seccion(`Ranking · ${nombre}`, `De mayor a menor calificación ICE de ${esc(D.mes)}, como mapa de calor: entre más arriba en la tabla, más verde; entre más abajo, más roja. Clientes evaluados: los de ${esc(nombre)} con ICE este mes. Solo entran jefaturas y rutas con al menos una evaluación.`,
       `<div class="ice-descargas ranking-descarga">
         <button type="button" class="ice-btn rojo" id="btnRanking${k}">${svgIcono('excel')}Descargar ranking en Excel</button>
         <span>Jefaturas y rutas de preventa de ${esc(nombre)}, una por hoja.</span>
       </div>
+      <p class="rk-leyenda"><span>Más baja</span><i aria-hidden="true"></i><span>Más alta</span></p>
       <div class="ranking-doble">
         <figure><figcaption>Jefaturas (${num(C.ranking_jefaturas.length)})</figcaption>${tablaRanking(C.ranking_jefaturas, 'jefatura', 'Jefatura')}</figure>
         <figure><figcaption>Rutas de preventa (${num(C.ranking_rutas.length)})</figcaption>${tablaRanking(C.ranking_rutas, 'ruta', 'Ruta')}</figure>
@@ -779,7 +799,8 @@ const Ice = (function () {
       (cuenta.ok ? `<span><span class="ev-mini">${svgIcono('ok')}</span>Todo al 100% <b>${num(cuenta.ok)}</b></span>` : '');
   }
 
-  function popupCliente(c) {
+  // extra: HTML debajo de los botones; destino: [lat, lon] de "Cómo llegar" si no son las del universo
+  function popupCliente(c, extra = '', destino = null) {
     const [sap, nombre, lat, lon, prio, zi, ruta, zpv, vprev, vant, ultima, ultimoIce, promHist, dir, semana, enSemana, conFecha, ult] = c;
     const evs = porSapEval[sap] || [];
     // La del mes si ya se evaluó (misma forma que la última evaluación)
@@ -787,7 +808,7 @@ const Ice = (function () {
     return `<div class="pc"><div class="pc-cab ${PRIO[prio].clase}"><b>${esc(nombre || 'Cliente sin nombre')}</b>
         <span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
         <span>${PRIO[prio].nombre} · ${evs.length ? `evaluado en ${esc(D.mes)}: ICE ${dec1(evs[0][6])}` : `sin evaluar en ${esc(D.mes)}`}</span></div>
-      ${enlacesMapa(lat, lon)}
+      ${destino ? enlacesMapa(destino[0], destino[1]) : enlacesMapa(lat, lon)}${extra}
       <dl class="pc-cuerpo">${fila('Dirección', esc(dir))}${fila('Zona', esc(D.zonas[zi]))}${fila('Ruta', esc(ruta))}${fila('Frecuencia', esc(zpv))}
         ${fila(`Visitas en ${D.prioridad.mes_anterior}`, num(vant))}${fila('Visitas antes', num(vprev))}
         ${fila('Última visita ICE', ultima ? `${esc(fechaCorta(ultima))} · ${dec1(ultimoIce)}` : 'sin visitas')}
@@ -1106,6 +1127,44 @@ const Ice = (function () {
       ${htmlRutasCruzan(j.anillos)}</div>`;
   }
 
+  // Datos de los clientes de los puntos (Programas/publica_ice.py, _clientes_poligonos)
+  const datosPuntos = () => (D.poligonos && D.poligonos.clientes) || {};
+  const nombrePunto = sap => {
+    const c = porSapCliente[sap], f = (datosPuntos().fuera || {})[sap];
+    return (c ? c[1] : f && f[0]) || 'Cliente sin nombre';
+  };
+
+  // Calificaciones ICE del cliente de un punto. En gris, las que quedan fuera del
+  // periodo que se ve; en "zonas que más restan", en rojo las debajo del promedio
+  function htmlCalificaciones(pt, tipo, M) {
+    const restan = tipo === 'restan', lista = (datosPuntos().calificaciones || {})[pt[3]] || [];
+    const resumen = restan
+      ? `${esc(periodoPol(M))}: ICE promedio <b>${num(pt[5], 1)}</b> en ${plural(pt[4], 'evaluación', 'evaluaciones')} · <b>${num(pt[2], 1)}</b> puntos debajo del promedio de la unidad`
+      : `${esc(periodoPol(M))}: <b>${plural(pt[2], 'evaluación', 'evaluaciones')}</b>`;
+    const filas = lista.map(([f, ci, v]) => {
+      const canal = D.canales[ci], ref = restan ? M.promedio[canal] : null;
+      const bajo = v != null && ref != null && v < ref;
+      return `<tr${M.desde && f < M.desde ? ' class="fuera"' : ''}><td>${f ? `${esc(fechaCorta(f))} ${partes(f).a}` : '—'}</td><td>${esc(canal)}</td><td class="${bajo ? 'bajo' : ''}">${dec1(v)}</td></tr>`;
+    }).join('');
+    return `<div class="pc-cal"><p class="pc-rutas-tit">Calificaciones ICE${lista.length ? ` · ${num(lista.length)}` : ''}</p>
+      <p class="pc-cal-res">${resumen}</p>
+      ${filas ? `<table class="pc-cal-tabla"><thead><tr><th>Fecha</th><th>Canal</th><th>ICE</th></tr></thead><tbody>${filas}</tbody></table>` : ''}</div>`;
+  }
+
+  // Ficha de un punto de cliente: pt = [lat, lon, peso, sap, ...]
+  function popupPuntoPol(pt, tipo, M) {
+    const [lat, lon, , sap] = pt, c = porSapCliente[sap], cal = htmlCalificaciones(pt, tipo, M);
+    if (c) return popupCliente(c, cal, [lat, lon]);
+    const [, ruta, jefatura, dir, u] = (datosPuntos().fuera || {})[sap] || [];
+    return `<div class="pc"><div class="pc-cab p3"><b>${esc(nombrePunto(sap))}</b>
+        <span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
+        <span>Fuera del universo ICE de ${esc(D.unidad)}</span></div>
+      ${enlacesMapa(lat, lon)}${cal}
+      <dl class="pc-cuerpo">${fila('Dirección', esc(dir || ''))}${fila('Jefatura', esc(jefatura || ''))}${fila('Ruta', esc(ruta || ''))}
+        ${u ? fila('Le faltó', `<b>${esc(nombrePeor(u))}</b> <span class="muted">(última evaluación, ${esc(fechaCorta(u[0]))})</span>`) : ''}</dl>
+      ${u ? metricasPopup(u[1], u[3], u[4]) : ''}</div>`;
+  }
+
   function poligonos() {
     const panel = $('p-poligonos');
     if (mapaP) { setTimeout(() => mapaP.invalidateSize(), 50); return; }
@@ -1150,9 +1209,9 @@ const Ice = (function () {
     mapaP = L.map('mapaPoli');
     capaBase(mapaP);
     botonUbicacion(mapaP);
-    const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
     const capaPol = L.layerGroup().addTo(mapaP), capaPts = L.layerGroup(), capaNombres = L.layerGroup().addTo(mapaP);
-    // Rutas en su propio panel, encima de los polígonos; etiquetas al acercar
+    // Rutas y puntos de clientes en un solo lienzo, encima de los polígonos
+    // (los puntos se agregan después y quedan sobre las rutas); etiquetas al acercar
     mapaP.createPane('rutasPoli').style.zIndex = 450;
     const rendRutas = L.canvas({ pane: 'rutasPoli', padding: 0.4, tolerance: TACTIL ? 10 : 5 });
     const capaRutas = L.layerGroup().addTo(mapaP), capaEtiq = L.layerGroup();
@@ -1163,9 +1222,9 @@ const Ice = (function () {
     let capas = {}, lineas = {}, resaltada = null, encuadrado = false;
     const calles = cuadrado ? 'Los límites corren por las calles: cada zona es la unión de las manzanas (calles de OpenStreetMap) que cubre. ' : '';
     const AYUDA = {
-      ice: `Cada zona sombreada es la superficie más chica que reúne el 50, 75 o 90 % de la densidad de probabilidad de las evaluaciones ICE (kernel gaussiano adaptativo: más fino donde hay muchos clientes evaluados y más amplio donde hay pocos; cada cliente pesa las veces que se evaluó). ${calles}Las zonas se enciman: el núcleo está dentro de la zona alta y esta dentro de la amplia. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver cuántas evaluaciones y clientes reúne y qué rutas la cruzan.`,
+      ice: `Cada zona sombreada es la superficie más chica que reúne el 50, 75 o 90 % de la densidad de probabilidad de las evaluaciones ICE (kernel gaussiano adaptativo: más fino donde hay muchos clientes evaluados y más amplio donde hay pocos; cada cliente pesa las veces que se evaluó). ${calles}Las zonas se enciman: el núcleo está dentro de la zona alta y esta dentro de la amplia. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver cuántas evaluaciones y clientes reúne y qué rutas la cruzan. Con <b>Clientes evaluados</b> encendido, ${TACTIL ? 'toca' : 'haz clic en'} un punto para ver sus calificaciones ICE, cómo llegar y sus datos.`,
       jefaturas: `Cada polígono encierra a los clientes activos de una jefatura (Master Data y JefaturasFrecuencia). Cada manzana es de la jefatura con más clientes dentro y los límites se emparejan por las calles (calles de OpenStreetMap), así que algún cliente puede quedar del otro lado: cada jefatura dice qué parte de sus clientes quedó dentro. ${TACTIL ? 'Toca' : 'Haz clic en'} una jefatura para ver sus clientes, su ICE del mes y sus rutas.`,
-      restan: `Zonas donde se juntan los puntos que las evaluaciones ICE quedaron por debajo del promedio de la unidad en su canal: ahí es donde más baja la calificación de la unidad (una evaluación arriba del promedio no pesa). ${calles}El foco reúne el 50 % de esos puntos, la zona de pérdida el 75 % y la amplia el 90 %. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver su ICE, cuánto le resta al promedio de la unidad, las submétricas que más quitan ahí y <b>las rutas que la cruzan</b>.`,
+      restan: `Zonas donde se juntan los puntos que las evaluaciones ICE quedaron por debajo del promedio de la unidad en su canal: ahí es donde más baja la calificación de la unidad (una evaluación arriba del promedio no pesa). ${calles}El foco reúne el 50 % de esos puntos, la zona de pérdida el 75 % y la amplia el 90 %. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver su ICE, cuánto le resta al promedio de la unidad, las submétricas que más quitan ahí y <b>las rutas que la cruzan</b>. Con <b>Clientes debajo del promedio</b> encendido, ${TACTIL ? 'toca' : 'haz clic en'} un punto para ver sus calificaciones ICE, cómo llegar y sus datos.`,
     };
     const ayudaComun = ' Con <b>Rutas</b> se dibujan las del día elegido (solo líneas y su código, que aparece al acercar el mapa). Cada tipo de polígono se descarga en su botón de KMZ, sin clientes ni rutas, para abrirlo en Google Earth, Google My Maps o QGIS.';
     const ponerEtiquetas = () => {
@@ -1241,6 +1300,8 @@ const Ice = (function () {
         const color = colorJef(k);
         const capa = L.polygon(j.anillos, { color, weight: 4, opacity: 0.95, fillColor: color, fillOpacity: 0.16, lineJoin: 'miter' })
           .bindPopup(() => popupJefatura(j, color), { maxWidth: 330 });
+        capa.anillosPol = j.anillos;
+        capa.orden = 0;
         if (!TACTIL) capa.bindTooltip(`<b>Jefatura ${esc(j.jefatura)}</b> · ${num(j.clientes)} clientes · ${num(j.area_km2, 1)} km²`, { sticky: true, opacity: 0.95 });
         // El nombre va en el centro de su parte más grande
         const mayor = j.anillos.reduce((a, b) => b[0].length > a[0].length ? b : a)[0];
@@ -1253,7 +1314,7 @@ const Ice = (function () {
       for (const c of D.clientes) {
         if (c[2] == null) continue;
         const k = indice[D.zonas[c[5]]];
-        const m = L.circleMarker([c[2], c[3]], { renderer: rend, radius: 3.5, color: BLANCO, weight: 0.8, fillColor: k == null ? GRIS : colorJef(k), fillOpacity: 0.95 });
+        const m = L.circleMarker([c[2], c[3]], { renderer: rendRutas, radius: 3.5, color: BLANCO, weight: 0.8, fillColor: k == null ? GRIS : colorJef(k), fillOpacity: 0.95 });
         if (!TACTIL) m.bindTooltip(`<b>${esc(c[1] || 'Cliente sin nombre')}</b> · SAP ${esc(c[0])} · ${esc(D.zonas[c[5]])}`, { direction: 'top', offset: [0, -4], opacity: 0.95 });
         m.addTo(capaPts);
       }
@@ -1296,6 +1357,8 @@ const Ice = (function () {
         n.poligonos.forEach((q, k) => {
           const capa = L.polygon(q.anillos, { color: T.linea[n.p], weight: GROSOR_POL[n.p], fillColor: T.color, fillOpacity: RELLENO_POL[n.p], lineJoin: 'miter' })
             .bindPopup(() => popupPoligono(tipo, n.p, k, q, R, M), { maxWidth: 330 });
+          capa.anillosPol = [q.anillos];
+          capa.orden = n.p;
           if (!TACTIL) capa.bindTooltip(tipo === 'restan'
             ? `<b>${esc(T.niveles[n.p])} ${k + 1}</b> · ICE ${num(q.ice, 1)} · ${num(q.evaluaciones)} evaluaciones`
             : `<b>${esc(T.niveles[n.p])} ${k + 1}</b> · ${num(q.evaluaciones)} evaluaciones · ${num(q.area_km2, 2)} km²`, { sticky: true, opacity: 0.95 });
@@ -1303,11 +1366,15 @@ const Ice = (function () {
           if (estado.niveles.has(n.p)) capa.addTo(capaPol);
         });
       }
-      for (const pt of M.puntos) {
-        const [lat, lon, n, sap] = pt, c = porSapCliente[sap];
-        const nombre = `<b>${esc(c ? c[1] || 'Cliente sin nombre' : 'Cliente')}</b> · SAP ${esc(sap)}`;
-        const m = L.circleMarker([lat, lon], { renderer: rend, radius: Math.min(7, 2.5 + Math.sqrt(tipo === 'restan' ? n / 4 : n)), color: BLANCO, weight: 1,
-                                               fillColor: tipo === 'restan' ? ROJO : NEGRO, fillOpacity: 0.85 });
+      // Los puntos chicos van al final: quedan encima y se pueden tocar
+      const altoFicha = Math.max(240, mapaP.getSize().y - 100);
+      for (const pt of [...M.puntos].sort((a, b) => b[2] - a[2])) {
+        const [lat, lon, n, sap] = pt;
+        const nombre = `<b>${esc(nombrePunto(sap))}</b> · SAP ${esc(sap)}`;
+        const m = L.circleMarker([lat, lon], { renderer: rendRutas, radius: Math.min(7, 2.5 + Math.sqrt(tipo === 'restan' ? n / 4 : n)), color: BLANCO, weight: 1,
+                                               fillColor: tipo === 'restan' ? ROJO : NEGRO, fillOpacity: 0.85 })
+          .bindPopup(() => popupPuntoPol(pt, tipo, M), { maxWidth: 330, maxHeight: altoFicha, className: 'ficha-punto' })
+          .on('popupopen', e => e.target.closeTooltip());
         if (!TACTIL) m.bindTooltip(tipo === 'restan'
           ? `${nombre} · ICE ${num(pt[5], 1)} en ${plural(pt[4], 'evaluación', 'evaluaciones')} · ${num(n, 1)} puntos debajo del promedio`
           : `${nombre} · ${plural(n, 'evaluación', 'evaluaciones')}`, { direction: 'top', offset: [0, -4], opacity: 0.95 });
@@ -1327,6 +1394,15 @@ const Ice = (function () {
       encuadrar();
     };
     pintar();
+
+    // El lienzo de rutas y puntos se queda con los clics que caen sobre los
+    // polígonos: el que no dio en una ruta ni en un cliente abre la zona de abajo
+    mapaP.on('click', e => {
+      const { lat, lng } = e.latlng;
+      const zona = Object.values(capas).filter(c => capaPol.hasLayer(c)).sort((a, b) => a.orden - b.orden)
+        .find(c => (c.cajas = c.cajas || c.anillosPol.map(conCaja)).some(q => enCaja(q, lat, lng)));
+      if (zona) zona.openPopup(e.latlng);
+    });
 
     const segmento = (id, clave, dato) => $(id).querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
       if (estado[clave] === b.dataset[dato]) return;
@@ -1616,15 +1692,14 @@ const Ice = (function () {
         <div class="mapa-controles">
           <div class="rutas-acciones">
             <button type="button" class="ice-btn rojo" data-pdf="hoy">${svgIcono('imprimir')}Impresión Hoy Rutas</button>
-            <button type="button" class="ice-btn" data-pdf="manana">${svgIcono('imprimir')}Impresión Mañana Rutas</button>
           </div>
-          <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en las impresiones de hoy y mañana</label>
+          <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en la impresión de hoy</label>
         </div>
         <div class="rutas-acciones rutas-semana" role="group" aria-label="Listas de preventa por día de la semana">
           <span class="poli-rutas-tit">Lista de preventa por día:</span>
-          ${(D.rutas_semana ? D.rutas_semana.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : ''}</button>`).join('')}
+          ${(D.rutas_semana ? D.rutas_semana.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada botón de día imprime, por jefatura y ruta, los clientes <b>prioridad 1, 2 y 3</b> que preventa visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación. Los no prioritarios no se imprimen porque nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ruta</b>, para que cada preventa se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de las rutas">
@@ -1796,29 +1871,23 @@ const Ice = (function () {
   }
 
   // ── Impresiones (PDF) ─────────────────────────────────────────────────
-  const PDF_M = 32;
+  // Una hoja por ruta, para que cada preventa se lleve la suya. Si una ruta no
+  // cabe sigue en otra hoja, con el mismo encabezado.
+  const PDF_M = 32, PDF_FILA = 16;
+  const SIN_JEFATURA = 'Sin jefatura';     // igual que SIN_ZONA de Programas/publica_ice.py
+  const nombreJefatura = j => j === SIN_JEFATURA ? j : `Jefatura ${j}`;
 
-  // ctx.jefPaginas: jefatura de cada hoja (para el pie) cuando el PDF va por jefatura
-  function documento(titulo, subtitulo, resumenTexto) {
+  // ctx.rutaPaginas: ruta de cada hoja (para el pie)
+  function documentoRutas(titulo) {
     const doc = new PDF.Documento({ titulo: `${titulo} · ${D.unidad}` });
-    doc.pagina();
-    doc.rect(0, 0, doc.W, 8, { relleno: ROJO });
-    doc.texto(PDF_M, 32, `REPORTE ICE · UNIDAD ${D.unidad.toUpperCase()}`, { tam: 7.5, negrita: true, color: GRIS_OSC });
-    doc.texto(PDF_M, 54, titulo, { tam: 18, negrita: true, color: ROJO });
-    doc.texto(PDF_M, 70, subtitulo, { tam: 9, color: NEGRO });
-    let y = 86;
-    for (const linea of PDF.renglones(resumenTexto, doc.W - 2 * PDF_M, 8.5)) {
-      doc.texto(PDF_M, y, linea, { tam: 8.5, color: GRIS_OSC });
-      y += 11.5;
-    }
-    const ctx = { doc, y: y + 6, titulo, jefatura: null, jefPaginas: [] };
+    const ctx = { doc, y: 0, titulo, rutaPaginas: [] };
     doc.pie((n, total) => {
-      const jef = ctx.jefPaginas[n - 1];
+      const ruta = ctx.rutaPaginas[n - 1];
       let hoja = '';
-      if (jef != null) {
-        const suyas = ctx.jefPaginas.filter(j => j === jef).length;
-        const k = ctx.jefPaginas.slice(0, n).filter(j => j === jef).length;
-        hoja = ` · ${nombreJefatura(jef).toUpperCase()} (HOJA ${k} DE ${suyas})`;
+      if (ruta != null) {
+        const suyas = ctx.rutaPaginas.filter(r => r === ruta).length;
+        const k = ctx.rutaPaginas.slice(0, n).filter(r => r === ruta).length;
+        hoja = ` · RUTA ${ruta} (HOJA ${k} DE ${suyas})`;
       }
       doc.linea(PDF_M, doc.H - 30, doc.W - PDF_M, doc.H - 30, { color: GRIS, grosor: 0.5 });
       doc.texto(PDF_M, doc.H - 19, `BRIGADAS VDM · ${titulo.toUpperCase()} · UNIDAD ${D.unidad.toUpperCase()}${hoja}`, { tam: 6.5, color: GRIS_OSC, max: doc.W - 2 * PDF_M - 90 });
@@ -1827,83 +1896,82 @@ const Ice = (function () {
     return ctx;
   }
 
-  const SIN_JEFATURA = 'Sin jefatura';     // igual que SIN_ZONA de Programas/publica_ice.py
-  const nombreJefatura = j => j === SIN_JEFATURA ? j : `Jefatura ${j}`;
-
-  function continuar(ctx) {
-    const { doc } = ctx;
-    doc.pagina();
-    doc.rect(0, 0, doc.W, 6, { relleno: ROJO });
-    doc.texto(PDF_M, 26, `${ctx.titulo} · Unidad ${D.unidad}${ctx.jefatura != null ? ` · ${nombreJefatura(ctx.jefatura)}` : ''} (continuación)`, { tam: 8.5, negrita: true, color: NEGRO });
-    if (ctx.jefatura != null) ctx.jefPaginas[doc.paginas.length - 1] = ctx.jefatura;
-    ctx.y = 42;
-  }
-
-  // Cada jefatura empieza en hoja nueva (la primera, debajo del encabezado del documento)
-  function seccionJefatura(ctx, jef, detalle, primera) {
-    const { doc } = ctx;
-    ctx.jefatura = jef;
-    if (!primera) {
-      doc.pagina();
-      doc.rect(0, 0, doc.W, 6, { relleno: ROJO });
-      doc.texto(PDF_M, 26, `${ctx.titulo} · Unidad ${D.unidad}`, { tam: 8.5, negrita: true, color: NEGRO });
-      ctx.y = 42;
-    }
-    ctx.jefPaginas[doc.paginas.length - 1] = jef;
-    doc.rect(PDF_M, ctx.y, doc.W - 2 * PDF_M, 24, { relleno: ROJO });
-    const w = doc.texto(PDF_M + 8, ctx.y + 16.5, nombreJefatura(jef).toUpperCase(), { tam: 12, negrita: true, color: BLANCO });
-    doc.texto(PDF_M + 20 + w, ctx.y + 16, detalle, { tam: 8.5, color: BLANCO, max: doc.W - 2 * PDF_M - w - 28 });
-    ctx.y += 32;
-  }
-
-  // Banda negra con el nombre de la ruta
-  function bandaRuta(ctx, texto, detalle) {
-    const { doc } = ctx;
-    doc.rect(PDF_M, ctx.y, doc.W - 2 * PDF_M, 18, { relleno: NEGRO });
-    const w = doc.texto(PDF_M + 8, ctx.y + 12.5, texto, { tam: 9.5, negrita: true, color: BLANCO });
-    doc.texto(PDF_M + 16 + w, ctx.y + 12.5, detalle, { tam: 8, color: '#E6E6E6', max: doc.W - 2 * PDF_M - w - 24 });
-    ctx.y += 18;
-  }
-
   function insigniaPdf(doc, x, y, tipo) {
     const s = PRIO[tipo];
     if (tipo) doc.circulo(x + 4, y - 3, 3.6, { relleno: s.relleno, borde: tipo >= 3 ? GRIS_OSC : s.relleno, grosor: 1.2 });
     doc.texto(x + 11, y, s.corto, { tam: 7.5, negrita: true, color: NEGRO });
   }
 
-  // Tabla con cortes de página: repite la banda de la ruta y los encabezados
-  function tablaPdf(ctx, columnas, filas, banda) {
-    const { doc } = ctx, limite = doc.H - 42, alto = 13;
+  // Franja, unidad, título del PDF y día: lo primero de cada hoja
+  function cabezaHoja(ctx, R) {
+    const { doc } = ctx;
+    doc.pagina();
+    doc.rect(0, 0, doc.W, 8, { relleno: ROJO });
+    doc.texto(PDF_M, 25, `REPORTE ICE · UNIDAD ${D.unidad.toUpperCase()} · ${ctx.titulo.toUpperCase()}`, { tam: 7.5, negrita: true, color: GRIS_OSC, max: doc.W - 2 * PDF_M - 210 });
+    doc.texto(doc.W - PDF_M, 25, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`, { tam: 8, color: NEGRO, alinear: 'der' });
+  }
+
+  // Encabezado de la hoja de una ruta (h = {codigo, jefatura, resumen}), con qué
+  // es cada tipo de cliente (los criterios de tiposCliente)
+  function hojaRuta(ctx, R, h, sigue) {
+    const { doc } = ctx, ancho = doc.W - 2 * PDF_M, ant = D.prioridad.mes_anterior;
+    cabezaHoja(ctx, R);
+    ctx.rutaPaginas[doc.paginas.length - 1] = h.codigo;
+    const w = doc.texto(PDF_M, 50, `RUTA ${h.codigo}`, { tam: 20, negrita: true, color: ROJO });
+    if (sigue) doc.texto(PDF_M + w + 8, 50, '(continuación)', { tam: 9, color: GRIS_OSC });
+    doc.texto(doc.W - PDF_M, 50, nombreJefatura(h.jefatura).toUpperCase(), { tam: 11, negrita: true, color: NEGRO, alinear: 'der', max: 240 });
+    doc.texto(PDF_M, 65, h.resumen, { tam: 8.5, color: NEGRO, max: ancho });
+    const tipos = [[1, `Evaluado en ${ant} y con ${num(D.prioridad.min_visitas)} o más visitas ICE en los meses anteriores.`],
+                   [2, `Evaluado en ${ant}, sin esa recurrencia.`],
+                   [3, `Cliente aleatorio que no se evaluó en ${ant}, pero sí alguna vez antes.`]];
+    let y = 73;
+    doc.rect(PDF_M, y, ancho, 54, { relleno: '#F4F4F4' });
+    doc.texto(PDF_M + 8, y + 11, 'QUÉ ES CADA TIPO DE CLIENTE', { tam: 6.5, negrita: true, color: GRIS_OSC });
+    tipos.forEach(([p, texto], i) => {
+      const yy = y + 23 + i * 11.5;
+      insigniaPdf(doc, PDF_M + 8, yy, p);
+      const wn = doc.texto(PDF_M + 34, yy, `${PRIO[p].nombre}:`, { tam: 8, negrita: true, color: NEGRO });
+      doc.texto(PDF_M + 38 + wn, yy, texto, { tam: 8, color: NEGRO, max: ancho - 46 - wn });
+    });
+    y += 54 + 4;
+    const nota = `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ÉPICA preventa: la ÉPICA de ${D.mes} hecha por preventa${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`;
+    for (const linea of PDF.renglones(nota, ancho, 7)) {
+      y += 9;
+      doc.texto(PDF_M, y, linea, { tam: 7, color: GRIS_OSC });
+    }
+    ctx.y = y + 8;
+  }
+
+  // Tabla con cortes de hoja: hojaNueva() abre la siguiente y se repiten los encabezados
+  function tablaPdf(ctx, columnas, filas, hojaNueva) {
+    const { doc } = ctx, limite = doc.H - 42;
     const cabecera = () => {
       let x = PDF_M;
       for (const c of columnas) {
-        doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 10, c.titulo.toUpperCase(), { tam: 6.3, negrita: true, color: GRIS_OSC, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 6 });
+        doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 10, c.titulo.toUpperCase(), { tam: 6.5, negrita: true, color: GRIS_OSC, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 6 });
         x += c.ancho;
       }
       doc.linea(PDF_M, ctx.y + 14, doc.W - PDF_M, ctx.y + 14, { color: NEGRO, grosor: 0.8 });
       ctx.y += 15;
     };
-    if (ctx.y + 18 + 15 + alto * Math.min(2, filas.length) > limite) continuar(ctx);
-    banda(false);
     cabecera();
     filas.forEach((f, k) => {
-      if (ctx.y + alto > limite) { continuar(ctx); banda(true); cabecera(); }
-      if (k % 2) doc.rect(PDF_M, ctx.y, doc.W - 2 * PDF_M, alto, { relleno: '#F4F4F4' });
+      if (ctx.y + PDF_FILA > limite) { hojaNueva(); cabecera(); }
+      if (k % 2) doc.rect(PDF_M, ctx.y, doc.W - 2 * PDF_M, PDF_FILA, { relleno: '#F4F4F4' });
       let x = PDF_M;
       columnas.forEach((c, j) => {
         const v = f[j];
-        if (v && v.tipo != null) insigniaPdf(doc, x + 4, ctx.y + 9.3, v.tipo);
+        if (v && v.tipo != null) insigniaPdf(doc, x + 4, ctx.y + 11, v.tipo);
         else {
           const t = v && typeof v === 'object' ? v : { texto: v };
-          doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 9.3, t.texto == null ? '' : String(t.texto),
-                    { tam: 7.6, negrita: !!t.negrita, color: t.color || NEGRO, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 7 });
+          doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 11, t.texto == null ? '' : String(t.texto),
+                    { tam: 8, negrita: !!t.negrita, color: t.color || NEGRO, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 7 });
         }
         x += c.ancho;
       });
-      ctx.y += alto;
+      ctx.y += PDF_FILA;
     });
     doc.linea(PDF_M, ctx.y, doc.W - PDF_M, ctx.y, { color: GRIS, grosor: 0.5 });
-    ctx.y += 12;
   }
 
   // En los PDF imprimibles la ÉPICA del mes es solo la hecha por preventa (en pantalla, la de brigadistas)
@@ -1927,44 +1995,42 @@ const Ice = (function () {
   }
 
   // Rutas de preventa: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en el mes (los no
-  // prioritarios nunca se han evaluado y no traen nada que trabajar), una jefatura por hoja
+  // prioritarios nunca se han evaluado y no traen nada que trabajar). Una ruta por hoja, juntas
+  // las de cada jefatura. Devuelve cuántas rutas y hojas salieron.
   function pdfRutas(R, titulo, archivo, todos) {
     const evaluado = p => !!porSapEval[p[2]];
     const nunca = p => p[4] === 4 && !evaluado(p);
-    const quitados = R.rutas.reduce((a, r) => a + r.puntos.filter(evaluado).length, 0);
-    const sinHistoria = R.rutas.reduce((a, r) => a + r.puntos.filter(nunca).length, 0);
+    const jefDe = x => x.r.jefatura || SIN_JEFATURA;
     const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)) }))
-      .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]));
-    const tipos = cuentaTipos(rutasPdf.flatMap(x => x.puntos));
-    const porJefatura = {};
-    for (const x of rutasPdf) (porJefatura[x.r.jefatura || SIN_JEFATURA] = porJefatura[x.r.jefatura || SIN_JEFATURA] || []).push(x);
-    const jefaturas = Object.keys(porJefatura).sort((a, b) => (a === SIN_JEFATURA) - (b === SIN_JEFATURA) || a.localeCompare(b, 'es', { numeric: true }));
-    const ctx = documento(titulo, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`,
-      `${plural(rutasPdf.length, 'ruta')} ${todos ? '' : 'con clientes ICE por evaluar '}en ${plural(jefaturas.length, 'jefatura')} (cada jefatura empieza en hoja nueva) · ICE por evaluar: ${num(tipos[1] || 0)} prioridad 1 (P1), ${num(tipos[2] || 0)} prioridad 2 (P2) y ${num(tipos[3] || 0)} prioridad 3 (P3)` +
-      `${todos ? ` · se incluyen los ${num(tipos[0] || 0)} clientes no ICE` : ''}. No se imprimen ${plural(quitados, 'cliente que ya tiene', 'clientes que ya tienen')} ICE en ${D.mes}${sinHistoria ? ` ni ${plural(sinHistoria, 'cliente no prioritario', 'clientes no prioritarios')} (nunca evaluados)` : ''}. Orden: P1, P2 y P3. ` +
-      `Prioridad 1: evaluados en ${D.prioridad.mes_anterior} con ${D.prioridad.min_visitas} o más visitas antes; prioridad 2: evaluados en ${D.prioridad.mes_anterior} sin esa recurrencia; prioridad 3: aleatorios evaluados alguna vez antes. ` +
-      `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ÉPICA preventa: la ÉPICA de ${D.mes} hecha por preventa${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`);
+      .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]))
+      .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
+    const ctx = documentoRutas(titulo);
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
                       { titulo: 'ÉPICA preventa', ancho: 86 }];
-    if (!rutasPdf.length) ctx.doc.texto(PDF_M, ctx.y + 10, 'No hay rutas con clientes ICE por evaluar este día.', { tam: 10, negrita: true });
-    jefaturas.forEach((jef, g) => {
-      const grupo = porJefatura[jef], tj = cuentaTipos(grupo.flatMap(x => x.puntos));
-      seccionJefatura(ctx, jef, `${plural(grupo.length, 'ruta')} · ICE por evaluar: P1 ${tj[1] || 0} · P2 ${tj[2] || 0} · P3 ${tj[3] || 0}`, g === 0);
-      for (const { r, puntos: pendientes } of grupo) {
-        const t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
-        const ice = pendientes.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
-        const puntos = todos ? ice.concat(pendientes.filter(p => !p[4])) : ice;
-        const filas = puntos.map((p, k) => {
-          const c = porSapCliente[p[2]], u = c && c[17];
-          return [k + 1, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', p[4] && c && c[11] != null ? dec1(c[11]) : '',
-                  u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(p[2]) : ''];
-        });
-        tablaPdf(ctx, columnas, filas, cont => bandaRuta(ctx, `RUTA ${r.codigo}${cont ? ' (cont.)' : ''}`,
-          `${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} en la ruta · por evaluar P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0}${fuera ? ` · ${num(fuera)} ya con ICE en ${D.mes}` : ''}`));
-      }
-    });
+    if (!rutasPdf.length) {
+      cabezaHoja(ctx, R);
+      ctx.doc.texto(PDF_M, 56, 'No hay rutas con clientes ICE por evaluar este día.', { tam: 12, negrita: true, color: NEGRO });
+    }
+    for (const x of rutasPdf) {
+      const { r, puntos: pendientes } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
+      const ice = pendientes.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
+      const puntos = todos ? ice.concat(pendientes.filter(p => !p[4])) : ice;
+      const filas = puntos.map((p, k) => {
+        const c = porSapCliente[p[2]], u = c && c[17];
+        return [k + 1, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', p[4] && c && c[11] != null ? dec1(c[11]) : '',
+                u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(p[2]) : ''];
+      });
+      const h = { codigo: r.codigo, jefatura: jefDe(x),
+                  resumen: `Por evaluar: ${plural(ice.length, 'cliente ICE', 'clientes ICE')} (P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0})` +
+                           `${todos && t[0] ? ` + ${plural(t[0], 'cliente no ICE', 'clientes no ICE')}` : ''}` +
+                           ` de ${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} de la ruta` +
+                           `${fuera ? ` · ${plural(fuera, 'ya evaluado', 'ya evaluados')} en ${D.mes}, no se ${fuera === 1 ? 'imprime' : 'imprimen'}` : ''}` };
+      hojaRuta(ctx, R, h, false);
+      tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
+    }
     PDF.descargar(ctx.doc.blob(), archivo);
+    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length };
   }
 
   function imprimir(boton) {
@@ -1974,14 +2040,16 @@ const Ice = (function () {
     // Deja que el navegador pinte el aviso antes de armar el documento
     setTimeout(() => {
       try {
+        let hecho;
         if (boton.dataset.pdfDia != null) {
           const R = rutasDeSemana(+boton.dataset.pdfDia);
-          pdfRutas(R, `Lista de preventa del ${R.dia.toLowerCase()}`, `ICE_Preventa_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
+          hecho = pdfRutas(R, `Lista de preventa del ${R.dia.toLowerCase()}`, `ICE_Preventa_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
         } else {
-          const dia = boton.dataset.pdf, R = D.rutas[dia];
-          pdfRutas(R, `Rutas de ${dia === 'hoy' ? 'hoy' : 'mañana'}`, `ICE_Rutas_${dia === 'hoy' ? 'Hoy' : 'Manana'}_${D.unidad}_${R.fecha}.pdf`, $('pdfTodos').checked);
+          const R = D.rutas.hoy;
+          hecho = pdfRutas(R, 'Rutas de hoy', `ICE_Rutas_Hoy_${D.unidad}_${R.fecha}.pdf`, $('pdfTodos').checked);
         }
-        estado.textContent = 'PDF listo: revisa tus descargas.';
+        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, 'ruta')} en ${plural(hecho.hojas, 'hoja')}. Revisa tus descargas.`
+          : 'PDF listo: este día no hay rutas con clientes por evaluar.';
       } catch (e) {
         console.error(e);
         estado.textContent = 'No se pudo generar el PDF.';

@@ -317,6 +317,18 @@ button, input, select { font: inherit; }
 .poli-pt { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--negro); box-shadow: 0 0 0 1.5px var(--blanco), 0 0 0 2.5px var(--negro); }
 .poli-grupo { padding: 12px 6px 6px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--negro); }
 .poli-grupo span { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--tinta3); margin-left: 4px; }
+/* Polígonos: ficha de un cliente (larga: se desplaza y la X queda libre de la barra) */
+.ficha-punto .leaflet-popup-scrolled { border: 0; scrollbar-width: thin; }
+.ficha-punto .pc-cab { padding-right: 34px; }
+.ficha-punto a.leaflet-popup-close-button, .ficha-punto a.leaflet-popup-close-button:hover { right: 14px; top: 4px; color: var(--blanco); }
+.pc-cal { margin-top: 10px; border-top: 1px solid var(--gris-2); }
+.pc-cal-res { padding: 0 14px 6px; font-size: 11.5px; line-height: 1.4; color: var(--tinta2); }
+.pc-cal-tabla { width: calc(100% - 28px); margin: 0 14px; border-collapse: collapse; font-size: 12px; }
+.pc-cal-tabla th { padding: 2px 0; font-size: 10px; letter-spacing: .06em; text-align: left; text-transform: uppercase; color: var(--tinta3); border-bottom: 1px solid var(--negro); }
+.pc-cal-tabla td { padding: 3px 0; border-bottom: 1px solid var(--gris-2); }
+.pc-cal-tabla th:last-child, .pc-cal-tabla td:last-child { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pc-cal-tabla tr.fuera td { color: var(--tinta3); font-weight: 500; }
+.pc-cal-tabla td.bajo { color: var(--coke); }
 .pc-nota { padding: 8px 14px 0; font-size: 11.5px; line-height: 1.4; color: var(--tinta3); }
 .poli-rutas { align-items: center; }
 .poli-rutas:empty { display: none; }
@@ -444,7 +456,8 @@ button, input, select { font: inherit; }
 .tabla-ranking th, .tabla-ranking td { border-left: 1px solid var(--gris-2); }
 .tabla-ranking th:first-child, .tabla-ranking td:first-child { border-left: 0; width: 44px; }
 .rk-valor { font-weight: 800; }
-.rk-valor.rojo { background: var(--coke) !important; color: var(--blanco); }
+.rk-leyenda { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--tinta2); }
+.rk-leyenda i { width: 150px; height: 10px; background: linear-gradient(90deg, rgb(227,0,0), rgb(255,213,74), rgb(18,161,80)); }
 
 /* Mix */
 .tabla-mix th, .tabla-mix td { border-left: 1px solid var(--gris-2); }
