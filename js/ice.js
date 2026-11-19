@@ -1703,7 +1703,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">Lista de preventa por día:</span>
           ${(D.rutas_semana ? D.rutas_semana.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ruta</b>, para que cada preventa se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ruta</b>, para que cada preventa se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de las rutas">
@@ -2017,6 +2017,58 @@ const Ice = (function () {
     return true;
   }
 
+  // Semanas de clientes prioridad 3: SAP, nombre y la semana del mes en que más veces
+  // lo ha evaluado el auditor (la de la pestaña Semanas). Va debajo de los QR (o de la
+  // tabla, si los QR no cupieron), en dos columnas para que ocupe la mitad de alto, y
+  // solo si cabe completa en lo que queda de la última hoja de la ruta; si no, no se pone.
+  // Anchos: el SAP de 10 dígitos en negritas y el encabezado «SEMANA MÁS EVALUADA»; lo demás es del nombre
+  const P3_FILA = 13, P3_SEP = 14, P3_ANCHO_SAP = 52, P3_ANCHO_SEMANA = 89;
+
+  function semanasP3Pdf(ctx, puntos, R) {
+    const lista = puntos.filter(p => p[4] === 3)
+      .map((p, k) => ({ p, k, s: (porSapCliente[p[2]] || [])[14] || null }))
+      .sort((a, b) => (a.s || 9) - (b.s || 9) || a.k - b.k);
+    if (!lista.length) return false;
+    const { doc } = ctx, ancho = doc.W - 2 * PDF_M;
+    const f = partes(R.fecha), semHoja = semanaDe(f.d), finMes = new Date(f.a, f.m, 0).getDate();
+    const dias = { 1: '1–7', 2: '8–14', 3: '15–21', 4: `22–${finMes}` };
+    const nota = PDF.renglones(`Semana del mes en que más veces lo ha evaluado el auditor (si hay empate, la de su visita más reciente). ` +
+      `El ${R.dia.toLowerCase()} ${f.d} de ${MESES[f.m - 1]} es semana ${semHoja}: esos van en negritas.`, ancho, 7);
+    const filas = Math.ceil(lista.length / 2);
+    let y = ctx.y + 18;
+    const ty = y + 24 + (nota.length - 1) * 9 + 6;
+    if (ty + 15 + filas * P3_FILA > doc.H - 42) return false;
+    doc.rect(PDF_M, y, 4, 13, { relleno: ROJO });
+    doc.texto(PDF_M + 10, y + 10.5, 'SEMANAS DE CLIENTES PRIORIDAD 3', { tam: 10.5, negrita: true, color: NEGRO });
+    nota.forEach((linea, i) => doc.texto(PDF_M, y + 24 + i * 9, linea, { tam: 7, color: GRIS_OSC }));
+    // Dos bloques lado a lado: primero se llena el izquierdo
+    const w = (ancho - P3_SEP) / 2, columnas = [['SAP', P3_ANCHO_SAP], ['Cliente', w - P3_ANCHO_SAP - P3_ANCHO_SEMANA], ['Semana más evaluada', P3_ANCHO_SEMANA]];
+    const bloques = [lista.slice(0, filas), lista.slice(filas)].filter(b => b.length);
+    bloques.forEach((bloque, b) => {
+      const x0 = PDF_M + b * (w + P3_SEP);
+      let x = x0;
+      for (const [titulo, a] of columnas) {
+        doc.texto(x + 4, ty + 10, titulo.toUpperCase(), { tam: 6.5, negrita: true, color: GRIS_OSC, max: a - 6 });
+        x += a;
+      }
+      doc.linea(x0, ty + 14, x0 + w, ty + 14, { color: NEGRO, grosor: 0.8 });
+      let yy = ty + 15;
+      bloque.forEach(({ p, s }, k) => {
+        if (k % 2) doc.rect(x0, yy, w, P3_FILA, { relleno: '#F4F4F4' });
+        const negrita = s === semHoja, valores = [p[2], p[3] || 'Cliente sin nombre', s ? `${s} (días ${dias[s]})` : 'Sin fecha'];
+        let xc = x0;
+        columnas.forEach(([, a], j) => {
+          doc.texto(xc + 4, yy + 9.3, String(valores[j]), { tam: 8, negrita, color: s || j < 2 ? NEGRO : GRIS_OSC, max: a - 7 });
+          xc += a;
+        });
+        yy += P3_FILA;
+      });
+      doc.linea(x0, yy, x0 + w, yy, { color: GRIS, grosor: 0.5 });
+    });
+    ctx.y = ty + 15 + filas * P3_FILA;
+    return true;
+  }
+
   // En los PDF imprimibles la ÉPICA del mes es solo la hecha por preventa (en pantalla, la de brigadistas)
   const epicaPv = sap => (D.epica_preventa || {})[sap];
   const epicaAl = () => D.epica_base_corte || D.epica_corte;
@@ -2048,7 +2100,7 @@ const Ice = (function () {
       .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]))
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
     const ctx = documentoRutas(titulo);
-    let conQr = 0;
+    let conQr = 0, conP3 = 0;
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
                       { titulo: 'ÉPICA preventa', ancho: 86 }];
@@ -2073,9 +2125,10 @@ const Ice = (function () {
       hojaRuta(ctx, R, h, false);
       tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
       if (ubicacionesPdf(ctx, puntos)) conQr++;
+      if (semanasP3Pdf(ctx, puntos, R)) conP3++;
     }
     PDF.descargar(ctx.doc.blob(), archivo);
-    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr };
+    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr, conP3 };
   }
 
   function imprimir(boton) {
@@ -2093,7 +2146,7 @@ const Ice = (function () {
           const R = D.rutas.hoy;
           hecho = pdfRutas(R, 'Rutas de hoy', `ICE_Rutas_Hoy_${D.unidad}_${R.fecha}.pdf`, $('pdfTodos').checked);
         }
-        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, 'ruta')} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios. Revisa tus descargas.`
+        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, 'ruta')} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3. Revisa tus descargas.`
           : 'PDF listo: este día no hay rutas con clientes por evaluar.';
       } catch (e) {
         console.error(e);
