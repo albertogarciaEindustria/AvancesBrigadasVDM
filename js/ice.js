@@ -2,7 +2,8 @@
  * la unidad (información del sistema con las descargas, On Premise y Home
  * Market con sus rankings, mapa, semanas del mes, cinética de los auditores
  * (js/ice-extra.js), ÉPICAS de preventa (js/ice-preventa.js), Mix de tipos de cliente,
- * rutas con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
+ * rutas de preventa y de farmers con sus impresiones en PDF y polígonos en
+ * KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
  * js/ice-admin.js (todas las unidades) y desde ahí abre cualquier unidad.
  *
@@ -186,21 +187,22 @@ const Ice = (function () {
   }
 
   // ── Reporte ───────────────────────────────────────────────────────────
-  let D = null, mapaM = null, mapaR = null, mapaP = null, mapaC = null, cineticaLista = false, canalesListos = {},
+  let D = null, mapaM = null, mapaP = null, mapaC = null, cineticaLista = false, canalesListos = {},
       porSapCliente = {}, porSapEval = {}, preventaLista = false;
   const PESTANAS = [['info', 'Información del sistema'], ['onpremise', 'On Premise'], ['homemarket', 'Home Market'], ['mapa', 'Mapa'],
-                    ['semanas', 'Semanas'], ['rutas', 'Rutas'], ['preventa', 'ÉPICAS Preventa'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
-  const PANELES_MAPA = new Set(['mapa', 'semanas', 'rutas', 'poligonos', 'cinetica']);
+                    ['semanas', 'Semanas'], ['rutas', 'Preventa'], ['farmers', 'Farmers'], ['preventa', 'ÉPICAS Preventa'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
+  const PANELES_MAPA = new Set(['mapa', 'semanas', 'rutas', 'farmers', 'poligonos', 'cinetica']);
 
   function render(datos, volver) {
     // Al cambiar de unidad (administrador) los mapas se vuelven a crear
-    for (const m of [mapaM, mapaR, mapaP, mapaS, mapaC]) if (m) m.remove();
-    mapaM = mapaR = mapaP = mapaS = mapaC = null;
+    for (const m of [mapaM, mapaP, mapaS, mapaC]) if (m) m.remove();
+    mapaM = mapaP = mapaS = mapaC = null;
+    for (const v of Object.values(vistasRuta)) v.quitar();
+    // Pestañas Preventa (id 'rutas', antes Rutas) y Farmers: la misma vista con otros datos
+    vistasRuta = { rutas: crearVistaRuta('rutas'), farmers: crearVistaRuta('farmers') };
     cineticaLista = false;
     preventaLista = false;
     canalesListos = {};
-    diaSel = 'hoy';
-    rutaSel = null;
     D = datos;
     porSapCliente = Object.fromEntries(D.clientes.map(c => [c[0], c]));
     porSapEval = {};
@@ -256,7 +258,7 @@ const Ice = (function () {
     Graficas.Tip.hide();
     if (cual === 'mapa') mapa();
     if (cual === 'semanas') semanas();
-    if (cual === 'rutas') rutas();
+    if (vistasRuta[cual]) vistasRuta[cual].abrir();
     if (cual === 'poligonos') poligonos();
     if (cual === 'cinetica') cinetica();
     // ÉPICAS Preventa (js/ice-preventa.js): se arma la primera vez que se abre
@@ -1668,15 +1670,34 @@ const Ice = (function () {
       </table></div>`;
   }
 
-  // ── Rutas ─────────────────────────────────────────────────────────────
-  let capaRutas = null, capaEtiquetas = null, grupos = [], diaSel = 'hoy', rutaSel = null;
+  // ── Preventa y Farmers ────────────────────────────────────────────────
+  // Las dos pestañas son la misma vista con otros datos y textos: Preventa = rutas
+  // de la Master Data con su frecuencia ZPV (D.rutas, D.rutas_semana) y Farmers =
+  // ClaveFarmer con su FrecuenciaFarmer de JefaturasFrecuencia (D.farmers,
+  // D.farmers_semana). En sus PDF la ÉPICA del mes es solo la de su grupo.
   const ZOOM_ETIQUETAS = 13;   // igual que en el sitio de brigadistas (js/unidad.js)
-
-  // Letrero con el código de cada ruta (en el centro de sus clientes), solo al acercar el mapa
-  function pintarEtiquetas() {
-    if ($('etiquetasRuta').checked && mapaR.getZoom() >= ZOOM_ETIQUETAS) capaEtiquetas.addTo(mapaR);
-    else mapaR.removeLayer(capaEtiquetas);
-  }
+  const VISTAS_RUTA = {
+    rutas: {
+      datos: () => D.rutas, semana: () => D.rutas_semana, epica: () => D.epica_preventa || {},
+      Uno: 'Ruta', uno: 'ruta', Varios: 'Rutas', varios: 'rutas', losVarios: 'las rutas', unUno: 'una ruta', estaUno: 'Esta ruta',
+      delUno: 'de la ruta', cadaUno: 'cada ruta', clave: 'el código', frecuencia: 'ZPV',
+      quien: 'preventa', quienUno: 'preventa', colEpica: 'ÉPICA preventa',
+      botonHoy: 'Impresión Hoy Rutas', tituloHoy: 'Rutas de hoy', archivoHoy: 'ICE_Rutas_Hoy',
+      tituloDia: dia => `Lista de preventa del ${dia}`, archivoDia: 'ICE_Preventa', listaDias: 'Lista de preventa por día',
+      nota: '',
+    },
+    farmers: {
+      datos: () => D.farmers, semana: () => D.farmers_semana, epica: () => D.epica_farmers || {},
+      Uno: 'Farmer', uno: 'farmer', Varios: 'Farmers', varios: 'farmers', losVarios: 'los farmers', unUno: 'un farmer', estaUno: 'Este farmer',
+      delUno: 'del farmer', cadaUno: 'cada farmer', clave: 'la clave', frecuencia: 'Farmer',
+      quien: 'farmers', quienUno: 'farmer', colEpica: 'ÉPICA farmer',
+      botonHoy: 'Impresión Hoy Farmers', tituloHoy: 'Farmers de hoy', archivoHoy: 'ICE_Farmers_Hoy',
+      tituloDia: dia => `Lista de farmers del ${dia}`, archivoDia: 'ICE_Farmers', listaDias: 'Lista de farmers por día',
+      nota: ' Cada cliente va con su farmer y se visita los días de su frecuencia Farmer (clave y frecuencia Farmer de JefaturasFrecuencia, /addjefaturas); la jefatura de cada farmer es la de la mayoría de sus clientes.',
+      sinDatos: 'Esta publicación no trae los recorridos de los farmers: la base de jefaturas (JefaturasFrecuencia) no tiene las columnas de clave y frecuencia Farmer. Hay que volver a mandar el Excel de OBJETIVOS con /addjefaturas y publicar de nuevo.',
+    },
+  };
+  let vistasRuta = {};
 
   // Un color por ruta (ángulo dorado), sin rojos: el rojo es prioridad 1
   function colorRuta(i) {
@@ -1687,211 +1708,232 @@ const Ice = (function () {
 
   const cuentaTipos = puntos => puntos.reduce((a, p) => { a[p[4]] = (a[p[4]] || 0) + 1; return a; }, {});
 
-  function rutas() {
-    const panel = $('p-rutas');
-    if (mapaR) { setTimeout(() => mapaR.invalidateSize(), 50); return; }
-    const H = D.rutas.hoy, M = D.rutas.manana;
-    panel.innerHTML = `
+  // Vista de la pestaña `id` ('rutas' = Preventa o 'farmers'): se arma la primera
+  // vez que se abre; quitar() borra su mapa al cambiar de unidad (administrador)
+  function crearVistaRuta(id) {
+    const V = VISTAS_RUTA[id], I = n => id + n;   // ids de la vista: rutasMapa, farmersMapa...
+    let mapa = null, capa = null, capaEtiq = null, grupos = [], diaSel = 'hoy';
+
+    // Letrero con el código de cada ruta (en el centro de sus clientes), solo al acercar el mapa
+    function pintarEtiquetas() {
+      if ($(I('Etiquetas')).checked && mapa.getZoom() >= ZOOM_ETIQUETAS) capaEtiq.addTo(mapa);
+      else mapa.removeLayer(capaEtiq);
+    }
+
+    function abrir() {
+      const panel = $('p-' + id);
+      if (mapa) { setTimeout(() => mapa.invalidateSize(), 50); return; }
+      const datos = V.datos();
+      if (!datos) {
+        panel.innerHTML = seccion(V.Varios, '', `<p class="ice-nota">${esc(V.sinDatos || 'Esta publicación no trae estos datos.')}</p>`);
+        return;
+      }
+      const H = datos.hoy, M = datos.manana, S = V.semana();
+      panel.innerHTML = `
       <div class="mapa-barra">
         <div class="mapa-controles">
           <div class="rutas-acciones">
-            <button type="button" class="ice-btn rojo" data-pdf="hoy">${svgIcono('imprimir')}Impresión Hoy Rutas</button>
+            <button type="button" class="ice-btn rojo" data-pdf="hoy">${svgIcono('imprimir')}${esc(V.botonHoy)}</button>
           </div>
-          <label class="ice-check"><input type="checkbox" id="pdfTodos"> Incluir a los clientes no ICE en la impresión de hoy</label>
+          <label class="ice-check"><input type="checkbox" id="${I('PdfTodos')}"> Incluir a los clientes no ICE en la impresión de hoy</label>
         </div>
-        <div class="rutas-acciones rutas-semana" role="group" aria-label="Listas de preventa por día de la semana">
-          <span class="poli-rutas-tit">Lista de preventa por día:</span>
-          ${(D.rutas_semana ? D.rutas_semana.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
+        <div class="rutas-acciones rutas-semana" role="group" aria-label="${esc(V.listaDias)} de la semana">
+          <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
+          ${(S ? S.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ruta</b>, para que cada preventa se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ${esc(V.uno)}</b>, para que cada ${esc(V.quienUno)} se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
-          <div class="segmento" role="group" aria-label="Día de las rutas">
+          <div class="segmento" role="group" aria-label="Día de ${esc(V.losVarios)}">
             <button type="button" data-dia="hoy" aria-pressed="true">Hoy · ${esc(H.dia)} ${esc(fechaCorta(H.fecha))}</button>
             <button type="button" data-dia="manana" aria-pressed="false">Mañana · ${esc(M.dia)} ${esc(fechaCorta(M.fecha))}</button>
           </div>
           <div class="chips" aria-label="Simbología">
             ${[1, 2, 3, 4].map(p => `<span class="chip" style="cursor:default"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</span>`).join('')}
-            <span class="chip" style="cursor:default"><span class="punto-prio p0" aria-hidden="true"></span>No ICE (color de la ruta)</span>
+            <span class="chip" style="cursor:default"><span class="punto-prio p0" aria-hidden="true"></span>No ICE (color ${esc(V.delUno)})</span>
           </div>
         </div>
-        <p class="mapa-resumen" id="rutasResumen" role="status"></p>
-        <p class="mapa-ayuda" id="pdfEstado" role="status" aria-live="polite"></p>
+        <p class="mapa-resumen" id="${I('Resumen')}" role="status"></p>
+        <p class="mapa-ayuda" id="${I('PdfEstado')}" role="status" aria-live="polite"></p>
       </div>
       <div class="rutas-cuerpo">
-        <div id="mapaRutas" class="mapa"></div>
-        <aside class="rutas-lista" aria-label="Rutas del día">
-          <input type="search" id="buscaRuta" placeholder="Buscar ruta o jefatura" aria-label="Buscar ruta o jefatura">
-          <label class="ice-check"><input type="checkbox" id="soloIce"> Solo rutas con clientes ICE</label>
-          <label class="ice-check"><input type="checkbox" id="etiquetasRuta" checked> Etiquetas de ruta (al acercar el mapa)</label>
-          <ul id="listaRutas"></ul>
+        <div id="${I('Mapa')}" class="mapa"></div>
+        <aside class="rutas-lista" aria-label="${esc(V.Varios)} del día">
+          <input type="search" id="${I('Busca')}" placeholder="Buscar ${esc(V.uno)} o jefatura" aria-label="Buscar ${esc(V.uno)} o jefatura">
+          <label class="ice-check"><input type="checkbox" id="${I('SoloIce')}"> Solo ${esc(V.varios)} con clientes ICE</label>
+          <label class="ice-check"><input type="checkbox" id="${I('Etiquetas')}" checked> Etiquetas de ${esc(V.uno)} (al acercar el mapa)</label>
+          <ul id="${I('Lista')}"></ul>
         </aside>
       </div>
-      <section class="ruta-detalle" id="rutaDetalle"></section>`;
-    mapaR = L.map('mapaRutas', { preferCanvas: true });
-    capaBase(mapaR);
-    botonUbicacion(mapaR);
-    capaRutas = L.layerGroup().addTo(mapaR);
-    capaEtiquetas = L.layerGroup();
-    pintarDia('hoy');
-    mapaR.on('zoomend', pintarEtiquetas);
+      <section class="ruta-detalle" id="${I('Detalle')}"></section>`;
+      mapa = L.map(I('Mapa'), { preferCanvas: true });
+      capaBase(mapa);
+      botonUbicacion(mapa);
+      capa = L.layerGroup().addTo(mapa);
+      capaEtiq = L.layerGroup();
+      pintarDia('hoy');
+      mapa.on('zoomend', pintarEtiquetas);
 
-    panel.querySelectorAll('.segmento button').forEach(b => b.addEventListener('click', () => {
-      panel.querySelectorAll('.segmento button').forEach(x => x.setAttribute('aria-pressed', x === b));
-      pintarDia(b.dataset.dia);
-    }));
-    $('buscaRuta').addEventListener('input', filtrarLista);
-    $('soloIce').addEventListener('change', filtrarLista);
-    $('etiquetasRuta').addEventListener('change', pintarEtiquetas);
-    panel.querySelectorAll('[data-pdf], [data-pdf-dia]').forEach(b => b.addEventListener('click', () => imprimir(b)));
-  }
+      panel.querySelectorAll('.segmento button').forEach(b => b.addEventListener('click', () => {
+        panel.querySelectorAll('.segmento button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        pintarDia(b.dataset.dia);
+      }));
+      $(I('Busca')).addEventListener('input', filtrarLista);
+      $(I('SoloIce')).addEventListener('change', filtrarLista);
+      $(I('Etiquetas')).addEventListener('change', pintarEtiquetas);
+      panel.querySelectorAll('[data-pdf], [data-pdf-dia]').forEach(b => b.addEventListener('click', () =>
+        imprimir(V, b, $(I('PdfEstado')), $(I('PdfTodos')).checked)));
+    }
 
-  function filtrarLista() {
-    const q = normalizar($('buscaRuta').value), solo = $('soloIce').checked;
-    const R = D.rutas[diaSel].rutas;
-    document.querySelectorAll('#listaRutas li').forEach((li, i) => {
-      const r = R[i];
-      li.hidden = (!!q && !normalizar(`${r.codigo} ${r.jefatura}`).includes(q)) || (solo && !r.puntos.some(p => p[4]));
-    });
-  }
+    function filtrarLista() {
+      const q = normalizar($(I('Busca')).value), solo = $(I('SoloIce')).checked;
+      const R = V.datos()[diaSel].rutas;
+      document.querySelectorAll(`#${I('Lista')} li`).forEach((li, i) => {
+        const r = R[i];
+        li.hidden = (!!q && !normalizar(`${r.codigo} ${r.jefatura}`).includes(q)) || (solo && !r.puntos.some(p => p[4]));
+      });
+    }
 
-  function pintarDia(dia) {
-    diaSel = dia; rutaSel = null;
-    const R = D.rutas[dia];
-    capaRutas.clearLayers();
-    capaEtiquetas.clearLayers();
-    grupos = [];
-    const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
-    const limites = [], marcadores = [], ice = [];
-    const total = R.rutas.reduce((a, r) => a + r.puntos.length, 0);
-    const tipos = cuentaTipos(R.rutas.flatMap(r => r.puntos));
-    R.rutas.forEach((r, i) => {
-      const color = colorRuta(i), coords = r.puntos.filter(p => p[0] != null).map(p => [p[0], p[1]]);
-      const g = { r, color, limites: coords.length ? L.latLngBounds(coords) : null, linea: null };
-      if (coords.length > 1) {
-        g.linea = L.polyline(coords, { renderer: rend, color, weight: 2, opacity: 0.6 }).bindTooltip(`Ruta ${esc(r.codigo)} · ${plural(r.puntos.length, 'cliente')}`, { sticky: true });
-        g.linea.addTo(capaRutas);
-      }
-      for (const p of r.puntos) {
-        if (p[0] == null) continue;
-        limites.push([p[0], p[1]]);
-        if (p[4]) { ice.push({ p, r }); continue; }
-        const m = L.circleMarker([p[0], p[1]], { renderer: rend, radius: 3.5, color: BLANCO, weight: 1, fillColor: color, fillOpacity: 1 })
+    function pintarDia(dia) {
+      diaSel = dia;
+      const R = V.datos()[dia];
+      capa.clearLayers();
+      capaEtiq.clearLayers();
+      grupos = [];
+      const rend = L.canvas({ padding: 0.4, tolerance: TACTIL ? 8 : 4 });
+      const limites = [], marcadores = [], ice = [];
+      const total = R.rutas.reduce((a, r) => a + r.puntos.length, 0);
+      const tipos = cuentaTipos(R.rutas.flatMap(r => r.puntos));
+      R.rutas.forEach((r, i) => {
+        const color = colorRuta(i), coords = r.puntos.filter(p => p[0] != null).map(p => [p[0], p[1]]);
+        const g = { r, color, limites: coords.length ? L.latLngBounds(coords) : null, linea: null };
+        if (coords.length > 1) {
+          g.linea = L.polyline(coords, { renderer: rend, color, weight: 2, opacity: 0.6 }).bindTooltip(`${esc(V.Uno)} ${esc(r.codigo)} · ${plural(r.puntos.length, 'cliente')}`, { sticky: true });
+          g.linea.addTo(capa);
+        }
+        for (const p of r.puntos) {
+          if (p[0] == null) continue;
+          limites.push([p[0], p[1]]);
+          if (p[4]) { ice.push({ p, r }); continue; }
+          const m = L.circleMarker([p[0], p[1]], { renderer: rend, radius: 3.5, color: BLANCO, weight: 1, fillColor: color, fillOpacity: 1 })
+            .bindPopup(() => popupRuta(p, r), { maxWidth: 320 });
+          etiqueta(m, p[3], p[2]);
+          m.addTo(capa);
+          marcadores.push(m);
+        }
+        if (coords.length) {
+          const c = coords.reduce((a, p) => [a[0] + p[0] / coords.length, a[1] + p[1] / coords.length], [0, 0]);
+          L.marker(c, { interactive: false, keyboard: false,
+            icon: L.divIcon({ className: 'ruta-etiqueta', html: `<span style="background:${color};color:${Graficas.tintaSobre(color)}">${esc(r.codigo)}</span>`, iconSize: null }) })
+            .addTo(capaEtiq);
+        }
+        grupos.push(g);
+      });
+      // Los clientes ICE van encima de todo, con la prioridad 1 hasta arriba
+      ice.sort((a, b) => b.p[4] - a.p[4]).forEach(({ p, r }) => {
+        const s = PRIO[p[4]];
+        const m = L.circleMarker([p[0], p[1]], { renderer: rend, radius: s.radio, color: s.borde, weight: s.grosor, fillColor: s.relleno, fillOpacity: 1 })
           .bindPopup(() => popupRuta(p, r), { maxWidth: 320 });
         etiqueta(m, p[3], p[2]);
-        m.addTo(capaRutas);
+        m.addTo(capa);
         marcadores.push(m);
-      }
-      if (coords.length) {
-        const c = coords.reduce((a, p) => [a[0] + p[0] / coords.length, a[1] + p[1] / coords.length], [0, 0]);
-        L.marker(c, { interactive: false, keyboard: false,
-          icon: L.divIcon({ className: 'ruta-etiqueta', html: `<span style="background:${color};color:${Graficas.tintaSobre(color)}">${esc(r.codigo)}</span>`, iconSize: null }) })
-          .addTo(capaEtiquetas);
-      }
-      grupos.push(g);
-    });
-    // Los clientes ICE van encima de todo, con la prioridad 1 hasta arriba
-    ice.sort((a, b) => b.p[4] - a.p[4]).forEach(({ p, r }) => {
-      const s = PRIO[p[4]];
-      const m = L.circleMarker([p[0], p[1]], { renderer: rend, radius: s.radio, color: s.borde, weight: s.grosor, fillColor: s.relleno, fillOpacity: 1 })
-        .bindPopup(() => popupRuta(p, r), { maxWidth: 320 });
-      etiqueta(m, p[3], p[2]);
-      m.addTo(capaRutas);
-      marcadores.push(m);
-    });
-    if (limites.length) mapaR.fitBounds(limitesRobustos(limites).pad(0.04));
-    else mapaR.setView([19.38, -99.14], 11);
-    mapaR.off('click');
-    toqueCercano(mapaR, marcadores);
-    pintarEtiquetas();
+      });
+      if (limites.length) mapa.fitBounds(limitesRobustos(limites).pad(0.04));
+      else mapa.setView([19.38, -99.14], 11);
+      mapa.off('click');
+      toqueCercano(mapa, marcadores);
+      pintarEtiquetas();
 
-    $('rutasResumen').innerHTML = `Rutas que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ZPV <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> rutas · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2, <b>${num(tipos[3] || 0)}</b> prioridad 3 y <b>${num(tipos[4] || 0)}</b> no prioritarios. Las líneas unen a los clientes de cada ruta; al acercar el mapa aparece la etiqueta con el código de cada ruta.`;
-    $('listaRutas').innerHTML = R.rutas.map((r, i) => {
-      const t = cuentaTipos(r.puntos);
-      return `<li><button type="button" class="ruta-item" data-i="${i}">
-        <span class="ruta-sw" style="background:${grupos[i].color}" aria-hidden="true"></span>
-        <span class="ruta-cod">${esc(r.codigo)}</span>
-        <span class="ruta-conteo">${[1, 2, 3, 4].map(p => t[p] ? `<span class="prio p${p}" title="${PRIO[p].nombre}">${PRIO[p].corto} ${t[p]}</span>` : '').join('')}</span>
-        <span class="ruta-info">${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')}</span></button></li>`;
-    }).join('');
-    document.querySelectorAll('#listaRutas .ruta-item').forEach(b => b.addEventListener('click', () => elegirRuta(+b.dataset.i)));
-    filtrarLista();
-    $('rutaDetalle').innerHTML = `<p class="muted">Elige una ruta de la lista para ver sus clientes de ${dia === 'hoy' ? 'hoy' : 'mañana'}.</p>`;
-  }
-
-  function popupRuta(p, r) {
-    const [lat, lon, sap, nombre, tipo] = p;
-    const c = porSapCliente[sap];
-    if (c) return popupCliente(c).replace('<span class="pc-sap">', `<span>Ruta ${esc(r.codigo)}</span><span class="pc-sap">`);
-    return `<div class="pc"><div class="pc-cab p3"><b>${esc(nombre || 'Cliente sin nombre')}</b><span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
-      <span>Ruta ${esc(r.codigo)} · ${PRIO[tipo].nombre}</span></div>${enlacesMapa(lat, lon)}
-      <dl class="pc-cuerpo">${fila('Jefatura', esc(r.jefatura))}</dl></div>`;
-  }
-
-  function elegirRuta(i) {
-    rutaSel = i;
-    document.querySelectorAll('#listaRutas .ruta-item').forEach(b => b.setAttribute('aria-current', +b.dataset.i === i ? 'true' : 'false'));
-    const g = grupos[i];
-    if (g.limites) mapaR.fitBounds(g.limites.pad(0.15));
-    if (g.linea) {
-      g.linea.setStyle({ weight: 6, opacity: 0.9 });
-      setTimeout(() => g.linea && g.linea.setStyle({ weight: 2, opacity: 0.6 }), 1800);
+      $(I('Resumen')).innerHTML = `${esc(V.Varios)} que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ${esc(V.frecuencia)} <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> ${esc(V.varios)} · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2, <b>${num(tipos[3] || 0)}</b> prioridad 3 y <b>${num(tipos[4] || 0)}</b> no prioritarios. Las líneas unen a los clientes de ${esc(V.cadaUno)}; al acercar el mapa aparece la etiqueta con ${esc(V.clave)} de ${esc(V.cadaUno)}.`;
+      $(I('Lista')).innerHTML = R.rutas.map((r, i) => {
+        const t = cuentaTipos(r.puntos);
+        return `<li><button type="button" class="ruta-item" data-i="${i}">
+          <span class="ruta-sw" style="background:${grupos[i].color}" aria-hidden="true"></span>
+          <span class="ruta-cod">${esc(r.codigo)}</span>
+          <span class="ruta-conteo">${[1, 2, 3, 4].map(p => t[p] ? `<span class="prio p${p}" title="${PRIO[p].nombre}">${PRIO[p].corto} ${t[p]}</span>` : '').join('')}</span>
+          <span class="ruta-info">${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')}</span></button></li>`;
+      }).join('') || `<li class="muted" style="padding:9px 6px">No hay ${esc(V.varios)} este día.</li>`;
+      document.querySelectorAll(`#${I('Lista')} .ruta-item`).forEach(b => b.addEventListener('click', () => elegirRuta(+b.dataset.i)));
+      filtrarLista();
+      $(I('Detalle')).innerHTML = `<p class="muted">Elige ${esc(V.unUno)} de la lista para ver sus clientes de ${dia === 'hoy' ? 'hoy' : 'mañana'}.</p>`;
     }
-    detalleRuta(g.r);
-  }
 
-  function filaClienteRuta(p, k) {
-    const [, , sap, nombre, tipo] = p;
-    const c = porSapCliente[sap];
-    const ev = porSapEval[sap];
-    const ultimo = c && c[10] ? `${dec1(c[11])} <span class="muted">(${esc(fechaCorta(c[10]))})</span>` : '<span class="muted">—</span>';
-    return `<tr><td class="izq">${k}</td><td class="izq"><span class="prio ${PRIO[tipo].clase}">${PRIO[tipo].corto}</span></td>
-      <td class="izq">${esc(sap)}</td><td class="izq">${esc(nombre)}</td><td class="izq">${c ? esc(c[13]) : ''}</td>
-      <td>${tipo ? ultimo : ''}</td><td>${ev ? dec1(ev[0][6]) : tipo ? '<span class="muted">—</span>' : ''}</td>
-      <td class="izq">${tipo ? textoEpica(sap) : ''}</td></tr>`;
-  }
+    function popupRuta(p, r) {
+      const [lat, lon, sap, nombre, tipo] = p;
+      const c = porSapCliente[sap];
+      if (c) return popupCliente(c).replace('<span class="pc-sap">', `<span>${esc(V.Uno)} ${esc(r.codigo)}</span><span class="pc-sap">`);
+      return `<div class="pc"><div class="pc-cab p3"><b>${esc(nombre || 'Cliente sin nombre')}</b><span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
+        <span>${esc(V.Uno)} ${esc(r.codigo)} · ${PRIO[tipo].nombre}</span></div>${enlacesMapa(lat, lon)}
+        <dl class="pc-cuerpo">${fila('Jefatura', esc(r.jefatura))}</dl></div>`;
+    }
 
-  function detalleRuta(r) {
-    const ice = r.puntos.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
-    const otros = r.puntos.filter(p => !p[4]);
-    const t = cuentaTipos(r.puntos);
-    const cont = $('rutaDetalle');
-    cont.innerHTML = `<div class="ruta-detalle-cab"><div>
-        <h3>Ruta ${esc(r.codigo)}</h3>
-        <p>${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')} ${diaSel === 'hoy' ? 'hoy' : 'mañana'} · ICE: ${num(t[1] || 0)} P1, ${num(t[2] || 0)} P2, ${num(t[3] || 0)} P3, ${num(t[4] || 0)} NP</p></div>
-        ${otros.length ? `<button type="button" class="ice-btn sec" id="verOtros" aria-expanded="false">Ver los ${num(otros.length)} clientes no ICE</button>` : ''}</div>
-      <div class="tabla-scroll"><table class="ice-tabla">
-        <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>Último ICE</th><th>ICE ${esc(D.mes)}</th><th class="izq">ÉPICA del mes</th></tr></thead>
-        <tbody id="filasRuta">${ice.length ? ice.map((p, k) => filaClienteRuta(p, k + 1)).join('') : '<tr><td class="izq muted" colspan="8">Esta ruta no tiene clientes ICE.</td></tr>'}</tbody>
-      </table></div>`;
-    const btn = $('verOtros');
-    if (btn) btn.addEventListener('click', () => {
-      const abierto = btn.getAttribute('aria-expanded') === 'true';
-      btn.setAttribute('aria-expanded', !abierto);
-      btn.textContent = abierto ? `Ver los ${num(otros.length)} clientes no ICE` : 'Ocultar clientes no ICE';
-      $('filasRuta').innerHTML = (ice.length ? ice.map((p, k) => filaClienteRuta(p, k + 1)).join('') : '') +
-        (abierto ? '' : otros.map((p, k) => filaClienteRuta(p, ice.length + k + 1)).join(''));
-    });
+    function elegirRuta(i) {
+      document.querySelectorAll(`#${I('Lista')} .ruta-item`).forEach(b => b.setAttribute('aria-current', +b.dataset.i === i ? 'true' : 'false'));
+      const g = grupos[i];
+      if (g.limites) mapa.fitBounds(g.limites.pad(0.15));
+      if (g.linea) {
+        g.linea.setStyle({ weight: 6, opacity: 0.9 });
+        setTimeout(() => g.linea && g.linea.setStyle({ weight: 2, opacity: 0.6 }), 1800);
+      }
+      detalleRuta(g.r);
+    }
+
+    function filaClienteRuta(p, k) {
+      const [, , sap, nombre, tipo] = p;
+      const c = porSapCliente[sap];
+      const ev = porSapEval[sap];
+      const ultimo = c && c[10] ? `${dec1(c[11])} <span class="muted">(${esc(fechaCorta(c[10]))})</span>` : '<span class="muted">—</span>';
+      return `<tr><td class="izq">${k}</td><td class="izq"><span class="prio ${PRIO[tipo].clase}">${PRIO[tipo].corto}</span></td>
+        <td class="izq">${esc(sap)}</td><td class="izq">${esc(nombre)}</td><td class="izq">${c ? esc(c[13]) : ''}</td>
+        <td>${tipo ? ultimo : ''}</td><td>${ev ? dec1(ev[0][6]) : tipo ? '<span class="muted">—</span>' : ''}</td>
+        <td class="izq">${tipo ? textoEpica(sap) : ''}</td></tr>`;
+    }
+
+    function detalleRuta(r) {
+      const ice = r.puntos.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
+      const otros = r.puntos.filter(p => !p[4]);
+      const t = cuentaTipos(r.puntos);
+      const cont = $(I('Detalle'));
+      cont.innerHTML = `<div class="ruta-detalle-cab"><div>
+          <h3>${esc(V.Uno)} ${esc(r.codigo)}</h3>
+          <p>${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')} ${diaSel === 'hoy' ? 'hoy' : 'mañana'} · ICE: ${num(t[1] || 0)} P1, ${num(t[2] || 0)} P2, ${num(t[3] || 0)} P3, ${num(t[4] || 0)} NP</p></div>
+          ${otros.length ? `<button type="button" class="ice-btn sec" id="${I('VerOtros')}" aria-expanded="false">Ver los ${num(otros.length)} clientes no ICE</button>` : ''}</div>
+        <div class="tabla-scroll"><table class="ice-tabla">
+          <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>Último ICE</th><th>ICE ${esc(D.mes)}</th><th class="izq">ÉPICA del mes</th></tr></thead>
+          <tbody id="${I('Filas')}">${ice.length ? ice.map((p, k) => filaClienteRuta(p, k + 1)).join('') : `<tr><td class="izq muted" colspan="8">${esc(V.estaUno)} no tiene clientes ICE.</td></tr>`}</tbody>
+        </table></div>`;
+      const btn = $(I('VerOtros'));
+      if (btn) btn.addEventListener('click', () => {
+        const abierto = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', !abierto);
+        btn.textContent = abierto ? `Ver los ${num(otros.length)} clientes no ICE` : 'Ocultar clientes no ICE';
+        $(I('Filas')).innerHTML = (ice.length ? ice.map((p, k) => filaClienteRuta(p, k + 1)).join('') : '') +
+          (abierto ? '' : otros.map((p, k) => filaClienteRuta(p, ice.length + k + 1)).join(''));
+      });
+    }
+
+    return { abrir, quitar() { if (mapa) mapa.remove(); mapa = null; } };
   }
 
   // ── Impresiones (PDF) ─────────────────────────────────────────────────
-  // Una hoja por ruta, para que cada preventa se lleve la suya. Si una ruta no
-  // cabe sigue en otra hoja, con el mismo encabezado.
+  // Una hoja por ruta (o por farmer), para que cada quien se lleve la suya. Si una
+  // ruta no cabe sigue en otra hoja, con el mismo encabezado. ctx.V = la vista
+  // (VISTAS_RUTA) de la que sale el PDF: textos y ÉPICA de su grupo.
   const PDF_M = 32, PDF_FILA = 16;
   const SIN_JEFATURA = 'Sin jefatura';     // igual que SIN_ZONA de Programas/publica_ice.py
   const nombreJefatura = j => j === SIN_JEFATURA ? j : `Jefatura ${j}`;
 
   // ctx.rutaPaginas: ruta de cada hoja (para el pie)
-  function documentoRutas(titulo) {
+  function documentoRutas(V, titulo) {
     const doc = new PDF.Documento({ titulo: `${titulo} · ${D.unidad}` });
-    const ctx = { doc, y: 0, titulo, rutaPaginas: [] };
+    const ctx = { doc, y: 0, titulo, rutaPaginas: [], V };
     doc.pie((n, total) => {
       const ruta = ctx.rutaPaginas[n - 1];
       let hoja = '';
       if (ruta != null) {
         const suyas = ctx.rutaPaginas.filter(r => r === ruta).length;
         const k = ctx.rutaPaginas.slice(0, n).filter(r => r === ruta).length;
-        hoja = ` · RUTA ${ruta} (HOJA ${k} DE ${suyas})`;
+        hoja = ` · ${V.Uno.toUpperCase()} ${ruta} (HOJA ${k} DE ${suyas})`;
       }
       doc.linea(PDF_M, doc.H - 30, doc.W - PDF_M, doc.H - 30, { color: GRIS, grosor: 0.5 });
       doc.texto(PDF_M, doc.H - 19, `BRIGADAS VDM · ${titulo.toUpperCase()} · UNIDAD ${D.unidad.toUpperCase()}${hoja}`, { tam: 6.5, color: GRIS_OSC, max: doc.W - 2 * PDF_M - 90 });
@@ -1912,16 +1954,16 @@ const Ice = (function () {
     doc.pagina();
     doc.rect(0, 0, doc.W, 8, { relleno: ROJO });
     doc.texto(PDF_M, 25, `REPORTE ICE · UNIDAD ${D.unidad.toUpperCase()} · ${ctx.titulo.toUpperCase()}`, { tam: 7.5, negrita: true, color: GRIS_OSC, max: doc.W - 2 * PDF_M - 210 });
-    doc.texto(doc.W - PDF_M, 25, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ZPV ${R.letra}`, { tam: 8, color: NEGRO, alinear: 'der' });
+    doc.texto(doc.W - PDF_M, 25, `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ${ctx.V.frecuencia} ${R.letra}`, { tam: 8, color: NEGRO, alinear: 'der' });
   }
 
   // Encabezado de la hoja de una ruta (h = {codigo, jefatura, resumen}), con qué
   // es cada tipo de cliente (los criterios de tiposCliente)
   function hojaRuta(ctx, R, h, sigue) {
-    const { doc } = ctx, ancho = doc.W - 2 * PDF_M, ant = D.prioridad.mes_anterior;
+    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M, ant = D.prioridad.mes_anterior;
     cabezaHoja(ctx, R);
     ctx.rutaPaginas[doc.paginas.length - 1] = h.codigo;
-    const w = doc.texto(PDF_M, 50, `RUTA ${h.codigo}`, { tam: 20, negrita: true, color: ROJO });
+    const w = doc.texto(PDF_M, 50, `${V.Uno.toUpperCase()} ${h.codigo}`, { tam: 20, negrita: true, color: ROJO });
     if (sigue) doc.texto(PDF_M + w + 8, 50, '(continuación)', { tam: 9, color: GRIS_OSC });
     doc.texto(doc.W - PDF_M, 50, nombreJefatura(h.jefatura).toUpperCase(), { tam: 11, negrita: true, color: NEGRO, alinear: 'der', max: 240 });
     doc.texto(PDF_M, 65, h.resumen, { tam: 8.5, color: NEGRO, max: ancho });
@@ -1938,7 +1980,7 @@ const Ice = (function () {
       doc.texto(PDF_M + 38 + wn, yy, texto, { tam: 8, color: NEGRO, max: ancho - 46 - wn });
     });
     y += 54 + 4;
-    const nota = `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ÉPICA preventa: la ÉPICA de ${D.mes} hecha por preventa${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`;
+    const nota = `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ${V.colEpica}: la ÉPICA de ${D.mes} hecha por ${V.quien}${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`;
     for (const linea of PDF.renglones(nota, ancho, 7)) {
       y += 9;
       doc.texto(PDF_M, y, linea, { tam: 7, color: GRIS_OSC });
@@ -2069,19 +2111,20 @@ const Ice = (function () {
     return true;
   }
 
-  // En los PDF imprimibles la ÉPICA del mes es solo la hecha por preventa (en pantalla, la de brigadistas)
-  const epicaPv = sap => (D.epica_preventa || {})[sap];
+  // En los PDF imprimibles la ÉPICA del mes es solo la del grupo de la vista: preventa en
+  // los de Preventa y farmers en los de Farmers (en pantalla, la de brigadistas)
   const epicaAl = () => D.epica_base_corte || D.epica_corte;
 
-  function epicaPdf(sap) {
-    const e = epicaPv(sap);
+  function epicaPdf(V, sap) {
+    const e = V.epica()[sap];
     if (!e) return { texto: 'Pendiente', negrita: true, color: ROJO };
     return { texto: `${dec1(e[1])} · ${ddmm(e[0])}${e[2] ? ' · NoGeo' : ''}${e[3] ? ' · FdF' : ''}`, negrita: !!(e[2] || e[3]), color: e[2] || e[3] ? ROJO : NEGRO };
   }
 
-  // Día de la semana (índice en rutas_semana.dias) con la forma de D.rutas.hoy: sus clientes P1, P2 y P3
-  function rutasDeSemana(i) {
-    const d = D.rutas_semana.dias[i], base = partes(D.hoy);
+  // Día de la semana (índice en rutas_semana.dias o farmers_semana.dias) con la forma de
+  // D.rutas.hoy: sus clientes P1, P2 y P3
+  function rutasDeSemana(V, i) {
+    const d = V.semana().dias[i], base = partes(D.hoy);
     let f = new Date(base.a, base.m - 1, base.d);
     for (let k = 0; k < 7 && DIAS[f.getDay()] !== d.dia; k++) f.setDate(f.getDate() + 1);
     const fecha = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
@@ -2089,24 +2132,24 @@ const Ice = (function () {
       puntos: saps.map(s => { const c = porSapCliente[s]; return [c ? c[2] : null, c ? c[3] : null, s, c ? c[1] : '', c ? c[4] : 3]; }) })) };
   }
 
-  // Rutas de preventa: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en el mes (los no
-  // prioritarios nunca se han evaluado y no traen nada que trabajar). Una ruta por hoja, juntas
-  // las de cada jefatura. Devuelve cuántas rutas y hojas salieron.
-  function pdfRutas(R, titulo, archivo, todos) {
+  // Rutas de preventa o de farmers: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en
+  // el mes (los no prioritarios nunca se han evaluado y no traen nada que trabajar). Una ruta
+  // por hoja, juntas las de cada jefatura. Devuelve cuántas rutas y hojas salieron.
+  function pdfRutas(V, R, titulo, archivo, todos) {
     const evaluado = p => !!porSapEval[p[2]];
     const nunca = p => p[4] === 4 && !evaluado(p);
     const jefDe = x => x.r.jefatura || SIN_JEFATURA;
     const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)) }))
       .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]))
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
-    const ctx = documentoRutas(titulo);
+    const ctx = documentoRutas(V, titulo);
     let conQr = 0, conP3 = 0;
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
-                      { titulo: 'ÉPICA preventa', ancho: 86 }];
+                      { titulo: V.colEpica, ancho: 86 }];
     if (!rutasPdf.length) {
       cabezaHoja(ctx, R);
-      ctx.doc.texto(PDF_M, 56, 'No hay rutas con clientes ICE por evaluar este día.', { tam: 12, negrita: true, color: NEGRO });
+      ctx.doc.texto(PDF_M, 56, `No hay ${V.varios} con clientes ICE por evaluar este día.`, { tam: 12, negrita: true, color: NEGRO });
     }
     for (const x of rutasPdf) {
       const { r, puntos: pendientes } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
@@ -2115,12 +2158,12 @@ const Ice = (function () {
       const filas = puntos.map((p, k) => {
         const c = porSapCliente[p[2]], u = c && c[17];
         return [k + 1, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', p[4] && c && c[11] != null ? dec1(c[11]) : '',
-                u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(p[2]) : ''];
+                u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(V, p[2]) : ''];
       });
       const h = { codigo: r.codigo, jefatura: jefDe(x),
                   resumen: `Por evaluar: ${plural(ice.length, 'cliente ICE', 'clientes ICE')} (P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0})` +
                            `${todos && t[0] ? ` + ${plural(t[0], 'cliente no ICE', 'clientes no ICE')}` : ''}` +
-                           ` de ${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} de la ruta` +
+                           ` de ${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} ${V.delUno}` +
                            `${fuera ? ` · ${plural(fuera, 'ya evaluado', 'ya evaluados')} en ${D.mes}, no se ${fuera === 1 ? 'imprime' : 'imprimen'}` : ''}` };
       hojaRuta(ctx, R, h, false);
       tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
@@ -2131,8 +2174,8 @@ const Ice = (function () {
     return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr, conP3 };
   }
 
-  function imprimir(boton) {
-    const estado = $('pdfEstado');
+  // Botón de impresión de una vista: el de hoy (data-pdf) o el de un día de la semana (data-pdf-dia)
+  function imprimir(V, boton, estado, todos) {
     boton.disabled = true;
     estado.textContent = 'Generando el PDF...';
     // Deja que el navegador pinte el aviso antes de armar el documento
@@ -2140,14 +2183,14 @@ const Ice = (function () {
       try {
         let hecho;
         if (boton.dataset.pdfDia != null) {
-          const R = rutasDeSemana(+boton.dataset.pdfDia);
-          hecho = pdfRutas(R, `Lista de preventa del ${R.dia.toLowerCase()}`, `ICE_Preventa_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
+          const R = rutasDeSemana(V, +boton.dataset.pdfDia);
+          hecho = pdfRutas(V, R, V.tituloDia(R.dia.toLowerCase()), `${V.archivoDia}_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
         } else {
-          const R = D.rutas.hoy;
-          hecho = pdfRutas(R, 'Rutas de hoy', `ICE_Rutas_Hoy_${D.unidad}_${R.fecha}.pdf`, $('pdfTodos').checked);
+          const R = V.datos().hoy;
+          hecho = pdfRutas(V, R, V.tituloHoy, `${V.archivoHoy}_${D.unidad}_${R.fecha}.pdf`, todos);
         }
-        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, 'ruta')} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3. Revisa tus descargas.`
-          : 'PDF listo: este día no hay rutas con clientes por evaluar.';
+        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, V.uno, V.varios)} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3. Revisa tus descargas.`
+          : `PDF listo: este día no hay ${V.varios} con clientes por evaluar.`;
       } catch (e) {
         console.error(e);
         estado.textContent = 'No se pudo generar el PDF.';
