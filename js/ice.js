@@ -535,18 +535,19 @@ const Ice = (function () {
     return filas.map(f => colorRanking(valores.length > 1 ? 1 - valores.indexOf(dec1(f.promedio)) / (valores.length - 1) : 0.5));
   }
 
-  function tablaRanking(filas, clave, cabecera) {
+  // conJefatura: la primera columna es la jefatura de la ruta (ranking de rutas de preventa)
+  function tablaRanking(filas, clave, cabecera, conJefatura = false) {
     if (!filas.length) return `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`;
     const calor = calorRanking(filas);
     return `<div class="tabla-scroll ranking-scroll"><table class="ice-tabla tabla-ranking">
-      <thead><tr><th>#</th><th class="izq">${esc(cabecera)}</th><th>Calificación ICE</th><th>Clientes evaluados</th></tr></thead>
-      <tbody>${filas.map((f, i) => `<tr><td>${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
+      <thead><tr>${conJefatura ? '<th class="izq">Jefatura</th>' : ''}<th class="rk-pos">#</th><th class="izq">${esc(cabecera)}</th><th>Calificación ICE</th><th>Clientes evaluados</th></tr></thead>
+      <tbody>${filas.map((f, i) => `<tr>${conJefatura ? `<td class="izq">${esc(f.jefatura || '')}</td>` : ''}<td class="rk-pos">${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
         <td class="rk-valor" style="background:${calor[i].fondo};color:${calor[i].tinta}">${dec1(f.promedio)}</td><td>${num(f.clientes)}</td></tr>`).join('')}</tbody>
     </table></div>`;
   }
 
   function seccionRanking(C, nombre, k) {
-    return seccion(`Ranking · ${nombre}`, `De mayor a menor calificación ICE de ${esc(D.mes)}, como mapa de calor: entre más arriba en la tabla, más verde; entre más abajo, más roja. Clientes evaluados: los de ${esc(nombre)} con ICE este mes. Solo entran jefaturas y rutas con al menos una evaluación.`,
+    return seccion(`Ranking · ${nombre}`, `De mayor a menor calificación ICE de ${esc(D.mes)}, como mapa de calor: entre más arriba en la tabla, más verde; entre más abajo, más roja. Clientes evaluados: los de ${esc(nombre)} con ICE este mes. Solo entran jefaturas y rutas con al menos una evaluación. La jefatura de cada ruta es la de la mayoría de sus clientes.`,
       `<div class="ice-descargas ranking-descarga">
         <button type="button" class="ice-btn rojo" id="btnRanking${k}">${svgIcono('excel')}Descargar ranking en Excel</button>
         <span>Jefaturas y rutas de preventa de ${esc(nombre)}, una por hoja.</span>
@@ -554,7 +555,7 @@ const Ice = (function () {
       <p class="rk-leyenda"><span>Más baja</span><i aria-hidden="true"></i><span>Más alta</span></p>
       <div class="ranking-doble">
         <figure><figcaption>Jefaturas (${num(C.ranking_jefaturas.length)})</figcaption>${tablaRanking(C.ranking_jefaturas, 'jefatura', 'Jefatura')}</figure>
-        <figure><figcaption>Rutas de preventa (${num(C.ranking_rutas.length)})</figcaption>${tablaRanking(C.ranking_rutas, 'ruta', 'Ruta')}</figure>
+        <figure><figcaption>Rutas de preventa (${num(C.ranking_rutas.length)})</figcaption>${tablaRanking(C.ranking_rutas, 'ruta', 'Ruta', true)}</figure>
       </div>`);
   }
 
@@ -1699,7 +1700,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">Lista de preventa por día:</span>
           ${(D.rutas_semana ? D.rutas_semana.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ruta</b>, para que cada preventa se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ruta</b>, para que cada preventa se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por preventa; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de las rutas">
@@ -1974,6 +1975,45 @@ const Ice = (function () {
     doc.linea(PDF_M, ctx.y, doc.W - PDF_M, ctx.y, { color: GRIS, grosor: 0.5 });
   }
 
+  // Ubicación de clientes prioritarios: una tarjeta por cliente P1 y P2 de la hoja
+  // con nombre, SAP y un QR que abre su ubicación en Google Maps. Va solo si caben
+  // todas en lo que queda de la última hoja de la ruta; si no, no se pone.
+  const QR_COLUMNAS = 3, QR_ALTO = 80, QR_SEP = 6;
+  const urlUbicacion = (lat, lon) => `https://www.google.com/maps/search/?api=1&query=${(+lat).toFixed(6)},${(+lon).toFixed(6)}`;
+
+  function ubicacionesPdf(ctx, puntos) {
+    const lista = puntos.filter(p => p[4] === 1 || p[4] === 2);
+    if (!lista.length) return false;
+    const { doc } = ctx, ancho = doc.W - 2 * PDF_M, filas = Math.ceil(lista.length / QR_COLUMNAS);
+    let y = ctx.y + 18;
+    if (y + 30 + filas * (QR_ALTO + QR_SEP) - QR_SEP > doc.H - 42) return false;
+    doc.rect(PDF_M, y, 4, 13, { relleno: ROJO });
+    doc.texto(PDF_M + 10, y + 10.5, 'UBICACIÓN DE CLIENTES PRIORITARIOS', { tam: 10.5, negrita: true, color: NEGRO });
+    doc.texto(PDF_M, y + 24, 'Clientes prioridad 1 y 2 de esta hoja. Escanea el QR con la cámara del celular para abrir su ubicación en Google Maps.', { tam: 7, color: GRIS_OSC, max: ancho });
+    y += 30;
+    const w = (ancho - (QR_COLUMNAS - 1) * QR_SEP) / QR_COLUMNAS, lado = QR_ALTO - 8;
+    lista.forEach((p, k) => {
+      const x = PDF_M + (k % QR_COLUMNAS) * (w + QR_SEP), yy = y + Math.floor(k / QR_COLUMNAS) * (QR_ALTO + QR_SEP);
+      doc.rect(x, yy, w, QR_ALTO, { borde: GRIS, grosor: 0.6 });
+      if (p[0] != null && p[1] != null) doc.qr(x + 4, yy + 4, lado, QR.crear(urlUbicacion(p[0], p[1]), { nivel: 'M' }));
+      else {
+        doc.rect(x + 4, yy + 4, lado, lado, { relleno: '#F4F4F4' });
+        doc.texto(x + 4 + lado / 2, yy + 4 + lado / 2 - 2, 'Sin', { tam: 7, color: GRIS_OSC, alinear: 'centro' });
+        doc.texto(x + 4 + lado / 2, yy + 4 + lado / 2 + 7, 'coordenadas', { tam: 7, color: GRIS_OSC, alinear: 'centro' });
+      }
+      const tx = x + lado + 10, tw = w - lado - 14;
+      insigniaPdf(doc, tx, yy + 15, p[4]);
+      const nombre = PDF.renglones(p[3] || 'Cliente sin nombre', tw, 8, true);
+      nombre.slice(0, 3).forEach((linea, i) => {
+        const resto = i === 2 && nombre.length > 3 ? nombre.slice(2).join(' ') : linea;
+        doc.texto(tx, yy + 30 + i * 10, resto, { tam: 8, negrita: true, color: NEGRO, max: tw });
+      });
+      doc.texto(tx, yy + QR_ALTO - 9, `SAP ${p[2]}`, { tam: 8, color: NEGRO, max: tw });
+    });
+    ctx.y = y + filas * (QR_ALTO + QR_SEP) - QR_SEP;
+    return true;
+  }
+
   // En los PDF imprimibles la ÉPICA del mes es solo la hecha por preventa (en pantalla, la de brigadistas)
   const epicaPv = sap => (D.epica_preventa || {})[sap];
   const epicaAl = () => D.epica_base_corte || D.epica_corte;
@@ -2005,6 +2045,7 @@ const Ice = (function () {
       .filter(x => todos ? x.puntos.length : x.puntos.some(p => p[4]))
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
     const ctx = documentoRutas(titulo);
+    let conQr = 0;
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
                       { titulo: 'ÉPICA preventa', ancho: 86 }];
@@ -2028,9 +2069,10 @@ const Ice = (function () {
                            `${fuera ? ` · ${plural(fuera, 'ya evaluado', 'ya evaluados')} en ${D.mes}, no se ${fuera === 1 ? 'imprime' : 'imprimen'}` : ''}` };
       hojaRuta(ctx, R, h, false);
       tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
+      if (ubicacionesPdf(ctx, puntos)) conQr++;
     }
     PDF.descargar(ctx.doc.blob(), archivo);
-    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length };
+    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr };
   }
 
   function imprimir(boton) {
@@ -2048,7 +2090,7 @@ const Ice = (function () {
           const R = D.rutas.hoy;
           hecho = pdfRutas(R, 'Rutas de hoy', `ICE_Rutas_Hoy_${D.unidad}_${R.fecha}.pdf`, $('pdfTodos').checked);
         }
-        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, 'ruta')} en ${plural(hecho.hojas, 'hoja')}. Revisa tus descargas.`
+        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, 'ruta')} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios. Revisa tus descargas.`
           : 'PDF listo: este día no hay rutas con clientes por evaluar.';
       } catch (e) {
         console.error(e);

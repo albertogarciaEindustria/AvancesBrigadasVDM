@@ -2,7 +2,7 @@
  * Helvetica-Bold (fuentes estándar de todo lector de PDF, codificación WinAnsi:
  * acentos y ñ incluidos), líneas y rectángulos. Las coordenadas van en puntos
  * desde la esquina superior izquierda; el texto se coloca por su línea base.
- * Lo usa la página ICE para imprimir las listas de rutas. */
+ * Lo usa la página ICE para imprimir las listas de rutas (con QR de ubicación). */
 const PDF = (function () {
   'use strict';
 
@@ -130,6 +130,26 @@ const PDF = (function () {
       if (relleno && borde) this.ops.push(`${rgb(relleno)} rg ${rgb(borde)} RG ${f(grosor)} w ${d} B`);
       else if (relleno) this.ops.push(`${rgb(relleno)} rg ${d} f`);
       else if (borde) this.ops.push(`${rgb(borde)} RG ${f(grosor)} w ${d} S`);
+    }
+
+    /** Código QR (lo que devuelve QR.crear de js/qr.js) en un cuadro de `lado`
+     *  puntos con su zona blanca de 4 módulos. Los módulos oscuros de cada fila
+     *  se juntan en tramos y todo se rellena en un solo trazo (sin rayas entre
+     *  filas al verlo en pantalla). */
+    qr(x, y, lado, codigo) {
+      const n = codigo.tamano, m = lado / (n + 8), g = v => (Math.round(v * 10000) / 10000).toString();
+      this.rect(x, y, lado, lado, { relleno: '#FFFFFF' });
+      const tramos = [];
+      codigo.modulos.forEach((fila, r) => {
+        for (let c = 0; c < n;) {
+          if (!fila[c]) { c++; continue; }
+          let k = c;
+          while (k < n && fila[k]) k++;
+          tramos.push(`${c} ${r} ${k - c} 1 re`);
+          c = k;
+        }
+      });
+      this.ops.push(`q ${g(m)} 0 0 ${g(-m)} ${g(x + 4 * m)} ${g(this.H - y - 4 * m)} cm 0 0 0 rg\n${tramos.join('\n')}\nf Q`);
     }
 
     /** fn(número de página, total) se llama en cada página al cerrar el documento. */
