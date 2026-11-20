@@ -481,7 +481,8 @@ button, input, select { font: inherit; }
 .tabla-mix .mix-total { font-weight: 800; }
 .rutas-semana { align-items: center; }
 
-/* ÉPICAS Preventa (js/ice-preventa.js) */
+/* ÉPICAS (antes ÉPICAS Preventa; js/ice-preventa.js): vistas Preventa y Farmers */
+.pv-vistas { margin: 22px 0 6px; }
 .tabla-pv th, .tabla-pv td { border-left: 1px solid var(--gris-2); }
 .tabla-pv th:first-child, .tabla-pv td:first-child { border-left: 0; }
 .tabla-pv tbody th small.pv-nota, .tabla-pv-dias small.pv-nota { display: block; font-size: 11px; font-weight: 600; color: var(--tinta3); }
@@ -498,7 +499,8 @@ button, input, select { font: inherit; }
 .tabla-pv-dias td.pv-c.v { background: #A8DDB1; }
 .tabla-pv-dias td.pv-c.a { background: #FFE07A; }
 .tabla-pv-dias td.pv-c.r { background: #F4A3A3; }
-.tabla-pv-dias tbody tr:hover > td.pv-c.v, .tabla-pv-dias tbody tr:hover > td.pv-c.a, .tabla-pv-dias tbody tr:hover > td.pv-c.r { filter: brightness(.95); }
+.tabla-pv-dias td.pv-c.m { background: #B994F0; }   /* farmers: recorrido y todos sus cercanos del día */
+.tabla-pv-dias tbody tr:hover > td.pv-c.v, .tabla-pv-dias tbody tr:hover > td.pv-c.a, .tabla-pv-dias tbody tr:hover > td.pv-c.r, .tabla-pv-dias tbody tr:hover > td.pv-c.m { filter: brightness(.95); }
 .pv-leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12.5px; color: var(--tinta2); }
 .pv-leyenda span { display: inline-flex; align-items: center; gap: 7px; }
 .pv-leyenda i { width: 14px; height: 14px; border: 1px solid var(--gris-marca); }

@@ -1,7 +1,7 @@
 /* Reporte ICE (ice.html): acceso con usuario + contraseña y las secciones de
  * la unidad (información del sistema con las descargas, On Premise y Home
  * Market con sus rankings, mapa, semanas del mes, cinética de los auditores
- * (js/ice-extra.js), ÉPICAS de preventa (js/ice-preventa.js), Mix de tipos de cliente,
+ * (js/ice-extra.js), ÉPICAS de preventa y de farmers (js/ice-preventa.js), Mix de tipos de cliente,
  * rutas de preventa y de farmers (con la zona de cada farmer y sus clientes
  * cercanos) con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
@@ -190,7 +190,7 @@ const Ice = (function () {
   let D = null, mapaM = null, mapaP = null, mapaC = null, cineticaLista = false, canalesListos = {},
       porSapCliente = {}, porSapEval = {}, preventaLista = false;
   const PESTANAS = [['info', 'Información del sistema'], ['onpremise', 'On Premise'], ['homemarket', 'Home Market'], ['mapa', 'Mapa'],
-                    ['semanas', 'Semanas'], ['rutas', 'Preventa'], ['farmers', 'Farmers'], ['preventa', 'ÉPICAS Preventa'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
+                    ['semanas', 'Semanas'], ['rutas', 'Preventa'], ['farmers', 'Farmers'], ['preventa', 'ÉPICAS'], ['poligonos', 'Polígonos'], ['cinetica', 'Cinética'], ['mix', 'Mix']];
   const PANELES_MAPA = new Set(['mapa', 'semanas', 'rutas', 'farmers', 'poligonos', 'cinetica']);
 
   function render(datos, volver) {
@@ -263,7 +263,7 @@ const Ice = (function () {
     if (cual === 'farmers') farmersPestana();
     if (cual === 'poligonos') poligonos();
     if (cual === 'cinetica') cinetica();
-    // ÉPICAS Preventa (js/ice-preventa.js): se arma la primera vez que se abre
+    // ÉPICAS (js/ice-preventa.js, antes ÉPICAS Preventa): se arma la primera vez que se abre
     if (cual === 'preventa' && !preventaLista) { preventaLista = true; IcePreventa.panel($('p-preventa'), D); }
     if (PANELES_CANAL[cual]) panelCanal(cual);
     if (cual === 'mix') mixPanel();
