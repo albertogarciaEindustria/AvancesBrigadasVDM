@@ -334,7 +334,7 @@ const Ice = (function () {
       ${seccion('Descargas de la unidad', '', `
         <div class="ice-descargas">
           <button type="button" class="ice-btn rojo" id="btnHoja">${svgIcono('descarga')}Descargar «Mis clientes ICE» (HTML)</button>
-          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: <b>eliges tu jefatura y tu ruta</b> y te dice qué clientes ICE te tocan hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y mañana, por prioridad 1, 2 y 3, con su nombre, SAP y lo que les faltó en su última evaluación. Los no prioritarios van en otra pestaña. Es una foto de esta publicación: descárgalo cada día.</span>
+          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: al abrirlo <b>eliges tu jefatura y tu ruta</b> (o <b>Farmer</b> y tu clave) y ves tus clientes ICE de hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y de mañana en una lista sencilla: tipo de cliente, SAP, nombre, último ICE y lo que le faltó. Tres pestañas: prioridad 1, 2 y 3; no prioritarios; y <b>tus clientes ya evaluados en ${esc(D.mes)}</b> con su calificación en colores. Al tocar un cliente ves su ficha: mapa, cómo llegar, sus datos y el desglose de su última evaluación. Es una foto de esta publicación: descárgalo cada día.</span>
         </div>
         ${D.excel ? `<div class="ice-descargas">
           <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
