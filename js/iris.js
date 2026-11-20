@@ -8,11 +8,14 @@
  *      de 45° o 90°; los huecos se llenan con trazos cortos y marcos pequeños.
  *      Entre dos trazos queda al menos una celda gruesa libre.
  *   2. Figuras: cada trazo se pinta en una cuadrícula fina y se engorda 1 a 3
- *      celdas (unos tramos más que otros: de ahí los hombros y escalones), sin
- *      llegar nunca a menos de una celda fina de otra figura. El contorno de
- *      cada figura es un bucle cerrado de una sola línea, con las esquinas y los
- *      escalones cortados a 45° (marching squares); un marco deja un hueco, que
- *      es otro bucle.
+ *      celdas (unos tramos más que otros: de ahí los hombros y escalones, como
+ *      pistas de circuito), sin llegar nunca a menos de HUECO celdas finas de
+ *      otra figura; lo que quede de menos de 3 celdas de ancho se quita (para que
+ *      nada parezca una línea). En los huecos se ponen triángulos (con la
+ *      hipotenusa a 45°), cuadrados y rectángulos.
+ *   3. El contorno de cada figura es un bucle cerrado de una sola línea, con las
+ *      esquinas y los escalones cortados a 45° (marching squares); un marco deja
+ *      un hueco, que es otro bucle.
  *
  * El centro del iris va en el borde izquierdo del rojo (donde empieza), a media
  * altura, y su radio es más o menos el 60 % de la altura del panel; en celular
@@ -32,7 +35,8 @@
   const SEMILLA = 20261119;
   const PUPILA = 0.32;          // radio de la pupila / radio del iris
   const PX_FINA = 4;            // tamaño aproximado de una celda fina en pantalla
-  const U = 3;                  // celdas finas por celda gruesa (la del esqueleto)
+  const U = 5;                  // celdas finas por celda gruesa (la del esqueleto)
+  const HUECO = 3;              // celdas finas libres, como mínimo, entre dos figuras
   const VELOCIDAD = 18;         // celdas finas por segundo de las chispas
   const movil = () => window.matchMedia('(max-width: 820px)').matches;
 
@@ -135,7 +139,7 @@
     }
     // 2) Fibras que nacen en los huecos del anillo (donde se abren las de la pupila)
     for (const [x, y] of barajar(celdas.filter(([x, y]) => Math.hypot(x, y) > RIN + 2 && Math.hypot(x, y) < N * 0.86))) {
-      if (!vecinosLibres(x, y) || rnd() < 0.2) continue;
+      if (!vecinosLibres(x, y) || rnd() < 0.55) continue;
       guardar(crecer(x, y, 4 * N, exterior(), giro(), umbral()), true);
     }
     // 3) Marcos pequeños (rectángulos de 1 a 3 celdas) donde hay espacio con margen
@@ -153,7 +157,7 @@
     }
     // 4) Fibras cortas para lo que quede
     for (const [x, y] of barajar(celdas.slice())) {
-      if (!vecinosLibres(x, y)) continue;
+      if (!vecinosLibres(x, y) || rnd() < 0.6) continue;
       guardar(crecer(x, y, 1 + Math.floor(rnd() * 4), N * 0.97, giro(), umbral()), false);
     }
     return trazos;
@@ -168,18 +172,21 @@
     const id = (x, y) => (y + N) * T + (x + N);
     const dentro = (x, y) => Math.abs(x) <= N && Math.abs(y) <= N;
     const etiqueta = new Int32Array(T * T), resto = new Int8Array(T * T), celdas = [null];
-    // ¿Hay una celda de otra figura en los 8 alrededores?
-    const ajena = (x, y, k) => {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const vx = x + dx, vy = y + dy;
-        if (dentro(vx, vy)) { const e = etiqueta[id(vx, vy)]; if (e && e !== k) return true; }
+    // Celdas a HUECO o menos de cada figura: 0 = de ninguna, k = solo de la figura k,
+    // -1 = de dos o más. Una figura no puede ocupar una celda cercana a otra
+    const cerca = new Int32Array(T * T);
+    const ajena = (x, y, k) => { const c = cerca[id(x, y)]; return c !== 0 && c !== k; };
+    const marcar = (x, y, k) => {
+      for (let dy = -HUECO; dy <= HUECO; dy++) for (let dx = -HUECO; dx <= HUECO; dx++) {
+        if (!dentro(x + dx, y + dy)) continue;
+        const q = id(x + dx, y + dy), c = cerca[q];
+        cerca[q] = c === 0 || c === k ? k : -1;
       }
-      return false;
     };
     let frente = [];
-    const poner = (x, y, k, b) => { const q = id(x, y); etiqueta[q] = k; resto[q] = b; celdas[k].push([x, y]); frente.push([x, y, k]); };
+    const poner = (x, y, k, b) => { const q = id(x, y); etiqueta[q] = k; resto[q] = b; marcar(x, y, k); frente.push([x, y, k]); };
     // Cuánto se engorda un tramo: más cerca de la pupila, más ancho
-    const engorde = r => { const p = rnd(); return r < N * 0.6 ? (p < 0.25 ? 1 : p < 0.65 ? 2 : 3) : (p < 0.5 ? 1 : p < 0.85 ? 2 : 3); };
+    const engorde = r => { const p = rnd(); return r < N * 0.6 ? (p < 0.55 ? 2 : 3) : (p < 0.2 ? 1 : p < 0.75 ? 2 : 3); };
     // 1) El esqueleto en la cuadrícula fina; cada tramo recto con su engorde
     trazos.forEach(tr => {
       const k = celdas.length;
@@ -213,12 +220,29 @@
           const r = Math.hypot(nx, ny);
           if (r < RIN - 1 || r > N || ajena(nx, ny, k)) continue;
           const q = id(nx, ny);
-          etiqueta[q] = k; resto[q] = b - 1; celdas[k].push([nx, ny]); nuevo.push([nx, ny, k]);
+          etiqueta[q] = k; resto[q] = b - 1; marcar(nx, ny, k); nuevo.push([nx, ny, k]);
         }
       }
       frente = nuevo;
     }
-    // 2b) Limpieza (dos pasadas): se rellenan las muescas de una celda (celda vacía con 3
+    // 2b) Sin partes delgadas (apertura: erosión y dilatación de una celda): lo que mida
+    //     menos de 3 celdas de ancho se quita, para que ninguna figura parezca una línea
+    const nucleo = new Uint8Array(T * T);
+    for (let y = -N + 1; y < N; y++) for (let x = -N + 1; x < N; x++) {
+      const q = id(x, y), e = etiqueta[q];
+      if (!e) continue;
+      let todo = true;
+      for (let dy = -1; dy <= 1 && todo; dy++) for (let dx = -1; dx <= 1 && todo; dx++) if (etiqueta[q + dy * T + dx] !== e) todo = false;
+      nucleo[q] = todo ? 1 : 0;
+    }
+    for (let y = -N + 1; y < N; y++) for (let x = -N + 1; x < N; x++) {
+      const q = id(x, y);
+      if (!etiqueta[q]) continue;
+      let queda = false;
+      for (let dy = -1; dy <= 1 && !queda; dy++) for (let dx = -1; dx <= 1 && !queda; dx++) if (nucleo[q + dy * T + dx]) queda = true;
+      if (!queda) etiqueta[q] = 0;
+    }
+    // 2c) Limpieza (dos pasadas): se rellenan las muescas de una celda (celda vacía con 3
     //     o más vecinos de la misma figura, o entre dos lados de ella) y se quitan las
     //     salientes de una celda, para que los bordes queden lisos
     for (let pasada = 0; pasada < 2; pasada++) {
@@ -229,9 +253,31 @@
           const k = d || i || ab || ar;
           if (!k) continue;
           const iguales = (d === k) + (i === k) + (ab === k) + (ar === k);
-          if ((iguales >= 3 || (d === k && i === k) || (ab === k && ar === k)) && !ajena(x, y, k)) etiqueta[q] = k;
+          if ((iguales >= 3 || (d === k && i === k) || (ab === k && ar === k)) && !ajena(x, y, k)) { etiqueta[q] = k; marcar(x, y, k); }
         } else if ((d === e0) + (i === e0) + (ab === e0) + (ar === e0) <= 1) etiqueta[q] = 0;
       }
+    }
+    // 2d) Figuras geométricas en los huecos que quedan: triángulos rectángulos (la
+    //     hipotenusa sale a 45°), cuadrados y rectángulos alargados hacia afuera
+    const lugares = [];
+    for (let y = -N; y <= N; y++) for (let x = -N; x <= N; x++) { const r = Math.hypot(x, y); if (r >= RIN + 1 && r <= N - 1) lugares.push([x, y]); }
+    for (let i = lugares.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [lugares[i], lugares[j]] = [lugares[j], lugares[i]]; }
+    for (const [x, y] of lugares) {
+      if (cerca[id(x, y)] || rnd() < 0.25) continue;
+      const tipo = rnd(), forma = [];
+      if (tipo < 0.4) {
+        const L = 5 + Math.floor(rnd() * 5), fx = rnd() < 0.5 ? 1 : -1, fy = rnd() < 0.5 ? 1 : -1;
+        for (let j = 0; j < L; j++) for (let i = 0; i + j < L; i++) forma.push([x + fx * i, y + fy * j]);
+      } else {
+        const cuadrado = tipo < 0.65, largo = cuadrado ? 3 + Math.floor(rnd() * 4) : 6 + Math.floor(rnd() * 6);
+        const corto = cuadrado ? largo : 3 + Math.floor(rnd() * 2), horizontal = Math.abs(x) >= Math.abs(y);
+        const w = horizontal ? largo : corto, h = horizontal ? corto : largo;
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) forma.push([x + i, y + j]);
+      }
+      if (!forma.every(([fx, fy]) => { if (!dentro(fx, fy)) return false; const r = Math.hypot(fx, fy); return r >= RIN && r <= N && !cerca[id(fx, fy)]; })) continue;
+      const k = celdas.length;
+      celdas.push([]);
+      for (const [fx, fy] of forma) { etiqueta[id(fx, fy)] = k; marcar(fx, fy, k); }
     }
     for (let k = 1; k < celdas.length; k++) celdas[k] = [];
     for (let y = -N; y <= N; y++) for (let x = -N; x <= N; x++) { const e = etiqueta[id(x, y)]; if (e) celdas[e].push([x, y]); }
@@ -383,7 +429,7 @@
     chispas = [];
     if (quieto.matches || !geo || typeof Element.prototype.animate !== 'function') return;
     const lista = candidatos();
-    const cuantas = Math.max(5, Math.min(geo.m ? 9 : 16, Math.round(lista.length / 10)));
+    const cuantas = Math.max(5, Math.min(geo.m ? 9 : 16, Math.round(lista.length / 6)));
     for (let i = 0; i < cuantas; i++) {
       const c = document.createElement('span');
       c.className = 'iris-chispa';
