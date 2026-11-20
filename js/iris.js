@@ -3,11 +3,13 @@
  *
  * El iris se arma una sola vez al abrir la página, siempre igual (azar con
  * semilla fija): una cuadrícula dentro de un anillo y trazos que salen de la
- * pupila hacia afuera con tramos rectos y vueltas de 45° o 90°, como pistas,
- * sin encimarse (cada punto de la cuadrícula es de un solo trazo y dos
- * diagonales no se cruzan); los huecos se llenan con trazos cortos y marcos
- * pequeños. Cada trazo se ve como un polígono hueco: una línea blanca gruesa y,
- * encima, una del color del fondo más delgada.
+ * pupila hacia afuera siguiendo su radio, con tramos rectos y vueltas de 45° o
+ * 90°, como pistas; los huecos se llenan con trazos cortos y marcos pequeños.
+ * Entre dos trazos (y entre dos partes de un mismo trazo) siempre queda al
+ * menos una celda libre, así que nunca se tocan. Cada trazo se ve como un bucle
+ * cerrado de una sola línea (el contorno de un tubo con esquinas y puntas
+ * redondeadas): una línea blanca gruesa y, encima, una del color del fondo un
+ * poco más delgada.
  *
  * El centro del iris va en el borde izquierdo del rojo (donde empieza), a media
  * altura, y su radio es más o menos el 60 % de la altura del panel; en celular
@@ -26,7 +28,7 @@
   const NS = 'http://www.w3.org/2000/svg';
   const SEMILLA = 20261119;
   const PUPILA = 0.32;          // radio de la pupila / radio del iris
-  const PX_CELDA = 10;          // tamaño aproximado de una celda en pantalla
+  const PX_CELDA = 7;           // tamaño aproximado de una celda en pantalla
   const VELOCIDAD = 7;          // celdas por segundo de las chispas
   const movil = () => window.matchMedia('(max-width: 820px)').matches;
 
@@ -53,20 +55,32 @@
   function generar(N) {
     const rnd = azar(SEMILLA + N), RIN = N * PUPILA, T = 2 * N + 1;
     const id = (x, y) => (y + N) * T + (x + N);
-    const ocupado = new Uint8Array(T * T), diagonal = new Uint8Array(T * T);
+    // ocupado = número del trazo (1, 2, ...) dueño de cada punto; 0 = libre
+    const ocupado = new Int32Array(T * T), diagonal = new Uint8Array(T * T);
+    let numero = 0;
     const DIR = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
     const enAnillo = (x, y, rmax) => { const r = Math.hypot(x, y); return r >= RIN && r <= rmax; };
     const libre = (x, y) => Math.abs(x) <= N && Math.abs(y) <= N && !ocupado[id(x, y)];
-    // ¿Se puede ir de (x, y) en la dirección d sin tocar otro trazo ni cruzar una diagonal?
-    function puede(x, y, d, rmax) {
+    // ¿Se puede ir de (x, y) en la dirección d? El punto nuevo debe estar libre y sus 8
+    // vecinos también, salvo el punto actual y el anterior del mismo trazo: así queda
+    // siempre una celda libre entre bucles (y en las vueltas del mismo trazo)
+    function puede(x, y, d, rmax, k, previo) {
       const nx = x + DIR[d][0], ny = y + DIR[d][1];
       if (!enAnillo(nx, ny, rmax) || !libre(nx, ny)) return false;
-      return !(d % 2) || !diagonal[id(Math.min(x, nx), Math.min(y, ny))];
+      if (d % 2 && diagonal[id(Math.min(x, nx), Math.min(y, ny))]) return false;
+      const actual = id(x, y);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const vx = nx + dx, vy = ny + dy;
+        if (Math.abs(vx) > N || Math.abs(vy) > N) continue;
+        const q = id(vx, vy);
+        if (ocupado[q] && !(ocupado[q] === k && (q === actual || q === previo))) return false;
+      }
+      return true;
     }
-    function mover(x, y, d) {
+    function mover(x, y, d, k) {
       const nx = x + DIR[d][0], ny = y + DIR[d][1];
       if (d % 2) diagonal[id(Math.min(x, nx), Math.min(y, ny))] = 1;
-      ocupado[id(nx, ny)] = 1;
+      ocupado[id(nx, ny)] = k;
       return [nx, ny];
     }
     const angulo = d => Math.atan2(DIR[d][1], DIR[d][0]);
@@ -78,9 +92,9 @@
     // dobla 45° hacia su radio; a veces se va de lado 1 a 3 celdas (vuelta de 90°) y
     // regresa, como las pistas. Nunca vuelve hacia la pupila.
     function crecer(x, y, largo, rmax, giro, umbral, lado = 0.1) {
-      const puntos = [[x, y]];
-      ocupado[id(x, y)] = 1;
-      let d = cercana(Math.atan2(y, x) + giro), deLado = 0, dLado = 0;
+      const puntos = [[x, y]], k = ++numero;
+      ocupado[id(x, y)] = k;
+      let d = cercana(Math.atan2(y, x) + giro), deLado = 0, dLado = 0, previo = -1;
       for (let paso = 0; paso < largo; paso++) {
         const meta = Math.atan2(y, x) + giro, desvio = diferencia(angulo(d), meta), hacia = desvio > 0 ? -1 : 1;
         if (!deLado && paso > 1 && rnd() < lado) { deLado = 1 + Math.floor(rnd() * 3); dLado = (d + (rnd() < 0.5 ? 2 : 6)) % 8; }
@@ -88,13 +102,14 @@
         let siguiente = -1;
         for (const g of orden) {
           const nd = (d + g + 8) % 8;
-          if (Math.cos(diferencia(angulo(nd), Math.atan2(y, x))) < (deLado ? -0.15 : 0.25) || !puede(x, y, nd, rmax)) continue;
+          if (Math.cos(diferencia(angulo(nd), Math.atan2(y, x))) < (deLado ? -0.15 : 0.25) || !puede(x, y, nd, rmax, k, previo)) continue;
           siguiente = nd;
           break;
         }
         if (deLado) deLado = siguiente === dLado ? deLado - 1 : 0;
         if (siguiente < 0) break;
-        [x, y] = mover(x, y, siguiente);
+        previo = id(x, y);
+        [x, y] = mover(x, y, siguiente, k);
         d = siguiente;
         puntos.push([x, y]);
       }
@@ -112,7 +127,7 @@
     const exterior = () => N * (0.9 + 0.1 * rnd());        // borde de afuera casi parejo
     // 1) Desde el borde de la pupila hacia afuera (las fibras del iris)
     for (const [x, y] of barajar(celdas.filter(([x, y]) => Math.hypot(x, y) < RIN + 1.3))) {
-      if (!libre(x, y) || rnd() < 0.25) continue;
+      if (!vecinosLibres(x, y) || rnd() < 0.1) continue;
       guardar(crecer(x, y, 4 * N, exterior(), giro(), umbral()), true);
     }
     // 2) Fibras que nacen en los huecos del anillo (donde se abren las de la pupila)
@@ -123,13 +138,14 @@
     // 3) Marcos pequeños (rectángulos de 1 a 3 celdas) donde hay espacio con margen
     for (const [x, y] of barajar(celdas.filter(([x, y]) => Math.hypot(x, y) > RIN + 4))) {
       if (rnd() < 0.5) continue;
-      const w = 1 + Math.floor(rnd() * 3), h = 1 + Math.floor(rnd() * 2);
+      const w = 2 + Math.floor(rnd() * 3), h = 2 + Math.floor(rnd() * 2);
       let cabe = true;
       for (let j = -1; j <= h + 1 && cabe; j++) for (let i = -1; i <= w + 1 && cabe; i++) {
         if (!libre(x + i, y + j) || !enAnillo(x + i, y + j, N * 0.95)) cabe = false;
       }
       if (!cabe) continue;
-      for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) ocupado[id(x + i, y + j)] = 1;
+      numero++;
+      for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) ocupado[id(x + i, y + j)] = numero;
       trazos.push({ puntos: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], cerrado: true, sale: false });
     }
     // 4) Fibras cortas para lo que quede
@@ -153,7 +169,7 @@
 
   // ── Armado ──────────────────────────────────────────────────────────
   const r0 = panel.getBoundingClientRect();
-  const N = Math.max(26, Math.min(70, Math.round(radioPantalla(r0.width, r0.height) / PX_CELDA)));
+  const N = Math.max(30, Math.min(100, Math.round(radioPantalla(r0.width, r0.height) / PX_CELDA)));
   const trazos = generar(N).map(t => ({ ...t, puntos: esquinas(t.puntos) }));
   const d = trazos.map(t => 'M' + t.puntos.map(p => p.join(' ')).join('L') + (t.cerrado ? 'Z' : '')).join('');
 
