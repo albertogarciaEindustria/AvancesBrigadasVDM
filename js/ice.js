@@ -201,6 +201,7 @@ const Ice = (function () {
     // Pestañas Preventa (id 'rutas', antes Rutas) y Farmers: la misma vista con otros datos
     vistasRuta = { rutas: crearVistaRuta('rutas'), farmers: crearVistaRuta('farmers'), cercanos: crearVistaCercanos() };
     farmersSub = 'recorridos';
+    farmersCanal = null;
     cineticaLista = false;
     preventaLista = false;
     canalesListos = {};
@@ -1698,6 +1699,7 @@ const Ice = (function () {
       nota: ' Cada cliente va con su farmer y se visita los días de su frecuencia Farmer (clave y frecuencia Farmer de JefaturasFrecuencia, /addjefaturas); la jefatura de cada farmer es la de la mayoría de sus clientes.',
       sinDatos: 'Esta publicación no trae los recorridos de los farmers: la base de jefaturas (JefaturasFrecuencia) no tiene las columnas de clave y frecuencia Farmer. Hay que volver a mandar el Excel de OBJETIVOS con /addjefaturas y publicar de nuevo.',
       panel: 'p-farmers-recorridos',      // dentro de la pestaña Farmers (farmersPestana)
+      porCanal: true,                      // botón de canal de la pestaña (farmersCanal)
     },
   };
   // Farmers, vista Zona y cercanos (crearVistaCercanos): sus PDF agregan los cercanos
@@ -1731,7 +1733,7 @@ const Ice = (function () {
   // vez que se abre; quitar() borra su mapa al cambiar de unidad (administrador)
   function crearVistaRuta(id) {
     const V = VISTAS_RUTA[id], I = n => id + n;   // ids de la vista: rutasMapa, farmersMapa...
-    let mapa = null, capa = null, capaEtiq = null, grupos = [], diaSel = 'hoy';
+    let mapa = null, capa = null, capaEtiq = null, grupos = [], diaSel = 'hoy', Rdia = null;
 
     // Letrero con el código de cada ruta (en el centro de sus clientes), solo al acercar el mapa
     function pintarEtiquetas() {
@@ -1806,7 +1808,7 @@ const Ice = (function () {
 
     function filtrarLista() {
       const q = normalizar($(I('Busca')).value), solo = $(I('SoloIce')).checked;
-      const R = V.datos()[diaSel].rutas;
+      const R = Rdia.rutas;
       document.querySelectorAll(`#${I('Lista')} li`).forEach((li, i) => {
         const r = R[i];
         li.hidden = (!!q && !normalizar(`${r.codigo} ${r.jefatura}`).includes(q)) || (solo && !r.puntos.some(p => p[4]));
@@ -1815,7 +1817,7 @@ const Ice = (function () {
 
     function pintarDia(dia) {
       diaSel = dia;
-      const R = V.datos()[dia];
+      const R = Rdia = rutasVista(V, dia), sel = canalVista(V);
       capa.clearLayers();
       capaEtiq.clearLayers();
       grupos = [];
@@ -1863,7 +1865,7 @@ const Ice = (function () {
       toqueCercano(mapa, marcadores);
       pintarEtiquetas();
 
-      $(I('Resumen')).innerHTML = `${esc(V.Varios)} que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ${esc(V.frecuencia)} <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> ${esc(V.varios)} · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2, <b>${num(tipos[3] || 0)}</b> prioridad 3 y <b>${num(tipos[4] || 0)}</b> no prioritarios. Las líneas unen a los clientes de ${esc(V.cadaUno)}; al acercar el mapa aparece la etiqueta con ${esc(V.clave)} de ${esc(V.cadaUno)}.`;
+      $(I('Resumen')).innerHTML = `${esc(V.Varios)} que visitan el <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia ${esc(V.frecuencia)} <b>${esc(R.letra)}</b>)${sel != null ? `, solo sus clientes <b>${esc(nombreCanalCorto(sel))}</b>` : ''}: <b>${num(R.rutas.length)}</b> ${esc(V.varios)} · <b>${num(total)}</b> clientes · ICE: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2, <b>${num(tipos[3] || 0)}</b> prioridad 3 y <b>${num(tipos[4] || 0)}</b> no prioritarios. Las líneas unen a los clientes de ${esc(V.cadaUno)}; al acercar el mapa aparece la etiqueta con ${esc(V.clave)} de ${esc(V.cadaUno)}.`;
       $(I('Lista')).innerHTML = R.rutas.map((r, i) => {
         const t = cuentaTipos(r.puntos);
         return `<li><button type="button" class="ruta-item" data-i="${i}">
@@ -1871,7 +1873,7 @@ const Ice = (function () {
           <span class="ruta-cod">${esc(r.codigo)}</span>
           <span class="ruta-conteo">${[1, 2, 3, 4].map(p => t[p] ? `<span class="prio p${p}" title="${PRIO[p].nombre}">${PRIO[p].corto} ${t[p]}</span>` : '').join('')}</span>
           <span class="ruta-info">${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.puntos.length, 'cliente')}</span></button></li>`;
-      }).join('') || `<li class="muted" style="padding:9px 6px">No hay ${esc(V.varios)} este día.</li>`;
+      }).join('') || `<li class="muted" style="padding:9px 6px">No hay ${esc(V.varios)}${sel != null ? ` con clientes ${esc(nombreCanalCorto(sel))}` : ''} este día.</li>`;
       document.querySelectorAll(`#${I('Lista')} .ruta-item`).forEach(b => b.addEventListener('click', () => elegirRuta(+b.dataset.i)));
       filtrarLista();
       $(I('Detalle')).innerHTML = `<p class="muted">Elige ${esc(V.unUno)} de la lista para ver sus clientes de ${dia === 'hoy' ? 'hoy' : 'mañana'}.</p>`;
@@ -1920,7 +1922,8 @@ const Ice = (function () {
       });
     }
 
-    return { abrir, quitar() { if (mapa) mapa.remove(); mapa = null; } };
+    // Al cambiar el canal (Farmers) se vuelve a pintar el día que se está viendo
+    return { abrir, refrescar() { if (mapa) pintarDia(diaSel); }, quitar() { if (mapa) mapa.remove(); mapa = null; } };
   }
 
   // ── Farmers: vistas Recorridos y Zona y cercanos ──────────────────────
@@ -1930,17 +1933,48 @@ const Ice = (function () {
   // caen en ella (farmers_semana.dias[].zonas, _zonas_farmers en publica_ice.py).
   let farmersSub = 'recorridos';
 
+  // Botón de canal de Farmers: null = todos los canales; si no, el índice del canal en
+  // D.canales ('Traditional' = Home Market). Lo respetan la pantalla y los PDF de las dos
+  // vistas: solo quedan los clientes de ese canal (P1, P2, P3 y cercanos) y los cercanos
+  // se escogen solo entre los de ese canal (farmers_semana.dias[].zonas_canal).
+  let farmersCanal = null;
+  const nombreCanalCorto = i => D.canales[i] === 'Traditional' ? 'Home Market' : D.canales[i];
+  const canalVista = V => V.porCanal && farmersCanal != null ? farmersCanal : null;
+  const conCanales = () => D.clientes.length > 0 && D.clientes[0].length > 18 && D.farmers.hoy.rutas.every(r => r.canales);
+
+  // Rutas de hoy o de mañana de una vista (D.rutas.hoy, D.farmers.hoy...), solo con los
+  // clientes del canal elegido (rutas[].canales: canal de cada punto)
+  function rutasVista(V, dia) {
+    const R = V.datos()[dia], sel = canalVista(V);
+    if (sel == null) return R;
+    return { ...R, rutas: R.rutas.map(r => ({ ...r, puntos: r.puntos.filter((p, k) => r.canales[k] === sel) })).filter(r => r.puntos.length) };
+  }
+
   function farmersPestana() {
     if (!D.farmers) { vistasRuta.farmers.abrir(); return; }   // aviso: la base no trae farmers
     const p = $('p-farmers');
     if (!$('farmersSub')) {
-      p.innerHTML = `<div class="ice-subpestanas"><div class="segmento" id="farmersSub" role="group" aria-label="Vista de la pestaña Farmers">
+      const canales = conCanales() ? [[null, 'Todos los canales'], ...['On Premise', 'Traditional'].map(c => [D.canales.indexOf(c), c === 'Traditional' ? 'Home Market' : c])] : [];
+      p.innerHTML = `<div class="ice-subpestanas farmers-barra"><div class="segmento" id="farmersSub" role="group" aria-label="Vista de la pestaña Farmers">
           <button type="button" data-sub="recorridos" aria-pressed="true">Recorridos</button>
-          <button type="button" data-sub="cercanos" aria-pressed="false">Zona y clientes cercanos</button></div></div>
+          <button type="button" data-sub="cercanos" aria-pressed="false">Zona y clientes cercanos</button></div>
+          ${canales.length ? `<div class="farmers-canal"><span class="poli-rutas-tit">Canal:</span>
+          <div class="segmento" id="farmersCanal" role="group" aria-label="Canal de los clientes de la pestaña Farmers">
+            ${canales.map(([i, n]) => `<button type="button" data-canal="${i == null ? '' : i}" aria-pressed="${i === farmersCanal}">${esc(n)}</button>`).join('')}
+          </div></div>
+          <p class="mapa-ayuda farmers-canal-ayuda">Con <b>On Premise</b> o <b>Home Market</b>, el mapa, la lista y los PDF de las dos vistas quedan solo con los clientes de ese canal: prioridad 1, 2 y 3 de cada recorrido y, en Zona y clientes cercanos, sus cercanos, que se escogen solo entre los de ese canal.</p>` : ''}</div>
         <div id="p-farmers-recorridos"></div><div id="p-farmers-cercanos" hidden></div>`;
       $('farmersSub').addEventListener('click', e => {
         const b = e.target.closest('[data-sub]');
         if (b) { farmersSub = b.dataset.sub; farmersPestana(); }
+      });
+      if ($('farmersCanal')) $('farmersCanal').addEventListener('click', e => {
+        const b = e.target.closest('[data-canal]');
+        if (!b) return;
+        farmersCanal = b.dataset.canal === '' ? null : +b.dataset.canal;
+        $('farmersCanal').querySelectorAll('[data-canal]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        vistasRuta.farmers.refrescar();
+        vistasRuta.cercanos.refrescar();
       });
     }
     $('farmersSub').querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === farmersSub));
@@ -1963,7 +1997,7 @@ const Ice = (function () {
 
   function crearVistaCercanos() {
     const V = VISTAS_RUTA.cercanos, I = n => 'cercanos' + n;
-    let mapa = null, capa = null, capaEtiq = null, grupos = [], R = null;
+    let mapa = null, capa = null, capaEtiq = null, grupos = [], R = null, diaI = 0;
 
     function pintarEtiquetas() {
       if ($(I('Etiquetas')).checked && mapa.getZoom() >= ZOOM_ETIQUETAS) capaEtiq.addTo(mapa);
@@ -2041,7 +2075,8 @@ const Ice = (function () {
     }
 
     function pintarDia(i) {
-      const S = V.semana(), d = S.dias[i];
+      const S = V.semana(), d = S.dias[i], sel = canalVista(V);
+      diaI = i;
       R = rutasDeSemana(V, i);
       capa.clearLayers();
       capaEtiq.clearLayers();
@@ -2098,7 +2133,7 @@ const Ice = (function () {
 
       const tipos = cuentaTipos(R.rutas.flatMap(r => r.puntos)), tc = cuentaTipos(R.rutas.flatMap(r => r.cercanos));
       const nc = (tc[1] || 0) + (tc[2] || 0), con = R.rutas.filter(r => r.cercanos.length).length;
-      $(I('Resumen')).innerHTML = `Zonas de los farmers del <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia Farmer <b>${esc(R.letra)}</b>): <b>${num(R.rutas.length)}</b> farmers · ICE en sus recorridos: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> prioridad 3 · <b>${num(nc)}</b> clientes cercanos (<b>${num(tc[1] || 0)}</b> P1 y <b>${num(tc[2] || 0)}</b> P2) para <b>${num(con)}</b> de ellos. Las líneas punteadas son la zona de cada farmer y la línea continua su recorrido del día.`;
+      $(I('Resumen')).innerHTML = `Zonas de los farmers del <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia Farmer <b>${esc(R.letra)}</b>)${sel != null ? `, solo clientes <b>${esc(nombreCanalCorto(sel))}</b>` : ''}: <b>${num(R.rutas.length)}</b> farmers · ICE en sus recorridos: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> prioridad 3 · <b>${num(nc)}</b> clientes cercanos (<b>${num(tc[1] || 0)}</b> P1 y <b>${num(tc[2] || 0)}</b> P2) para <b>${num(con)}</b> de ellos. Las líneas punteadas son la zona de cada farmer y la línea continua su recorrido del día.`;
       $(I('Lista')).innerHTML = R.rutas.map((r, k) => {
         const t = cuentaTipos(r.puntos);
         return `<li><button type="button" class="ruta-item" data-i="${k}">
@@ -2141,16 +2176,16 @@ const Ice = (function () {
           <p>${esc(r.jefatura || 'Sin jefatura')} · ${plural(r.total, 'cliente')} el ${esc(R.dia.toLowerCase())} · ICE: ${num(t[1] || 0)} P1, ${num(t[2] || 0)} P2, ${num(t[3] || 0)} P3 · ${plural(r.cercanos.length, 'cliente cercano', 'clientes cercanos')} · zona de +${num(r.margen)} m</p></div></div>
         <div class="tabla-scroll"><table class="ice-tabla">
           <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>Último ICE</th><th>ICE ${esc(D.mes)}</th><th class="izq">ÉPICA del mes</th></tr></thead>
-          <tbody>${ice.length ? ice.map((p, j) => filaClienteRuta(p, j + 1)).join('') : '<tr><td class="izq muted" colspan="8">Este farmer no tiene clientes prioridad 1, 2 o 3 este día.</td></tr>'}</tbody>
+          <tbody>${ice.length ? ice.map((p, j) => filaClienteRuta(p, j + 1)).join('') : `<tr><td class="izq muted" colspan="8">Este farmer no tiene clientes${canalVista(V) != null ? ` ${esc(nombreCanalCorto(canalVista(V)))}` : ''} prioridad 1, 2 o 3 este día.</td></tr>`}</tbody>
         </table></div>
         <h4 class="cercanos-tit">Clientes cercanos a su ruta (no están en ella)</h4>
         <div class="tabla-scroll"><table class="ice-tabla">
           <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>A su recorrido</th><th>Último ICE</th><th class="izq">Le faltó</th><th class="izq">ÉPICA del mes</th></tr></thead>
-          <tbody>${r.cercanos.length ? r.cercanos.map((p, j) => filaCercano(p, j + 1)).join('') : `<tr><td class="izq muted" colspan="9">No hay clientes prioridad 1 o 2 sin frecuencia Farmer en su zona (ni con ${num(D.farmers_zonas_criterio.margen_max)} m de margen).</td></tr>`}</tbody>
+          <tbody>${r.cercanos.length ? r.cercanos.map((p, j) => filaCercano(p, j + 1)).join('') : `<tr><td class="izq muted" colspan="9">No hay clientes${canalVista(V) != null ? ` ${esc(nombreCanalCorto(canalVista(V)))}` : ''} prioridad 1 o 2 sin frecuencia Farmer en su zona (ni con ${num(D.farmers_zonas_criterio.margen_max)} m de margen).</td></tr>`}</tbody>
         </table></div>`;
     }
 
-    return { abrir, quitar() { if (mapa) mapa.remove(); mapa = null; } };
+    return { abrir, refrescar() { if (mapa) pintarDia(diaI); }, quitar() { if (mapa) mapa.remove(); mapa = null; } };
   }
 
   // ── Impresiones (PDF) ─────────────────────────────────────────────────
@@ -2364,23 +2399,29 @@ const Ice = (function () {
   // Día de la semana (índice en rutas_semana.dias o farmers_semana.dias) con la forma de
   // D.rutas.hoy: sus clientes P1, P2 y P3
   function rutasDeSemana(V, i) {
-    const d = V.semana().dias[i], base = partes(D.hoy);
+    const d = V.semana().dias[i], base = partes(D.hoy), sel = canalVista(V);
     let f = new Date(base.a, base.m - 1, base.d);
     for (let k = 0; k < 7 && DIAS[f.getDay()] !== d.dia; k++) f.setDate(f.getDate() + 1);
     const fecha = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
     const punto = s => { const c = porSapCliente[s]; return [c ? c[2] : null, c ? c[3] : null, s, c ? c[1] : '', c ? c[4] : 3]; };
-    let rutas = d.ice.map(([codigo, jefatura, total, saps]) => ({ codigo, jefatura, total, puntos: saps.map(punto) }));
+    // Con el botón de canal de Farmers: solo los clientes de ese canal (clientes[18]) y el
+    // total de clientes de cada farmer es el de ese canal (dias[].canales_total)
+    const okCanal = s => sel == null || (!!porSapCliente[s] && porSapCliente[s][18] === sel);
+    const totalDe = (codigo, total) => sel == null || !d.canales_total ? total : (d.canales_total[codigo] || [])[sel] || 0;
+    let rutas = d.ice.map(([codigo, jefatura, total, saps]) => ({ codigo, jefatura, total: totalDe(codigo, total), puntos: saps.filter(okCanal).map(punto) }));
     if (V.cercanos) {
       // Vista Zona y cercanos: todos los farmers del día (aunque no traigan P1–P3), con
-      // su zona y sus cercanos [lat, lon, sap, nombre, tipo, metros a la ruta]
+      // su zona y sus cercanos [lat, lon, sap, nombre, tipo, metros a la ruta]; con un
+      // canal elegido, las zonas y cercanos escogidos solo entre los de ese canal
       const por = Object.fromEntries(rutas.map(r => [r.codigo, r]));
-      for (const [codigo, jefatura, total, margen, poligono, cerc] of d.zonas || []) {
-        const r = por[codigo] || (por[codigo] = { codigo, jefatura, total, puntos: [] });
-        Object.assign(r, { margen, poligono, cercanos: cerc.map(([s, metros]) => punto(s).concat([metros])) });
+      const zonas = sel != null && d.zonas_canal ? d.zonas_canal[D.canales[sel]] : d.zonas;
+      for (const [codigo, jefatura, total, margen, poligono, cerc] of zonas || []) {
+        const r = por[codigo] || (por[codigo] = { codigo, jefatura, total: totalDe(codigo, total), puntos: [] });
+        Object.assign(r, { margen, poligono, cercanos: cerc.filter(([s]) => okCanal(s)).map(([s, metros]) => punto(s).concat([metros])) });
       }
       rutas = Object.values(por).sort((a, b) => a.codigo < b.codigo ? -1 : a.codigo > b.codigo ? 1 : 0);
       for (const r of rutas) r.cercanos = r.cercanos || [];
-    }
+    } else if (sel != null) rutas = rutas.filter(r => r.puntos.length);
     return { dia: d.dia, letra: d.letra, fecha, rutas };
   }
 
@@ -2388,7 +2429,8 @@ const Ice = (function () {
   // propia tabla debajo de la de la ruta, con cortes de hoja como la principal
   function cercanosPdf(ctx, R, h, cerc) {
     const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M;
-    const nota = PDF.renglones(`Clientes prioridad 1 y 2 sin frecuencia Farmer y sin ICE en ${D.mes} que quedan dentro de la zona de tu recorrido del ${R.dia.toLowerCase()} ` +
+    const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';
+    const nota = PDF.renglones(`Clientes${canal} prioridad 1 y 2 sin frecuencia Farmer y sin ICE en ${D.mes} que quedan dentro de la zona de tu recorrido del ${R.dia.toLowerCase()} ` +
       `(tus clientes del día más ${num(h.margen)} m alrededor). No están en tu ruta: son los más cercanos a ella. A tu ruta: distancia al camino que une a tus clientes en orden.`, ancho, 7);
     const alto = 18 + 24 + (nota.length - 1) * 9 + 6 + 15 + PDF_FILA;
     if (ctx.y + alto > doc.H - 42) hojaRuta(ctx, R, h, true);
@@ -2419,13 +2461,14 @@ const Ice = (function () {
       .filter(x => (todos ? x.puntos.length : x.puntos.some(p => p[4])) || x.cerc.length)
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
     const ctx = documentoRutas(V, titulo);
+    const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';   // botón de canal de Farmers
     let conQr = 0, conP3 = 0, cercanos = 0;
     const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
                       { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
                       { titulo: V.colEpica, ancho: 86 }];
     if (!rutasPdf.length) {
       cabezaHoja(ctx, R);
-      ctx.doc.texto(PDF_M, 56, `No hay ${V.varios} con clientes ICE por evaluar este día.`, { tam: 12, negrita: true, color: NEGRO });
+      ctx.doc.texto(PDF_M, 56, `No hay ${V.varios} con clientes ICE${canal} por evaluar este día.`, { tam: 12, negrita: true, color: NEGRO });
     }
     for (const x of rutasPdf) {
       const { r, puntos: pendientes, cerc } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
@@ -2437,15 +2480,15 @@ const Ice = (function () {
                 u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(V, p[2]) : ''];
       });
       const h = { codigo: r.codigo, jefatura: jefDe(x), margen: r.margen,
-                  resumen: `Por evaluar: ${plural(ice.length, 'cliente ICE', 'clientes ICE')} (P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0})` +
-                           `${todos && t[0] ? ` + ${plural(t[0], 'cliente no ICE', 'clientes no ICE')}` : ''}` +
-                           ` de ${plural(r.total != null ? r.total : r.puntos.length, 'cliente')} ${V.delUno}` +
+                  resumen: `Por evaluar: ${plural(ice.length, `cliente ICE${canal}`, `clientes ICE${canal}`)} (P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0})` +
+                           `${todos && t[0] ? ` + ${plural(t[0], `cliente no ICE${canal}`, `clientes no ICE${canal}`)}` : ''}` +
+                           ` de ${plural(r.total != null ? r.total : r.puntos.length, `cliente${canal}`, `clientes${canal}`)} ${V.delUno}` +
                            `${fuera ? ` · ${plural(fuera, 'ya evaluado', 'ya evaluados')} en ${D.mes}, no se ${fuera === 1 ? 'imprime' : 'imprimen'}` : ''}` };
       hojaRuta(ctx, R, h, false);
       if (filas.length) tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
       else {
         ctx.y += 12;
-        ctx.doc.texto(PDF_M, ctx.y, 'Ningún cliente prioridad 1, 2 o 3 de tu recorrido está pendiente este día.', { tam: 9, negrita: true, color: NEGRO });
+        ctx.doc.texto(PDF_M, ctx.y, `Ningún cliente${canal} prioridad 1, 2 o 3 de tu recorrido está pendiente este día.`, { tam: 9, negrita: true, color: NEGRO });
       }
       if (cerc.length) { cercanosPdf(ctx, R, h, cerc); cercanos += cerc.length; }
       if (ubicacionesPdf(ctx, puntos.concat(cerc))) conQr++;
@@ -2460,22 +2503,25 @@ const Ice = (function () {
   function imprimir(V, boton, estado, todos) {
     boton.disabled = true;
     estado.textContent = 'Generando el PDF...';
+    // Con el botón de canal de Farmers el título y el archivo dicen el canal
+    const sel = canalVista(V), canal = sel == null ? '' : nombreCanalCorto(sel);
+    const tit = t => canal ? `${t} · ${canal}` : t, arch = a => canal ? `${a}_${canal.replace(/\s+/g, '')}` : a;
     // Deja que el navegador pinte el aviso antes de armar el documento
     setTimeout(() => {
       try {
         let hecho;
         if (boton.dataset.pdfDia != null) {
           const R = rutasDeSemana(V, +boton.dataset.pdfDia);
-          hecho = pdfRutas(V, R, V.tituloDia(R.dia.toLowerCase()), `${V.archivoDia}_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
+          hecho = pdfRutas(V, R, tit(V.tituloDia(R.dia.toLowerCase())), `${arch(V.archivoDia)}_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
         } else if (V.cercanos) {
           const R = rutasDeSemana(V, V.semana().dias.findIndex(d => d.hoy));
-          hecho = pdfRutas(V, R, V.tituloHoy, `${V.archivoHoy}_${D.unidad}_${R.fecha}.pdf`, false);
+          hecho = pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}.pdf`, false);
         } else {
-          const R = V.datos().hoy;
-          hecho = pdfRutas(V, R, V.tituloHoy, `${V.archivoHoy}_${D.unidad}_${R.fecha}.pdf`, todos);
+          const R = rutasVista(V, 'hoy');
+          hecho = pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}.pdf`, todos);
         }
-        estado.textContent = hecho.rutas ? `PDF listo: ${plural(hecho.rutas, V.uno, V.varios)} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}. Revisa tus descargas.`
-          : `PDF listo: este día no hay ${V.varios} con clientes por evaluar.`;
+        estado.textContent = hecho.rutas ? `PDF listo${canal ? ` (solo ${canal})` : ''}: ${plural(hecho.rutas, V.uno, V.varios)} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}. Revisa tus descargas.`
+          : `PDF listo: este día no hay ${V.varios} con clientes${canal ? ` ${canal}` : ''} por evaluar.`;
       } catch (e) {
         console.error(e);
         estado.textContent = 'No se pudo generar el PDF.';
