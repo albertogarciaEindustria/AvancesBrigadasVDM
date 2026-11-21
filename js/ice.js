@@ -11,6 +11,11 @@
  * última evaluación ICE (la del mes si ya se evaluó; elemento 17 de cada
  * cliente, ver _datos_ultima en Programas/publica_ice.py).
  *
+ * Fichas de cliente: cada barra de submétrica dice su %, los puntos que sumó de
+ * su total y los que perdió (puntos oficiales del formato con que se calificó);
+ * al tocarla sube desde abajo el checklist de esa submétrica para ese cliente
+ * (js/ice-checklist.js, reglas en Programas/checklist_ice.py).
+ *
  * El usuario se normaliza (sin acentos, símbolos ni mayúsculas) y su hash dice
  * qué archivo pedir: datos/ice/u-<hash>.js trae, cifrados con la contraseña,
  * el nombre del archivo de datos de la unidad y su llave. Los datos
@@ -58,6 +63,8 @@ const Ice = (function () {
   };
   // Nombres cortos de las submétricas para los PDF
   const CORTO = { precio: 'Com. de precios', plataformas: 'Act. plataformas' };
+  // ...y para las barras con puntos de las fichas (deben caber con «90% 13.5/15» en un celular)
+  const CORTO_BARRA = { precio: 'Com. precios', plataformas: 'Plataformas' };
   const svgIcono = id => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[id] || ICONOS.ok}</svg>`;
 
   const $ = id => document.getElementById(id);
@@ -206,6 +213,8 @@ const Ice = (function () {
     preventaLista = false;
     canalesListos = {};
     D = datos;
+    IceChecklist.preparar(D.checklist);
+    hojaChecklist.cerrar();
     porSapCliente = Object.fromEntries(D.clientes.map(c => [c[0], c]));
     porSapEval = {};
     for (const e of D.evaluados) (porSapEval[e[0]] = porSapEval[e[0]] || []).push(e);
@@ -334,7 +343,7 @@ const Ice = (function () {
       ${seccion('Descargas de la unidad', '', `
         <div class="ice-descargas">
           <button type="button" class="ice-btn rojo" id="btnHoja">${svgIcono('descarga')}Descargar «Mis clientes ICE» (HTML)</button>
-          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: al abrirlo <b>eliges tu jefatura y tu ruta</b> (o <b>Farmer</b> y tu clave) y ves tus clientes ICE de hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y de mañana en una lista sencilla: tipo de cliente, SAP, nombre, último ICE y lo que le faltó. Tres pestañas: prioridad 1, 2 y 3; no prioritarios; y <b>tus clientes ya evaluados en ${esc(D.mes)}</b> con su calificación en colores. Al tocar un cliente ves su ficha: mapa, cómo llegar, sus datos y el desglose de su última evaluación. Es una foto de esta publicación: descárgalo cada día.</span>
+          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: al abrirlo <b>eliges tu jefatura y tu ruta</b> (o <b>Farmer</b> y tu clave) y ves tus clientes ICE de hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y de mañana en una lista sencilla: tipo de cliente, SAP, nombre, último ICE y lo que le faltó. Tres pestañas: prioridad 1, 2 y 3; no prioritarios; y <b>tus clientes ya evaluados en ${esc(D.mes)}</b> con su calificación en colores. Al tocar un cliente ves su ficha: mapa, cómo llegar, sus datos y el desglose de su última evaluación con los puntos que sumó y perdió en cada submétrica; <b>al tocar una barra ves el checklist</b> de esa submétrica para su tipo de cliente, con lo que vale cada paso y la calculadora de frentes SOCI/SOVI. Es una foto de esta publicación: descárgalo cada día.</span>
         </div>
         ${D.excel ? `<div class="ice-descargas">
           <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
@@ -603,6 +612,17 @@ const Ice = (function () {
     const mayor = p.reduce((a, v, i) => (v != null && (a == null || v > p[a]) ? i : a), null);
     const w = G.pesos[canal] || [];
     const pesos = mets.map((m, i) => w[i] != null ? `${m.nombre} ${num(w[i] * 100, 0)}` : null).filter(Boolean).join(', ');
+    // Puntos oficiales del manual por tipo de cliente (checklist ICE; no cambian con el tamaño)
+    const CK = D.checklist, ckCanal = CK && CK.canales[(CK.orden || [])[D.canales.indexOf(canal)]];
+    const porTipo = ckCanal ? Object.entries(ckCanal.tipos).map(([t, nt]) => {
+      const f = Object.keys(ckCanal.formatos).find(x => x.endsWith('_' + t));
+      return f ? [nt, ckCanal.formatos[f]] : null;
+    }).filter(Boolean) : [];
+    const oficiales = porTipo.map(([nt, rs]) => `${nt}: ${rs.map(r => `${r.nombre} ${r.pts}`).join(', ')}`).join(' · ');
+    // Rubros que en algún tipo de cliente no cuentan (Home Market con reja: SOVI y Métrica local)
+    const todos = [...new Set(porTipo.flatMap(([, rs]) => rs.map(r => r.nombre)))];
+    const noCuentan = porTipo.map(([nt, rs]) => [nt, todos.filter(n => !rs.some(r => r.nombre === n))]).filter(([, f]) => f.length)
+      .map(([nt, f]) => `${f.join(' y ')} no ${f.length > 1 ? 'cuentan' : 'cuenta'} para un cliente ${nt.toLowerCase()}: no le ${f.length > 1 ? 'quitan' : 'quita'} puntos.`).join(' ');
     const usadas = filas.filter(({ i }) => C.metricas_zona.some(z => z.prom[i] != null));
     const calor = C.metricas_zona.length ? `<h3 class="ice-subtitulo" style="margin-top:26px">Promedio de cada submétrica por jefatura (%)</h3>
       <div class="tabla-scroll"><table class="ice-tabla tabla-calor">
@@ -615,7 +635,7 @@ const Ice = (function () {
         }).join('')}</tr>`).join('')}</tbody>
       </table></div>
       <p class="escala-calor"><span>0%</span><i aria-hidden="true"></i><span>100%</span></p>` : '';
-    return seccion(`Desglose de la calificación · ${nombre}`, `Submétricas del ICE en ${esc(D.mes)}: promedio de cumplimiento y cuántos puntos se pierden en promedio por cada una (peso aproximado × lo que le falta para el 100%). La que más quita es donde más conviene trabajar.`,
+    return seccion(`Desglose de la calificación · ${nombre}`, `Submétricas del ICE en ${esc(D.mes)}: promedio de cumplimiento y cuántos puntos se pierden en promedio por cada una (${oficiales ? 'con los puntos del manual ICE 2026 para el tipo de cliente con que se calificó cada evaluación' : 'peso aproximado × lo que le falta para el 100%'}). La que más quita es donde más conviene trabajar.`,
       `<div class="ice-dos">
         <div class="tabla-scroll"><table class="ice-tabla">
           <thead><tr><th>Submétrica</th><th>Promedio</th><th>Puntos que quita</th></tr></thead>
@@ -627,7 +647,7 @@ const Ice = (function () {
         <figure><figcaption>Puntos que quita cada submétrica</figcaption><div class="grafica" id="gPerd${k}"></div></figure>
       </div>
       ${calor}
-      ${pesos ? `<p class="ice-nota">Peso aproximado de cada submétrica (puntos que aporta al 100%; con el bono el máximo es 110): ${esc(pesos)}, estimado con ${num(G.n_pesos[canal])} evaluaciones. El reporte no trae la fórmula: los pesos sirven para comparar, no son oficiales.</p>` : ''}`);
+      ${oficiales ? `<p class="ice-nota">Puntos de cada submétrica al 100% según el manual ICE 2026 (con el bono el máximo es 110). ${esc(oficiales)}.${noCuentan ? ' ' + esc(noCuentan) : ''}</p>` : pesos ? `<p class="ice-nota">Peso aproximado de cada submétrica (puntos que aporta al 100%; con el bono el máximo es 110): ${esc(pesos)}, estimado con ${num(G.n_pesos[canal])} evaluaciones. El reporte no trae la fórmula: los pesos sirven para comparar, no son oficiales.</p>` : ''}`);
   }
 
   function graficaPerdidos(cont, canal, nombre) {
@@ -784,17 +804,85 @@ const Ice = (function () {
     return mets.map((v, i) => v == null ? null : (w[i] != null ? w[i] : 0.01) * Math.max(0, 100 - v));
   }
 
-  // Barras de las submétricas de una evaluación (canal, submétricas, la que más quita)
-  function metricasPopup(ci, mets, peor) {
-    const perd = perdidosDe(ci, mets);
-    return `<div class="pc-mets">${D.metricas.map((m, i) => {
+  // Barras de las submétricas de una evaluación u = [fecha, canal, ICE, submétricas,
+  // la que más quitó, puntos, formato con que se calificó, formato de la Master Data]:
+  // «Enfriador 80% 36/45» (%, puntos que sumó / su total) y a la derecha los que perdió,
+  // con los puntos oficiales de su formato (js/ice-checklist.js); en evaluaciones de
+  // antes de esas reglas, solo el % y los puntos aproximados de los pesos estimados.
+  // Cada barra es un botón que abre el checklist de esa submétrica (hojaChecklist).
+  function metricasPopup(u, nombre, sap) {
+    const [fecha, ci, , mets, peor, , fmt, fmtM] = u;
+    const perd = perdidosDe(ci, mets), conPts = IceChecklist.conPuntos(fecha), noCuentan = [];
+    const filas = D.metricas.map((m, i) => {
       const v = mets[i];
       if (v == null) return '';
-      return `<div class="pc-met${peor === i ? ' peor' : ''}"><span class="icono-metrica">${svgIcono(m.id)}</span>
-        <span class="barra"><i style="width:${Math.min(100, v)}%"></i><em>${esc(m.nombre)} ${num(v, 0)}%</em></span>
-        <b>${perd[i] > 0.05 ? '−' + num(perd[i], 1) : '0'}</b></div>`;
-    }).join('')}</div>`;
+      if (conPts && IceChecklist.noAplica(ci, fmt, i)) { noCuentan.push(m.nombre); return ''; }
+      const inf = IceChecklist.info(ci, fmt, i, v, fecha);
+      const p = inf ? inf.perdidos : perd[i];
+      const datos = esc(JSON.stringify([ci, fmt || '', fmtM || '', i, v, fecha || '', nombre || '', sap || '']));
+      return `<button type="button" class="pc-met${peor === i ? ' peor' : ''}" data-ck="${datos}" title="${esc(m.nombre)}: ver su checklist"><span class="icono-metrica">${svgIcono(m.id)}</span>
+        <span class="barra"><i style="width:${Math.min(100, v)}%"></i><em>${esc(inf ? CORTO_BARRA[m.id] || m.nombre : m.nombre)}</em><span class="pc-pts">${num(v, 0)}%${inf ? ` ${IceChecklist.pts(inf.ganados)}/${IceChecklist.pts(inf.total)}` : ''}</span></span>
+        <b>${p > 0.05 ? '−' + (inf ? IceChecklist.pts(p) : num(p, 1)) : '0'}</b></button>`;
+    }).join('');
+    if (!filas) return '';
+    return `<div class="pc-mets">${filas}</div>
+      ${noCuentan.length ? `<p class="pc-ck-nota">${esc(noCuentan.join(' y '))}: no ${noCuentan.length > 1 ? 'cuentan' : 'cuenta'} para un cliente ${esc((IceChecklist.formato(ci, fmt).split(' · ')[1] || '').toLowerCase())}.</p>` : ''}
+      ${IceChecklist.hay() ? `<p class="pc-ck-nota">${TACTIL ? 'Toca' : 'Haz clic en'} una barra para ver su checklist.${conPts ? '' : ' Esta evaluación es de antes de las reglas de hoy: el % es el del reporte y los puntos de la derecha son aproximados.'}</p>` : ''}`;
   }
+
+  // ── Checklist de una submétrica: hoja que sube desde abajo ────────────
+  const hojaChecklist = (function () {
+    let raiz = null, origen = null;
+    function crear() {
+      if (raiz) return;
+      const estilo = document.createElement('style');
+      estilo.textContent = IceChecklist.css;
+      document.head.appendChild(estilo);
+      raiz = document.createElement('div');
+      raiz.className = 'ck-hoja';
+      raiz.hidden = true;
+      raiz.innerHTML = `<div class="ck-fondo" data-cerrar></div>
+        <section class="ck-panel" role="dialog" aria-modal="true" aria-labelledby="ckTitulo" tabindex="-1">
+          <header class="ck-barra"><div><p class="ck-cliente" id="ckCliente"></p><h3 id="ckTitulo">Checklist</h3></div>
+            <button type="button" class="ck-cerrar" data-cerrar aria-label="Cerrar el checklist">×</button></header>
+          <div class="ck-cuerpo" id="ckCuerpo"></div>
+        </section>`;
+      document.body.appendChild(raiz);
+      raiz.addEventListener('click', e => { if (e.target.closest('[data-cerrar]')) cerrar(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && !raiz.hidden) cerrar(); });
+      IceChecklist.enlazar($('ckCuerpo'));
+    }
+    function abrir(datos, boton) {
+      crear();
+      const [ci, fmt, fmtM, i, pct, fecha, nombre, sap] = datos;
+      const metrica = D.metricas[i] ? D.metricas[i].nombre : '';
+      origen = boton;
+      $('ckCliente').textContent = [nombre || 'Cliente sin nombre', sap ? `SAP ${sap}` : ''].filter(Boolean).join(' · ');
+      $('ckTitulo').textContent = `Checklist · ${metrica}`;
+      $('ckCuerpo').innerHTML = IceChecklist.html({ ci, fmt, fmtMaster: fmtM, i, pct, fecha, metrica });
+      raiz.hidden = false;
+      document.body.classList.add('ck-abierto');
+      $('ckCuerpo').scrollTop = 0;
+      raiz.querySelector('.ck-panel').focus();
+    }
+    function cerrar() {
+      if (!raiz || raiz.hidden) return;
+      raiz.hidden = true;
+      document.body.classList.remove('ck-abierto');
+      if (origen && document.contains(origen)) origen.focus();
+      origen = null;
+    }
+    // Las fichas viven en popups de Leaflet, que no dejan subir el clic: se escucha en captura
+    document.addEventListener('click', e => {
+      const b = e.target.closest && e.target.closest('[data-ck]');
+      if (!b || !D) return;
+      let datos;
+      try { datos = JSON.parse(b.getAttribute('data-ck')); } catch (err) { return; }
+      e.preventDefault();
+      abrir(datos, b);
+    }, true);
+    return { abrir, cerrar };
+  })();
 
   // Última evaluación del cliente: [fecha, canal, ICE, submétricas, la que más quitó, puntos]
   const idPeor = u => u[4] == null ? 'ok' : D.metricas[u[4]].id;
@@ -813,7 +901,7 @@ const Ice = (function () {
     const [sap, nombre, lat, lon, prio, zi, ruta, zpv, vprev, vant, ultima, ultimoIce, promHist, dir, semana, enSemana, conFecha, ult] = c;
     const evs = porSapEval[sap] || [];
     // La del mes si ya se evaluó (misma forma que la última evaluación)
-    const u = evs.length ? [evs[0][5], evs[0][4], evs[0][6], evs[0][7], evs[0][8], evs[0][9]] : ult;
+    const u = evs.length ? [evs[0][5], evs[0][4], evs[0][6], evs[0][7], evs[0][8], evs[0][9], evs[0][16], evs[0][17]] : ult;
     return `<div class="pc"><div class="pc-cab ${PRIO[prio].clase}"><b>${esc(nombre || 'Cliente sin nombre')}</b>
         <span class="pc-sap">SAP <strong>${esc(sap)}</strong></span>
         <span>${PRIO[prio].nombre} · ${evs.length ? `evaluado en ${esc(D.mes)}: ICE ${dec1(evs[0][6])}` : `sin evaluar en ${esc(D.mes)}`}</span></div>
@@ -824,7 +912,7 @@ const Ice = (function () {
         ${fila('Promedio ICE', dec1(promHist))}${semana ? fila('Semana del mes', `${num(semana)} <span class="muted">(${num(enSemana)} de ${plural(conFecha, 'visita')})</span>`) : ''}
         ${fila(`ÉPICA de ${D.mes}`, textoEpica(sap))}
         ${u ? fila('Le faltó', `<b>${esc(nombrePeor(u))}</b> <span class="muted">(${evs.length ? `ICE de ${esc(D.mes)}` : `última evaluación, ${esc(fechaCorta(u[0]))}`})</span>`) : ''}</dl>
-      ${u ? `${evs.length ? '' : `<p class="pc-sub">Última evaluación · ${esc(fechaCorta(u[0]))} · ICE ${dec1(u[2])} · ${esc(D.canales[u[1]])}</p>`}${metricasPopup(u[1], u[3], u[4])}` : ''}</div>`;
+      ${u ? `${evs.length ? '' : `<p class="pc-sub">Última evaluación · ${esc(fechaCorta(u[0]))} · ICE ${dec1(u[2])} · ${esc(D.canales[u[1]])}</p>`}${metricasPopup(u, nombre, sap)}` : ''}</div>`;
   }
 
   function popupEvaluado(e) {
@@ -837,7 +925,7 @@ const Ice = (function () {
       <dl class="pc-cuerpo">${fila('Lo que más quita', peor ? `<b>${esc(peor)}</b>` : 'nada: todo al 100%')}${fila('Tipo', PRIO[prio].nombre)}
         ${fila('Zona', esc(D.zonas[zi]))}${fila('Encuesta', ubic === 'Far' ? 'lejos del cliente (Far)' : ubic === 'Near' ? 'cerca del cliente' : '')}
         ${prio ? fila(`ÉPICA de ${D.mes}`, textoEpica(sap)) : ''}</dl>
-      ${metricasPopup(e[4], e[7], e[8])}</div>`;
+      ${metricasPopup([fecha, ci, score, e[7], e[8], e[9], e[16], e[17]], nombre, sap)}</div>`;
   }
 
   function mapa() {
@@ -1171,7 +1259,7 @@ const Ice = (function () {
       ${enlacesMapa(lat, lon)}${cal}
       <dl class="pc-cuerpo">${fila('Dirección', esc(dir || ''))}${fila('Jefatura', esc(jefatura || ''))}${fila('Ruta', esc(ruta || ''))}
         ${u ? fila('Le faltó', `<b>${esc(nombrePeor(u))}</b> <span class="muted">(última evaluación, ${esc(fechaCorta(u[0]))})</span>`) : ''}</dl>
-      ${u ? metricasPopup(u[1], u[3], u[4]) : ''}</div>`;
+      ${u ? metricasPopup(u, nombrePunto(sap), sap) : ''}</div>`;
   }
 
   function poligonos() {

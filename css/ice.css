@@ -277,6 +277,26 @@ button, input, select { font: inherit; }
 .pc-met.peor .barra i { background: rgba(244,0,0,.25); }
 .pc-met b { font-variant-numeric: tabular-nums; }
 .pc-sub { padding: 10px 14px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tinta3); }
+/* Barras de submétricas: botones que abren el checklist (js/ice-checklist.js) */
+button.pc-met { width: 100%; min-height: 24px; padding: 0; border: 0; background: none; font: inherit; font-size: 11.5px; color: inherit; text-align: left; cursor: pointer; }
+button.pc-met:hover .barra, button.pc-met:focus-visible .barra { box-shadow: inset 0 0 0 1.5px var(--negro); }
+.pc-met .barra { display: flex; justify-content: space-between; gap: 8px; }
+.pc-met .barra em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-met .pc-pts { position: relative; flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pc-ck-nota { padding: 6px 14px 0; font-size: 11px; line-height: 1.35; color: var(--tinta3); }
+.pc-mets { min-width: 272px; }   /* la ficha se ensancha un poco para que quepan nombre, % y puntos */
+/* Checklist de una submétrica: hoja que sube desde abajo */
+.ck-hoja { position: fixed; inset: 0; z-index: 5000; display: flex; align-items: flex-end; justify-content: center; }
+.ck-fondo { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+.ck-panel { position: relative; display: flex; flex-direction: column; width: min(600px, 100%); max-height: min(86vh, 900px); background: var(--blanco); border-top: 6px solid var(--coke); box-shadow: 0 -10px 30px rgba(0,0,0,.35); outline: none; animation: ck-sube .18s ease-out; }
+@keyframes ck-sube { from { transform: translateY(40px); opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .ck-panel { animation: none; } }
+.ck-barra { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 16px 10px; border-bottom: 1px solid var(--gris-2); }
+.ck-cliente { font-size: 11.5px; font-weight: 700; color: var(--tinta3); }
+.ck-barra h3 { margin-top: 2px; font-size: 15px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.ck-cerrar { flex: none; width: 40px; height: 40px; font-size: 26px; line-height: 1; color: var(--negro); border: 2px solid var(--negro); background: var(--blanco); cursor: pointer; }
+.ck-cuerpo { overflow: auto; padding: 12px 16px calc(18px + env(safe-area-inset-bottom)); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+body.ck-abierto { overflow: hidden; }
 .pc-btn { display: block; margin: 8px 12px 0; padding: 9px 0; text-align: center; text-decoration: none; font-weight: 800; font-size: 12.5px; letter-spacing: .06em; background: var(--coke); color: var(--blanco) !important; }
 .pc-btn.sec { background: var(--gris-1); color: var(--negro) !important; font-weight: 700; }
 .ctl-ubicacion button { display: grid; place-items: center; width: 34px; height: 34px; background: var(--blanco); border: 0; cursor: pointer; color: var(--negro); }

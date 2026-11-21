@@ -117,7 +117,14 @@ const IceExtra = (function () {
       ...(F.universo ? [['Universo ICE cargado', largo(F.universo), hace(F.universo)]] : []),
       ...(F.master ? [['Master Data cargada', largo(F.master), hace(F.master)]] : []),
       ...(F.jefaturas ? [['Jefaturas y frecuencias cargadas', largo(F.jefaturas), hace(F.jefaturas)]] : []),
+      ...(D.checklist ? [['Metas SOCI/SOVI del checklist (/sovisoci)', D.checklist.metas_al ? largo(D.checklist.metas_al) : 'Sin cargar', D.checklist.metas_al ? hace(D.checklist.metas_al) : '']] : []),
     ];
+    // Checklist ICE por cliente (js/ice-checklist.js): metas con que se calculan los frentes
+    const CK = D.checklist;
+    const metasCk = CK ? (CK.orden || Object.keys(CK.canales)).flatMap(c => {
+      const x = CK.canales[c];
+      return Object.keys(x.metas).map(k => [x.nombre, (x.nombres_metas || {})[k] || k, x.metas[k]]);
+    }) : [];
     return `<div class="ice-kpis info-kpis">
         <div class="ice-kpi destacado"><p class="kpi-etiqueta">Página actualizada</p><p class="kpi-valor info-valor">${esc(largo(D.generado))}</p>
           <p class="kpi-sub">${esc(hace(D.generado))} ${estado(hPag != null && hPag <= 26, 'Al día', 'Sin actualizar')}</p></div>
@@ -131,7 +138,13 @@ const IceExtra = (function () {
         <div class="tabla-scroll"><table class="ice-tabla">
           <thead><tr><th>Dato</th><th class="izq">Fecha</th><th class="izq">Antigüedad</th></tr></thead>
           <tbody>${filas.map(([k, v, h]) => `<tr><th scope="row">${esc(k)}</th><td class="izq">${esc(v)}</td><td class="izq">${esc(h)}</td></tr>`).join('')}</tbody>
-        </table></div></section>`;
+        </table></div></section>
+      ${CK ? `<section class="ice-seccion"><header class="ice-sec-cab"><div><h2>Checklist ICE por cliente</h2>
+        <p>En las fichas de cliente (Mapa, Semanas, Preventa, Farmers, Polígonos y la hoja «Mis clientes ICE») cada barra dice el porcentaje de la submétrica, los puntos que sumó de su total y, a un lado, los que perdió, con los puntos del manual ICE 2026 para el tipo de cliente con que se calificó (tamaño, y Fonda o Puesto en On Premise, con o sin reja en Home Market). Al tocar una barra sale el checklist de esa submétrica para ese cliente: lo que vale cada paso y, en SOCI y SOVI, cuántos frentes de Coca-Cola le faltan para la meta. Las metas las pone el líder con /sovisoci en el bot:</p></div></header>
+        <div class="tabla-scroll"><table class="ice-tabla">
+          <thead><tr><th>Canal</th><th class="izq">Meta</th><th>Valor</th></tr></thead>
+          <tbody>${metasCk.map(([c, n, v]) => `<tr><th scope="row">${esc(c)}</th><td class="izq">${esc(n)}</td><td>${v != null ? `${esc(String(v))}%` : '<span class="muted">sin meta</span>'}</td></tr>`).join('')}</tbody>
+        </table></div></section>` : ''}`;
   }
 
   // ── Cinética ──────────────────────────────────────────────────────────
@@ -409,6 +422,13 @@ a.fila:hover{background:#F6F6F6}
 .met.peor .barra{background:#FFE5E5;font-weight:800;color:#B00000}
 .met.peor .barra i{background:rgba(244,0,0,.28)}
 .met.peor b{color:#F40000}
+button.met{width:100%;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.08)}
+button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1.5px #000}
+.met[aria-expanded="true"] .barra{box-shadow:inset 0 0 0 2px #000}
+.met .barra{display:flex;justify-content:space-between;gap:8px}
+.met .barra em{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.met .barra .pts{position:relative;flex:none;font-weight:700;font-variant-numeric:tabular-nums}
+.ck-sitio{margin:2px 0 10px;padding:12px 12px 10px;border:2px solid #000;border-top:6px solid #F40000}
 .datos{display:grid;grid-template-columns:minmax(104px,36%) minmax(0,1fr);margin:10px 0 0}
 .datos dt,.datos dd{margin:0;padding:9px 0;border-bottom:1px solid #E6E6E6}
 .datos dt{padding-right:10px;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#4D4D4D}
@@ -435,7 +455,7 @@ a.fila:hover{background:#F6F6F6}
     //  9 farmer, 10 frecuencia del farmer, 11 canal, 12 visitas ICE del mes anterior,
     //  13 visitas antes, 14 semana del mes, 15 visitas en esa semana, 16 visitas con fecha,
     //  17 promedio ICE, 18 última evaluación [fecha, canal, ICE, submétricas, la que más
-    //  quitó, puntos] o 0, 19 evaluación del mes [fecha, ICE, auditor, ubicación] o 0,
+    //  quitó, puntos, formato con que se calificó, formato de la Master Data] o 0, 19 evaluación del mes [fecha, ICE, auditor, ubicación] o 0,
     //  20 ÉPICA del mes [brigadistas, preventa, farmers]: [fecha, calificación, NoGeo, foto de foto] o 0,
     //  21 fecha y 22 ICE de su última evaluación antes del mes]
     var $ = function (id) { return document.getElementById(id); };
@@ -447,7 +467,9 @@ a.fila:hover{background:#F6F6F6}
     var FARMER = '__farmer__';            // valor de la opción Farmer en la lista de jefaturas
     var CLAVE = 'MisClientesICE:' + D.unidad;
     var est = { g: '', j: '', r: '', dia: 'hoy', tab: 'p' };
-    var vista = '', desdeLista = false, scrollLista = 0;
+    var vista = '', desdeLista = false, scrollLista = 0, fichaU = null;
+    // Checklist ICE de cada submétrica (programaChecklist de js/ice-checklist.js, copiado en este archivo)
+    IceChecklist.preparar(D.checklist);
     var porSap = {};
     D.clientes.forEach(function (c, i) { porSap[c[0]] = i; });
     try {
@@ -497,6 +519,8 @@ a.fila:hover{background:#F6F6F6}
       var alguna = (u[3] || []).some(function (v) { return v != null; });
       return { t: alguna ? 'Todo al 100%' : 'Sin desglose', gris: true };
     }
+    // Puntos aproximados que quitó cada submétrica con los pesos estimados (evaluaciones
+    // de antes de las reglas del checklist); con ellas se usan los puntos oficiales
     function perdidos(u) {
       var w = D.pesos[u[1]] || [];
       return (u[3] || []).map(function (v, i) { return v == null ? null : (w[i] != null ? w[i] : 0.01) * Math.max(0, 100 - v); });
@@ -637,24 +661,36 @@ a.fila:hover{background:#F6F6F6}
     function desglose(c) {
       var u = c[18];
       if (!u) return '<p class="f-peor ok">Este cliente <b>nunca se ha evaluado en ICE</b>: todavía no hay calificaciones de submétricas.</p>';
-      var perd = perdidos(u), f = falto(u, false);
+      var perd = perdidos(u), f = falto(u, false), conPts = IceChecklist.conPuntos(u[0]), noCuentan = [];
+      // Barra = botón: «Enfriador 80% 36/45» y a la derecha los puntos perdidos; al
+      // tocarla se despliega debajo el checklist de esa submétrica
       var mets = D.metricas.map(function (m, i) {
         var v = (u[3] || [])[i];
         if (v == null) return '';
-        var p = perd[i];
-        return '<div class="met' + (u[4] === i ? ' peor' : '') + '"><span class="ico">' + m[2] + '</span>'
-          + '<span class="barra"><i style="width:' + Math.max(0, Math.min(100, v)) + '%"></i><em>' + esc(m[0]) + ' ' + Math.round(v) + '%</em></span>'
-          + '<b>' + (p > 0.05 ? '−' + p.toFixed(1) : '0') + '</b></div>';
+        if (conPts && IceChecklist.noAplica(u[1], u[6], i)) { noCuentan.push(m[0]); return ''; }
+        var inf = IceChecklist.info(u[1], u[6], i, v, u[0]);
+        var p = inf ? inf.perdidos : perd[i];
+        return '<button type="button" class="met' + (u[4] === i ? ' peor' : '') + '" data-i="' + i + '" aria-expanded="false" aria-controls="ck-' + i + '"><span class="ico">' + m[2] + '</span>'
+          + '<span class="barra"><i style="width:' + Math.max(0, Math.min(100, v)) + '%"></i><em>' + esc(inf ? m[1] : m[0]) + '</em>'
+          + '<span class="pts">' + Math.round(v) + '%' + (inf ? ' ' + IceChecklist.pts(inf.ganados) + '/' + IceChecklist.pts(inf.total) : '') + '</span></span>'
+          + '<b>' + (p > 0.05 ? '−' + (inf ? IceChecklist.pts(p) : p.toFixed(1)) : '0') + '</b></button>'
+          + '<div class="ck-sitio" id="ck-' + i + '" hidden></div>';
       }).join('');
       return '<div class="f-ice">' + celdaCalor(u[2]) + '<p><b>' + (c[19] ? 'Evaluación de ' + esc(D.mes) : 'Última evaluación ICE') + '</b><br>'
         + esc(fecha(u[0])) + ' · ' + esc(D.canales[u[1]] || '') + '</p></div>'
         + (u[4] != null
           ? '<p class="f-peor">Lo que más le quitó: <b>' + esc(f.t) + '</b>' + (u[5] != null ? ' (−' + u[5].toFixed(1) + ' puntos)' : '') + '. Está en rojo abajo.</p>'
           : '<p class="f-peor ok">' + (f.t === 'Todo al 100%' ? 'No perdió puntos en ninguna submétrica.' : 'El reporte no trae el desglose de esta evaluación.') + '</p>')
-        + (mets ? '<div class="mets">' + mets + '</div><p class="nota">Porcentaje de cada submétrica y, a la derecha, los puntos aproximados que le quitó (pesos estimados con el histórico ICE, no son la fórmula oficial).</p>' : '');
+        + (mets ? '<div class="mets">' + mets + '</div>'
+          + (noCuentan.length ? '<p class="nota">' + esc(noCuentan.join(' y ')) + ': no ' + (noCuentan.length > 1 ? 'cuentan' : 'cuenta') + ' para un cliente ' + esc((IceChecklist.formato(u[1], u[6]).split(' · ')[1] || '').toLowerCase()) + '.</p>' : '')
+          + '<p class="nota">' + (conPts
+            ? 'En cada barra: porcentaje de la submétrica y los puntos que sumó de su total (puntos del manual ICE 2026 para un cliente <b>' + esc(IceChecklist.formato(u[1], u[6])) + '</b>); a la derecha, los que perdió.'
+            : 'Porcentaje de cada submétrica y, a la derecha, los puntos aproximados que le quitó: esta evaluación es de antes de las reglas de hoy.')
+          + ' <b>Toca una barra para ver su checklist</b>: lo que vale cada paso y, en SOCI y SOVI, cuántos frentes faltan.</p>' : '');
     }
     function pintarFicha(sap) {
       var c = D.clientes[porSap[sap]], m = c[19], ep = c[20] || [0, 0, 0];
+      fichaU = c[18] || null;
       var conCoord = c[3] != null && c[4] != null;
       var ll = conCoord ? (+c[3]) + ',' + (+c[4]) : '';
       // Semana del mes en que más veces lo ha evaluado el auditor
@@ -693,6 +729,20 @@ a.fila:hover{background:#F6F6F6}
         else location.hash = rutaSel() ? 'lista' : 'inicio';
       });
     }
+
+    $('vFicha').addEventListener('click', function (ev) {
+      var b = ev.target, raiz = $('vFicha');
+      while (b && b !== raiz && !(b.getAttribute && b.getAttribute('data-i') !== null)) b = b.parentNode;
+      if (!b || b === raiz || !fichaU) return;
+      var i = +b.getAttribute('data-i'), caja = $('ck-' + i), abierto = b.getAttribute('aria-expanded') === 'true';
+      if (!abierto && !caja.innerHTML) {
+        caja.innerHTML = IceChecklist.html({ ci: fichaU[1], fmt: fichaU[6], fmtMaster: fichaU[7], i: i, pct: fichaU[3][i],
+                                             fecha: fichaU[0], metrica: D.metricas[i][0] });
+      }
+      caja.hidden = abierto;
+      b.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+    });
+    IceChecklist.enlazar($('vFicha'));
 
     // ── Navegación con el # de la dirección (el botón Atrás del celular funciona) ──
     function navegar() {
@@ -733,7 +783,7 @@ a.fila:hover{background:#F6F6F6}
       const c = porSap.get(sap), e = delMes.get(sap);
       if (!c && !e) return -1;
       // La del mes si ya se evaluó (igual que la ficha del mapa)
-      const ult = e ? [e[5], e[4], e[6], e[7], e[8], e[9]] : (c[17] || 0);
+      const ult = e ? [e[5], e[4], e[6], e[7], e[8], e[9], e[16] || '', e[17] || ''] : (c[17] || 0);
       const mes = e ? [e[5], e[6], e[13] || '', e[12] || ''] : 0;
       const ep = [epica(D.epica, sap), epica(D.epica_preventa, sap), epica(D.epica_farmers, sap)];
       const r = c
@@ -795,6 +845,7 @@ a.fila:hover{background:#F6F6F6}
       pesos: D.canales.map(n => (D.desglose && D.desglose.pesos && D.desglose.pesos[n]) || []),
       dias: { hoy: dia(D.rutas.hoy), manana: dia(D.rutas.manana) },
       preventa, farmers, clientes,
+      checklist: D.checklist || null,     // reglas del checklist ICE (Programas/checklist_ice.py)
     };
   }
 
@@ -815,7 +866,7 @@ a.fila:hover{background:#F6F6F6}
 <meta name="theme-color" content="#F40000">
 <title>Mis clientes ICE · ${esc(D.unidad)} · ${esc(H.fecha)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap">
-<style>${CSS_HOJA}</style>
+<style>${CSS_HOJA}${IceChecklist.css}</style>
 </head>
 <body>
 <header class="cab">
@@ -858,6 +909,7 @@ a.fila:hover{background:#F6F6F6}
 </main>
 <footer class="pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>
 <script type="application/json" id="datos">${json}</script>
+<script>var IceChecklist = (${programaChecklist.toString()})();</script>
 <script>(${programaHoja.toString()})();</script>
 </body>
 </html>
