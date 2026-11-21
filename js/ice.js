@@ -343,7 +343,7 @@ const Ice = (function () {
       ${seccion('Descargas de la unidad', '', `
         <div class="ice-descargas">
           <button type="button" class="ice-btn rojo" id="btnHoja">${svgIcono('descarga')}Descargar «Mis clientes ICE» (HTML)</button>
-          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: al abrirlo <b>eliges tu jefatura y tu ruta</b> (o <b>Farmer</b> y tu clave) y ves tus clientes ICE de hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y de mañana en una lista sencilla: tipo de cliente, SAP, nombre, último ICE y lo que le faltó. Tres pestañas: prioridad 1, 2 y 3; no prioritarios; y <b>tus clientes ya evaluados en ${esc(D.mes)}</b> con su calificación en colores. Al tocar un cliente ves su ficha: mapa, cómo llegar, sus datos y el desglose de su última evaluación con los puntos que sumó y perdió en cada submétrica; <b>al tocar una barra ves el checklist</b> de esa submétrica para su tipo de cliente, con lo que vale cada paso y la calculadora de frentes SOCI/SOVI. Es una foto de esta publicación: descárgalo cada día.</span>
+          <span>Un archivo que se abre en el celular o la computadora, sin contraseña: al abrirlo <b>eliges tu jefatura y tu ruta</b> (o <b>Farmer</b> y tu clave) y ves tus clientes ICE de hoy (${esc(D.rutas.hoy.dia.toLowerCase())}) y de mañana en una lista sencilla: tipo de cliente, SAP, nombre, canal (Home Market u On Premise), último ICE y lo que le faltó. Tres pestañas: prioridad 1, 2 y 3; no prioritarios; y <b>tus clientes ya evaluados en ${esc(D.mes)}</b> con su calificación en colores. Al tocar un cliente ves su ficha: mapa, cómo llegar, sus datos y el desglose de su última evaluación con los puntos que sumó y perdió en cada submétrica; <b>al tocar una barra ves el checklist</b> de esa submétrica para su tipo de cliente, con lo que vale cada paso y la calculadora de frentes SOCI/SOVI. Es una foto de esta publicación: descárgalo cada día.</span>
         </div>
         ${D.excel ? `<div class="ice-descargas">
           <button type="button" class="ice-btn rojo" id="btnExcel">${svgIcono('excel')}Descargar Excel de clasificación</button>
@@ -404,7 +404,7 @@ const Ice = (function () {
     graficaDiaria($(`gDia${k}`), C.por_dia, F.promedio, nombre);
     if ($(`gMeses${k}`)) graficaMeses($(`gMeses${k}`), C.historico, E);
     if ($(`gPerd${k}`)) graficaPerdidos($(`gPerd${k}`), canal, nombre);
-    $(`btnRanking${k}`).addEventListener('click', () => bajarExcel(C.excel));
+    activarRanking($('p-' + id), C, nombre, k);
   }
 
   // Dos paneles con el mismo eje de días: promedio (línea) y evaluaciones (barras)
@@ -547,33 +547,195 @@ const Ice = (function () {
     return { fondo: `rgb(${c.join(',')})`, tinta: 0.2126 * r + 0.7152 * g + 0.0722 * n > 0.179 ? NEGRO : BLANCO };
   }
 
-  function calorRanking(filas) {
-    const valores = [...new Set([...filas].sort((a, b) => b.promedio - a.promedio).map(f => dec1(f.promedio)))];
-    return filas.map(f => colorRanking(valores.length > 1 ? 1 - valores.indexOf(dec1(f.promedio)) / (valores.length - 1) : 0.5));
+  function calorRanking(filas, clave = 'promedio') {
+    const valores = [...new Set([...filas].sort((a, b) => b[clave] - a[clave]).map(f => dec1(f[clave])))];
+    return filas.map(f => colorRanking(valores.length > 1 ? 1 - valores.indexOf(dec1(f[clave])) / (valores.length - 1) : 0.5));
   }
 
-  // conJefatura: la primera columna es la jefatura de la ruta (ranking de rutas de preventa)
-  function tablaRanking(filas, clave, cabecera, conJefatura = false) {
+  // Trabajo ICE (WIce) de una jefatura o ruta: área bajo el polígono que une las
+  // calificaciones de sus clientes evaluados, uno tras otro por fecha (cada cliente
+  // ocupa un ancho de 1; ver _wice en Programas/publica_ice.py). El ranking va por WIce.
+  const INTEGRAL = '<span class="rk-integral" aria-hidden="true">∫</span>';
+  // Bottom: promedio (tal como se ve, a un decimal) debajo del umbral del canal (85 Home Market, 90 On Premise)
+  const esBottom = (v, umbral) => umbral != null && v != null && Number(num(v, 1).replace(/,/g, '')) < umbral;
+
+  // conJefatura: la primera columna es la jefatura de la ruta (ranking de rutas de preventa).
+  // tipo 'j' (jefaturas) o 'r' (rutas): cada fila se elige para ver su gráfica (activarRanking)
+  function tablaRanking(filas, clave, cabecera, conJefatura, umbral, tipo) {
     if (!filas.length) return `<p class="muted">Sin evaluaciones en ${esc(D.mes)}.</p>`;
-    const calor = calorRanking(filas);
+    const calor = calorRanking(filas, 'wice');
     return `<div class="tabla-scroll ranking-scroll"><table class="ice-tabla tabla-ranking">
-      <thead><tr>${conJefatura ? '<th class="izq">Jefatura</th>' : ''}<th class="rk-pos">#</th><th class="izq">${esc(cabecera)}</th><th>Calificación ICE</th><th>Clientes evaluados</th></tr></thead>
-      <tbody>${filas.map((f, i) => `<tr>${conJefatura ? `<td class="izq">${esc(f.jefatura || '')}</td>` : ''}<td class="rk-pos">${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
-        <td class="rk-valor" style="background:${calor[i].fondo};color:${calor[i].tinta}">${dec1(f.promedio)}</td><td>${num(f.clientes)}</td></tr>`).join('')}</tbody>
+      <thead><tr>${conJefatura ? '<th class="izq">Jefatura</th>' : ''}<th class="rk-pos">#</th><th class="izq">${esc(cabecera)}</th>
+        <th class="rk-wice" title="Área bajo el polígono de las calificaciones de sus clientes evaluados">${INTEGRAL}<span class="rk-fx">f(x)</span> Trabajo (<span class="rk-fx">WIce</span>)</th><th>Promedio ICE</th><th>Clientes evaluados</th></tr></thead>
+      <tbody>${filas.map((f, i) => `<tr class="rk-fila" data-rk="${tipo}:${i}" tabindex="0" aria-label="Ver la gráfica de ${esc(cabecera.toLowerCase())} ${esc(f[clave])}">${conJefatura ? `<td class="izq">${esc(f.jefatura || '')}</td>` : ''}<td class="rk-pos">${num(f.pos)}</td><th scope="row" class="izq">${esc(f[clave])}</th>
+        <td class="rk-valor" style="background:${calor[i].fondo};color:${calor[i].tinta}">${dec1(f.wice)}</td>
+        <td${esBottom(f.promedio, umbral) ? ' class="rk-bajo"' : ''}>${dec1(f.promedio)}</td><td>${num(f.clientes)}</td></tr>`).join('')}</tbody>
     </table></div>`;
   }
 
   function seccionRanking(C, nombre, k) {
-    return seccion(`Ranking · ${nombre}`, `De mayor a menor calificación ICE de ${esc(D.mes)}, como mapa de calor: entre más arriba en la tabla, más verde; entre más abajo, más roja. Clientes evaluados: los de ${esc(nombre)} con ICE este mes. Solo entran jefaturas y rutas con al menos una evaluación. La jefatura de cada ruta es la de la mayoría de sus clientes.`,
+    const u = C.umbral;
+    return seccion(`Ranking · ${nombre}`, `Ordenado por <b>trabajo ICE (WIce)</b> de ${esc(D.mes)}: el área bajo el polígono que une las calificaciones de los clientes evaluados de cada jefatura o ruta, uno tras otro (método del polígono). Cada cliente ocupa un ancho de 1, así que el área es la suma de sus calificaciones: suma más quien evalúa más clientes y mejor calificados, para ser justos con quien más trabaja. Al lado, su promedio ICE${u != null ? ` (en rojo si está debajo de ${num(u)}: Bottom)` : ''} y cuántos clientes evaluó. Solo entran jefaturas y rutas con al menos una evaluación; la jefatura de cada ruta es la de la mayoría de sus clientes. <b>${TACTIL ? 'Toca' : 'Haz clic en'} una jefatura o una ruta</b> para ver su gráfica.`,
       `<div class="ice-descargas ranking-descarga">
-        <button type="button" class="ice-btn rojo" id="btnRanking${k}">${svgIcono('excel')}Descargar ranking en Excel</button>
-        <span>Jefaturas y rutas de preventa de ${esc(nombre)}, una por hoja.</span>
+        <button type="button" class="ice-btn rojo" id="btnRkJef${k}">${svgIcono('imprimir')}PDF de jefaturas</button>
+        <button type="button" class="ice-btn rojo" id="btnRkTop${k}">${svgIcono('imprimir')}PDF ranking Top / Bottom</button>
+        <span>El de jefaturas trae su tabla (trabajo, promedio y clientes evaluados). El de ranking trae las rutas de preventa en <b>Top</b>${u != null ? ` (promedio de ${num(u)} o más)` : ''} y <b>Bottom</b>${u != null ? ` (debajo de ${num(u)})` : ''}, cada grupo por trabajo.</span>
       </div>
-      <p class="rk-leyenda"><span>Más baja</span><i aria-hidden="true"></i><span>Más alta</span></p>
+      <p class="mapa-ayuda" id="rkEstado${k}" role="status" aria-live="polite"></p>
+      <p class="rk-leyenda"><span>Menos trabajo</span><i aria-hidden="true"></i><span>Más trabajo</span></p>
       <div class="ranking-doble">
-        <figure><figcaption>Jefaturas (${num(C.ranking_jefaturas.length)})</figcaption>${tablaRanking(C.ranking_jefaturas, 'jefatura', 'Jefatura')}</figure>
-        <figure><figcaption>Rutas de preventa (${num(C.ranking_rutas.length)})</figcaption>${tablaRanking(C.ranking_rutas, 'ruta', 'Ruta', true)}</figure>
-      </div>`);
+        <figure><figcaption>Jefaturas (${num(C.ranking_jefaturas.length)})</figcaption>${tablaRanking(C.ranking_jefaturas, 'jefatura', 'Jefatura', false, u, 'j')}</figure>
+        <figure><figcaption>Rutas de preventa (${num(C.ranking_rutas.length)})</figcaption>${tablaRanking(C.ranking_rutas, 'ruta', 'Ruta', true, u, 'r')}</figure>
+      </div>
+      <div class="rk-grafica" id="rkGraf${k}" aria-live="polite"><p class="muted">${TACTIL ? 'Toca' : 'Haz clic en'} una jefatura o una ruta del ranking para ver la gráfica de su trabajo: la calificación de cada cliente evaluado y el área total.</p></div>`);
+  }
+
+  // Filas del ranking (elegir una dibuja su gráfica) y botones de PDF
+  function activarRanking(panel, C, nombre, k) {
+    const listas = { j: C.ranking_jefaturas, r: C.ranking_rutas };
+    const elegir = tr => {
+      const [tipo, i] = tr.dataset.rk.split(':'), f = listas[tipo][+i];
+      panel.querySelectorAll('tr[data-rk]').forEach(x => x.classList.toggle('rk-sel', x === tr));
+      const titulo = tipo === 'j' ? `Jefatura ${f.jefatura}` : `Ruta ${f.ruta} · ${nombreJefatura(f.jefatura || SIN_JEFATURA)}`;
+      const cont = $(`rkGraf${k}`);
+      graficaIntegral(cont, f, titulo, nombre, C.umbral);
+      const r = cont.getBoundingClientRect();
+      if (r.top > window.innerHeight - 120 || r.bottom < 0) cont.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    panel.querySelectorAll('tr[data-rk]').forEach(tr => {
+      tr.addEventListener('click', () => elegir(tr));
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(tr); } });
+    });
+    const estado = $(`rkEstado${k}`);
+    const boton = (id, hacer) => $(id).addEventListener('click', () => {
+      try { estado.textContent = hacer(); } catch (e) { console.error(e); estado.textContent = 'No se pudo generar el PDF.'; }
+    });
+    boton(`btnRkJef${k}`, () => pdfRankingJefaturas(C, nombre));
+    boton(`btnRkTop${k}`, () => pdfRankingTopBottom(C, nombre));
+  }
+
+  // Gráfica del trabajo de una jefatura o ruta: sus clientes evaluados uno tras otro (por
+  // fecha), el polígono que une sus calificaciones y debajo una barra por cliente (su franja
+  // del área: de la mitad con el anterior a la mitad con el siguiente). En medio, el área total.
+  function graficaIntegral(cont, f, titulo, nombre, umbral) {
+    const P = f.puntos || [], n = P.length;
+    cont.innerHTML = `<div class="rk-graf-cab"><h3 class="ice-subtitulo">${esc(titulo)} · ${esc(nombre)}</h3>
+        <p>${INTEGRAL}f(x) Trabajo (WIce) <b>${dec1(f.wice)}</b> · promedio ICE <b${esBottom(f.promedio, umbral) ? ' class="rk-bajo"' : ''}>${dec1(f.promedio)}</b> · ${plural(f.clientes, 'cliente evaluado', 'clientes evaluados')} en ${esc(D.mes)} · lugar ${num(f.pos)} del ranking</p></div>
+      <div class="grafica"></div>
+      <p class="mapa-ayuda">Cada punto es un cliente evaluado (en orden de fecha) con su calificación ICE; el polígono rojo los une. Cada barra es la franja del área de un cliente; todas juntas suman el trabajo (WIce), que es igual a la suma de las calificaciones.${umbral != null ? ` Puntos en rojo: debajo de ${num(umbral)}.` : ''} ${TACTIL ? 'Toca' : 'Pasa el cursor sobre'} una barra para ver al cliente.</p>`;
+    const g = cont.querySelector('.grafica');
+    if (!n) { g.innerHTML = '<p class="muted">Sin clientes evaluados.</p>'; return; }
+    const ys = P.map(p => p[2] == null ? 0 : p[2]);
+    A.montar(g, (c, W, T) => {
+      const H = 320, m = { l: 40, r: 14, t: 20, b: 40 };
+      const svg = A.svgBase(c, W, H, `Trabajo ICE de ${titulo}`);
+      const hi = Math.max(110, Math.ceil(Math.max(...ys) / 10) * 10);
+      const y = A.escala(0, hi, H - m.b, m.t), x = A.escala(0, n, m.l, W - m.r);
+      A.ejeY(svg, y, A.ticks(0, hi, 5), m.l, W - m.r, T);
+      // Altura del polígono en la orilla izquierda de la franja i (x = i)
+      const h = i => i <= 0 ? ys[0] : i >= n ? ys[n - 1] : (ys[i - 1] + ys[i]) / 2;
+      const fino = (W - m.l - m.r) / n < 6;
+      ys.forEach((v, i) => {
+        const d = `M${x(i)},${y(0)}L${x(i)},${y(h(i))}L${x(i + 0.5)},${y(v)}L${x(i + 1)},${y(h(i + 1))}L${x(i + 1)},${y(0)}Z`;
+        const barra = A.el('path', { d, fill: i % 2 ? '#F6AFAF' : '#FBD0D0', stroke: BLANCO, 'stroke-width': fino ? 0 : 1 }, svg);
+        const ev = (porSapEval[P[i][0]] || [])[0], area = (h(i) + 2 * v + h(i + 1)) / 4;
+        Graficas.conTip(barra, `<b>${esc(ev ? ev[1] || 'Cliente sin nombre' : 'Cliente')}</b><table class="tip-tabla">
+          <tr><td>Cliente</td><td>${num(i + 1)} de ${num(n)}</td></tr><tr><td>SAP</td><td>${esc(P[i][0])}</td></tr>
+          <tr><td>Evaluado</td><td>${esc(P[i][1] ? fechaCorta(P[i][1]) : '—')}</td></tr><tr><td>ICE</td><td>${dec1(P[i][2])}</td></tr>
+          <tr><td>Su franja del área</td><td>${dec1(area)}</td></tr></table>`);
+      });
+      let linea = `M${x(0)},${y(ys[0])}`;
+      ys.forEach((v, i) => { linea += `L${x(i + 0.5)},${y(v)}`; });
+      linea += `L${x(n)},${y(ys[n - 1])}`;
+      A.el('path', { d: linea, fill: 'none', stroke: ROJO, 'stroke-width': 2, 'stroke-linejoin': 'round', 'pointer-events': 'none' }, svg);
+      if (umbral != null) A.lineaObjetivo(svg, y, umbral, m.l, W - m.r, `Bottom: debajo de ${umbral}`, T);
+      const r = n > 80 ? 2 : n > 30 ? 3 : 4;
+      ys.forEach((v, i) => A.el('circle', { cx: x(i + 0.5), cy: y(v), r, fill: esBottom(v, umbral) ? ROJO : NEGRO, stroke: BLANCO, 'stroke-width': r > 2 ? 1.5 : 0.5, 'pointer-events': 'none' }, svg));
+      A.el('line', { x1: m.l, x2: W - m.r, y1: y(0), y2: y(0), stroke: T.eje, 'stroke-width': 1 }, svg);
+      // Números de cliente abajo (los que quepan)
+      const cada = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - m.l - m.r) / 26))));
+      for (let i = 0; i < n; i += cada) A.texto(svg, x(i + 0.5), H - m.b + 16, num(i + 1), { 'text-anchor': 'middle', fill: T.muted, 'font-size': 11, class: 'g-num' });
+      A.texto(svg, (m.l + W - m.r) / 2, H - 6, 'Clientes evaluados, en orden de fecha', { 'text-anchor': 'middle', fill: T.tinta2, 'font-size': 11, 'font-weight': 600 });
+      // Área total en medio de la gráfica
+      const cx = (m.l + W - m.r) / 2, cy = y(Math.min(...ys) / 2) + 4;
+      const fondo = A.el('rect', { x: cx - 92, y: cy - 30, width: 184, height: 46, fill: BLANCO, 'fill-opacity': 0.92, stroke: NEGRO, 'stroke-width': 1.5, 'pointer-events': 'none' }, svg);
+      const total = A.texto(svg, cx, cy - 2, `∫ = ${dec1(f.wice)}`, { 'text-anchor': 'middle', fill: NEGRO, 'font-size': 22, 'font-weight': 800, class: 'g-num' });
+      A.texto(svg, cx, cy + 12, 'ÁREA TOTAL · TRABAJO (WIce)', { 'text-anchor': 'middle', fill: T.tinta2, 'font-size': 9.5, 'font-weight': 700, 'letter-spacing': '0.08em' });
+      const b = total.getBBox();      // un área de 5 cifras no cabe en el recuadro de base
+      if (b.width + 24 > 184) { fondo.setAttribute('x', cx - b.width / 2 - 12); fondo.setAttribute('width', b.width + 24); }
+    });
+  }
+
+  // ── PDF del ranking (en lugar del Excel): jefaturas, y rutas en Top / Bottom ──
+  function documentoRanking(titulo) {
+    const doc = new PDF.Documento({ titulo: `${titulo} · ${D.unidad}` });
+    doc.pie((n, total) => {
+      doc.linea(PDF_M, doc.H - 30, doc.W - PDF_M, doc.H - 30, { color: GRIS, grosor: 0.5 });
+      doc.texto(PDF_M, doc.H - 19, `BRIGADAS VDM · ${titulo.toUpperCase()} · UNIDAD ${D.unidad.toUpperCase()}`, { tam: 6.5, color: GRIS_OSC, max: doc.W - 2 * PDF_M - 90 });
+      doc.texto(doc.W - PDF_M, doc.H - 19, `Página ${n} de ${total}`, { tam: 6.5, color: GRIS_OSC, alinear: 'der' });
+    });
+    return { doc, y: 0 };
+  }
+
+  // Franja, título y explicación (primera hoja) o solo la franja y el título (las que siguen)
+  function hojaRanking(ctx, titulo, notas, sigue) {
+    const { doc } = ctx, ancho = doc.W - 2 * PDF_M;
+    doc.pagina();
+    doc.rect(0, 0, doc.W, 8, { relleno: ROJO });
+    doc.texto(PDF_M, 25, `REPORTE ICE · UNIDAD ${D.unidad.toUpperCase()} · ${D.mes.toUpperCase()} ${D.anio}`, { tam: 7.5, negrita: true, color: GRIS_OSC, max: ancho - 200 });
+    doc.texto(doc.W - PDF_M, 25, D.corte ? `Corte ICE al ${D.corte.texto}` : `Publicado ${D.generado}`, { tam: 8, color: NEGRO, alinear: 'der', max: 200 });
+    const w = doc.texto(PDF_M, 50, titulo.toUpperCase(), { tam: 17, negrita: true, color: ROJO, max: ancho });
+    if (sigue) doc.texto(PDF_M + w + 8, 50, '(continuación)', { tam: 9, color: GRIS_OSC });
+    let y = 52;
+    if (!sigue) for (const linea of notas.flatMap(t => PDF.renglones(t, ancho, 7.5))) { y += 10; doc.texto(PDF_M, y, linea, { tam: 7.5, color: GRIS_OSC }); }
+    ctx.y = y + 8;
+  }
+
+  const notaWice = umbral => `Trabajo (WIce): área bajo el polígono que une las calificaciones ICE de los clientes evaluados en ${D.mes} de cada jefatura o ruta, uno tras otro por fecha; cada cliente ocupa un ancho de 1, así que es la suma de sus calificaciones. El ranking va de mayor a menor trabajo; la celda del trabajo va como mapa de calor (verde = más trabajo, rojo = menos).${umbral != null ? ` Promedio en rojo: debajo de ${umbral} (Bottom).` : ''}`;
+
+  function filaPdfRanking(f, calor, umbral, conJefatura, clave) {
+    return [f.pos, ...(conJefatura ? [f.jefatura || SIN_JEFATURA] : []), { texto: f[clave], negrita: true },
+            { texto: dec1(f.wice), negrita: true, fondo: calor.fondo, color: calor.tinta },
+            esBottom(f.promedio, umbral) ? { texto: dec1(f.promedio), negrita: true, color: ROJO } : dec1(f.promedio), num(f.clientes)];
+  }
+
+  function pdfRankingJefaturas(C, nombre) {
+    const filas = C.ranking_jefaturas, titulo = `Ranking de jefaturas · ${nombre}`, calor = calorRanking(filas, 'wice');
+    const ctx = documentoRanking(titulo), notas = [notaWice(C.umbral)];
+    hojaRanking(ctx, titulo, notas, false);
+    const columnas = [{ titulo: '#', ancho: 30 }, { titulo: 'Jefatura', ancho: 188 }, { titulo: 'f(x) TRABAJO (WIce)', ancho: 120, alinear: 'der', integral: true, literal: true },
+                      { titulo: 'Promedio ICE', ancho: 100, alinear: 'der' }, { titulo: 'Clientes evaluados', ancho: 110, alinear: 'der' }];
+    if (filas.length) tablaPdf(ctx, columnas, filas.map((f, i) => filaPdfRanking(f, calor[i], C.umbral, false, 'jefatura')), () => hojaRanking(ctx, titulo, notas, true));
+    else ctx.doc.texto(PDF_M, ctx.y + 14, `Sin evaluaciones de ${nombre} en ${D.mes}.`, { tam: 11, negrita: true, color: NEGRO });
+    PDF.descargar(ctx.doc.blob(), `RankingICE_Jefaturas_${nombre.replace(/\s+/g, '')}_${D.unidad}_${D.anio}-${String(D.mes_num).padStart(2, '0')}.pdf`);
+    return `PDF listo: ${plural(filas.length, 'jefatura')} de ${nombre}. Revisa tus descargas.`;
+  }
+
+  // Top = promedio de `umbral` o más; Bottom = debajo. Cada grupo en el orden del ranking
+  // (por trabajo); # es el lugar en el ranking general y el mapa de calor es el de la página
+  function pdfRankingTopBottom(C, nombre) {
+    const todas = C.ranking_rutas, u = C.umbral, calor = calorRanking(todas, 'wice');
+    const conCalor = todas.map((f, i) => ({ f, c: calor[i] }));
+    const bottom = conCalor.filter(x => esBottom(x.f.promedio, u)), top = conCalor.filter(x => !esBottom(x.f.promedio, u));
+    const titulo = `Ranking de rutas Top / Bottom · ${nombre}`;
+    const ctx = documentoRanking(titulo), { doc } = ctx;
+    const notas = [`Rutas de preventa de ${nombre} con clientes evaluados en ${D.mes}, separadas en Top (promedio ICE de ${u} o más) y Bottom (promedio debajo de ${u}); en cada grupo, de mayor a menor trabajo. #: lugar en el ranking general por trabajo. Jefatura: la de la mayoría de los clientes de la ruta.`, notaWice(u)];
+    hojaRanking(ctx, titulo, notas, false);
+    const columnas = [{ titulo: '#', ancho: 30 }, { titulo: 'Jefatura', ancho: 110 }, { titulo: 'Ruta', ancho: 110 },
+                      { titulo: 'f(x) TRABAJO (WIce)', ancho: 104, alinear: 'der', integral: true, literal: true }, { titulo: 'Promedio ICE', ancho: 92, alinear: 'der' },
+                      { titulo: 'Clientes evaluados', ancho: 102, alinear: 'der' }];
+    for (const [nombreG, lista, regla] of [['Top', top, `promedio de ${u} o más`], ['Bottom', bottom, `promedio debajo de ${u}`]]) {
+      if (ctx.y + 64 > doc.H - 42) hojaRanking(ctx, titulo, notas, true);
+      const y = ctx.y + 14;
+      doc.rect(PDF_M, y, doc.W - 2 * PDF_M, 22, { relleno: nombreG === 'Top' ? NEGRO : ROJO });
+      doc.texto(PDF_M + 10, y + 15, `${nombreG.toUpperCase()} · ${regla.toUpperCase()}`, { tam: 11, negrita: true, color: BLANCO });
+      doc.texto(doc.W - PDF_M - 10, y + 15, plural(lista.length, 'ruta'), { tam: 10, negrita: true, color: BLANCO, alinear: 'der' });
+      ctx.y = y + 26;
+      if (lista.length) tablaPdf(ctx, columnas, lista.map(x => filaPdfRanking(x.f, x.c, u, true, 'ruta')), () => hojaRanking(ctx, titulo, notas, true));
+      else { doc.texto(PDF_M, ctx.y + 12, `Ninguna ruta en ${nombreG} este mes.`, { tam: 9, negrita: true, color: NEGRO }); ctx.y += 18; }
+    }
+    PDF.descargar(doc.blob(), `RankingICE_TopBottom_${nombre.replace(/\s+/g, '')}_${D.unidad}_${D.anio}-${String(D.mes_num).padStart(2, '0')}.pdf`);
+    return `PDF listo: ${plural(top.length, 'ruta')} en Top y ${plural(bottom.length, 'ruta')} en Bottom (promedio debajo de ${u}). Revisa tus descargas.`;
   }
 
   // Violín por jefatura del canal
@@ -1850,7 +2012,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${(S ? S.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada PDF trae <b>una hoja por ${esc(V.uno)}</b>, para que cada ${esc(V.quienUno)} se lleve la suya: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
+        <p class="mapa-ayuda">Cada botón baja un <b>ZIP con una carpeta por jefatura</b> y, dentro, <b>un PDF por ${esc(V.uno)}</b>, para mandarle a cada jefatura lo suyo y que cada ${esc(V.quienUno)} se lleve su hoja: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de ${esc(V.losVarios)}">
@@ -2109,7 +2271,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${S.dias.map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen de ${num(K.margen)} m alrededor; si dentro hay menos de ${num(K.min)} clientes para agregar, el margen crece de ${num(K.paso)} en ${num(K.paso)} m hasta ${num(K.margen_max)} m. En su zona se le agregan <b>hasta ${num(K.max)} clientes prioridad 1 y 2 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)}: los más cercanos al camino que une a sus clientes en orden (◆ en el mapa). Un cliente que cae en varias zonas va solo con el farmer que lo tiene más cerca. Cada PDF trae <b>una hoja por farmer</b> con sus clientes prioridad 1, 2 y 3 del día y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen de ${num(K.margen)} m alrededor; si dentro hay menos de ${num(K.min)} clientes para agregar, el margen crece de ${num(K.paso)} en ${num(K.paso)} m hasta ${num(K.margen_max)} m. En su zona se le agregan <b>hasta ${num(K.max)} clientes prioridad 1 y 2 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)}: los más cercanos al camino que une a sus clientes en orden (◆ en el mapa). Un cliente que cae en varias zonas va solo con el farmer que lo tiene más cerca. Cada botón baja un <b>ZIP con una carpeta por jefatura</b> (la del farmer ese día) y, dentro, <b>un PDF por farmer</b> con sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento dias" role="group" aria-label="Día en el mapa">
@@ -2355,7 +2517,10 @@ const Ice = (function () {
     const cabecera = () => {
       let x = PDF_M;
       for (const c of columnas) {
-        doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 10, c.titulo.toUpperCase(), { tam: 6.5, negrita: true, color: GRIS_OSC, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 6 });
+        // c.integral: el signo ∫ antes del título (se dibuja: las fuentes del PDF no lo traen)
+        const der = c.alinear === 'der', dx = c.integral && !der ? 8 : 0;
+        const w = doc.texto(der ? x + c.ancho - 4 : x + 4 + dx, ctx.y + 10, c.literal ? c.titulo : c.titulo.toUpperCase(), { tam: 6.5, negrita: true, color: GRIS_OSC, alinear: der ? 'der' : 'izq', max: c.ancho - 6 - (c.integral ? 8 : 0) });
+        if (c.integral) doc.integral(der ? x + c.ancho - 4 - w - 7 : x + 4, ctx.y + 11.5, 10, { color: GRIS_OSC });
         x += c.ancho;
       }
       doc.linea(PDF_M, ctx.y + 14, doc.W - PDF_M, ctx.y + 14, { color: NEGRO, grosor: 0.8 });
@@ -2371,6 +2536,7 @@ const Ice = (function () {
         if (v && v.tipo != null) insigniaPdf(doc, x + 4, ctx.y + 11, v.tipo);
         else {
           const t = v && typeof v === 'object' ? v : { texto: v };
+          if (t.fondo) doc.rect(x, ctx.y, c.ancho, PDF_FILA, { relleno: t.fondo });
           doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 11, t.texto == null ? '' : String(t.texto),
                     { tam: 8, negrita: !!t.negrita, color: t.color || NEGRO, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 7 });
         }
@@ -2527,44 +2693,48 @@ const Ice = (function () {
     doc.texto(PDF_M + 10, y + 10.5, 'CLIENTES CERCANOS A TU RUTA (NO ESTÁN EN ELLA)', { tam: 10.5, negrita: true, color: NEGRO });
     nota.forEach((linea, i) => doc.texto(PDF_M, y + 24 + i * 9, linea, { tam: 7, color: GRIS_OSC }));
     ctx.y = y + 24 + (nota.length - 1) * 9 + 6;
-    const columnas = [{ titulo: '#', ancho: 20 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 106 },
-                      { titulo: 'Dirección', ancho: 94 }, { titulo: 'A tu ruta', ancho: 48, alinear: 'der' }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' },
-                      { titulo: 'Más le quitó', ancho: 78 }, { titulo: V.colEpica, ancho: 86 }];
+    const columnas = [{ titulo: '#', ancho: 20 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 92 },
+                      { titulo: 'Canal', ancho: 58 }, { titulo: 'Dirección', ancho: 74 }, { titulo: 'A tu ruta', ancho: 42, alinear: 'der' },
+                      { titulo: 'Últ. ICE', ancho: 34, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 70 }, { titulo: V.colEpica, ancho: 78 }];
     const filas = cerc.map((p, k) => {
       const c = porSapCliente[p[2]], u = c && c[17];
-      return [`C${k + 1}`, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', `${num(p[5])} m`, c && c[11] != null ? dec1(c[11]) : '',
+      return [`C${k + 1}`, { tipo: p[4] }, p[2], p[3], canalPdf(p[2]), c ? c[13] : '', `${num(p[5])} m`, c && c[11] != null ? dec1(c[11]) : '',
               u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', epicaPdf(V, p[2])];
     });
     tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
   }
 
+  // Canal del cliente en los PDF (clientes[18]: Master Data o su último canal ICE)
+  const canalPdf = sap => { const c = porSapCliente[sap]; return c && c[18] != null ? nombreCanalCorto(c[18]) : ''; };
+  // Nombre de archivo o carpeta dentro del ZIP (sin acentos ni símbolos)
+  const limpioArchivo = s => String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'archivo';
+
   // Rutas de preventa o de farmers: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en
-  // el mes (los no prioritarios nunca se han evaluado y no traen nada que trabajar). Una ruta
-  // por hoja, juntas las de cada jefatura. Devuelve cuántas rutas y hojas salieron.
-  function pdfRutas(V, R, titulo, archivo, todos) {
+  // el mes (los no prioritarios nunca se han evaluado y no traen nada que trabajar). Un PDF
+  // por ruta (o farmer) y todos en un ZIP con una carpeta por jefatura, para mandarle a cada
+  // jefatura lo suyo. Devuelve cuántas rutas, hojas y carpetas salieron.
+  async function pdfRutas(V, R, titulo, archivo, todos) {
     const evaluado = p => !!porSapEval[p[2]];
     const nunca = p => p[4] === 4 && !evaluado(p);
     const jefDe = x => x.r.jefatura || SIN_JEFATURA;
     const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)), cerc: (r.cercanos || []).filter(p => !evaluado(p)) }))
       .filter(x => (todos ? x.puntos.length : x.puntos.some(p => p[4])) || x.cerc.length)
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
-    const ctx = documentoRutas(V, titulo);
     const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';   // botón de canal de Farmers
-    let conQr = 0, conP3 = 0, cercanos = 0;
-    const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 128 },
-                      { titulo: 'Dirección', ancho: 122 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 78 },
-                      { titulo: V.colEpica, ancho: 86 }];
-    if (!rutasPdf.length) {
-      cabezaHoja(ctx, R);
-      ctx.doc.texto(PDF_M, 56, `No hay ${V.varios} con clientes ICE${canal} por evaluar este día.`, { tam: 12, negrita: true, color: NEGRO });
-    }
+    let conQr = 0, conP3 = 0, cercanos = 0, hojas = 0;
+    const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 112 },
+                      { titulo: 'Canal', ancho: 58 }, { titulo: 'Dirección', ancho: 96 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' },
+                      { titulo: 'Más le quitó', ancho: 70 }, { titulo: V.colEpica, ancho: 78 }];
+    if (!rutasPdf.length) return { rutas: 0, hojas: 0, carpetas: 0, conQr, conP3, cercanos };
+    const raiz = limpioArchivo(archivo), entradas = [], carpetas = new Set();
     for (const x of rutasPdf) {
+      const ctx = documentoRutas(V, titulo);
       const { r, puntos: pendientes, cerc } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
       const ice = pendientes.filter(p => p[4]).sort((a, b) => a[4] - b[4]);
       const puntos = todos ? ice.concat(pendientes.filter(p => !p[4])) : ice;
       const filas = puntos.map((p, k) => {
         const c = porSapCliente[p[2]], u = c && c[17];
-        return [k + 1, { tipo: p[4] }, p[2], p[3], c ? c[13] : '', p[4] && c && c[11] != null ? dec1(c[11]) : '',
+        return [k + 1, { tipo: p[4] }, p[2], p[3], canalPdf(p[2]), c ? c[13] : '', p[4] && c && c[11] != null ? dec1(c[11]) : '',
                 u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', p[4] ? epicaPdf(V, p[2]) : ''];
       });
       const h = { codigo: r.codigo, jefatura: jefDe(x), margen: r.margen,
@@ -2582,37 +2752,42 @@ const Ice = (function () {
       if (ubicacionesPdf(ctx, puntos.concat(cerc))) conQr++;
       else if (cerc.length && ubicacionesPdf(ctx, cerc, true)) conQr++;   // si no caben todos, los de los cercanos
       if (semanasP3Pdf(ctx, puntos, R)) conP3++;
+      const carpeta = limpioArchivo(nombreJefatura(jefDe(x)));
+      carpetas.add(carpeta);
+      hojas += ctx.doc.paginas.length;
+      entradas.push({ nombre: `${raiz}/${carpeta}/${limpioArchivo(`${V.Uno}_${r.codigo}_${R.dia}_${R.fecha}`)}.pdf`,
+                      datos: new Uint8Array(await ctx.doc.blob().arrayBuffer()) });
     }
-    PDF.descargar(ctx.doc.blob(), archivo);
-    return { rutas: rutasPdf.length, hojas: ctx.doc.paginas.length, conQr, conP3, cercanos };
+    Archivos.descargar(await Archivos.zip(entradas), `${raiz}.zip`);
+    return { rutas: rutasPdf.length, hojas, carpetas: carpetas.size, conQr, conP3, cercanos };
   }
 
   // Botón de impresión de una vista: el de hoy (data-pdf) o el de un día de la semana (data-pdf-dia)
   function imprimir(V, boton, estado, todos) {
     boton.disabled = true;
-    estado.textContent = 'Generando el PDF...';
+    estado.textContent = 'Generando los PDF y el ZIP...';
     // Con el botón de canal de Farmers el título y el archivo dicen el canal
     const sel = canalVista(V), canal = sel == null ? '' : nombreCanalCorto(sel);
     const tit = t => canal ? `${t} · ${canal}` : t, arch = a => canal ? `${a}_${canal.replace(/\s+/g, '')}` : a;
     // Deja que el navegador pinte el aviso antes de armar el documento
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         let hecho;
         if (boton.dataset.pdfDia != null) {
           const R = rutasDeSemana(V, +boton.dataset.pdfDia);
-          hecho = pdfRutas(V, R, tit(V.tituloDia(R.dia.toLowerCase())), `${arch(V.archivoDia)}_${R.dia}_${D.unidad}_${R.fecha}.pdf`, false);
+          hecho = await pdfRutas(V, R, tit(V.tituloDia(R.dia.toLowerCase())), `${arch(V.archivoDia)}_${R.dia}_${D.unidad}_${R.fecha}`, false);
         } else if (V.cercanos) {
           const R = rutasDeSemana(V, V.semana().dias.findIndex(d => d.hoy));
-          hecho = pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}.pdf`, false);
+          hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, false);
         } else {
           const R = rutasVista(V, 'hoy');
-          hecho = pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}.pdf`, todos);
+          hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, todos);
         }
-        estado.textContent = hecho.rutas ? `PDF listo${canal ? ` (solo ${canal})` : ''}: ${plural(hecho.rutas, V.uno, V.varios)} en ${plural(hecho.hojas, 'hoja')}, ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}. Revisa tus descargas.`
-          : `PDF listo: este día no hay ${V.varios} con clientes${canal ? ` ${canal}` : ''} por evaluar.`;
+        estado.textContent = hecho.rutas ? `ZIP listo${canal ? ` (solo ${canal})` : ''}: ${plural(hecho.carpetas, 'carpeta de jefatura', 'carpetas de jefatura')} con ${plural(hecho.rutas, `PDF de ${V.uno}`, `PDF de ${V.varios}`)} (${plural(hecho.hojas, 'hoja')} en total), ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}. Revisa tus descargas.`
+          : `Este día no hay ${V.varios} con clientes${canal ? ` ${canal}` : ''} por evaluar: no se descargó nada.`;
       } catch (e) {
         console.error(e);
-        estado.textContent = 'No se pudo generar el PDF.';
+        estado.textContent = 'No se pudieron generar los PDF.';
       } finally {
         boton.disabled = false;
       }

@@ -493,6 +493,21 @@ body.ck-abierto { overflow: hidden; }
 .rk-valor { font-weight: 800; }
 .rk-leyenda { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--tinta2); }
 .rk-leyenda i { width: 150px; height: 10px; background: linear-gradient(90deg, rgb(227,0,0), rgb(255,213,74), rgb(18,161,80)); }
+/* Trabajo ICE (WIce): filas que se eligen para ver su gráfica integral */
+.rk-integral { display: inline-block; margin-right: 1px; font-family: Georgia, "Times New Roman", serif; font-size: 1.45em; font-style: italic; font-weight: 400; line-height: 0; vertical-align: -0.18em; }
+.tabla-ranking th, .tabla-ranking td { padding: 8px 8px; }
+.tabla-ranking thead th { letter-spacing: .06em; }
+.rk-fx { text-transform: none; letter-spacing: 0; }
+.rk-fila { cursor: pointer; }
+.rk-fila:hover th, .rk-fila:hover td:not(.rk-valor) { background: var(--gris-1); }
+.rk-fila:focus-visible { outline: 3px solid var(--negro); outline-offset: -3px; }
+.rk-fila.rk-sel th, .rk-fila.rk-sel td:not(.rk-valor) { background: var(--negro); color: var(--blanco); }
+.rk-bajo { color: var(--coke); font-weight: 800; }
+.rk-fila.rk-sel td.rk-bajo { color: #FF8A8A; }
+.rk-grafica { margin-top: 22px; padding: 16px 18px; border: 2px solid var(--negro); border-top: 6px solid var(--coke); }
+.rk-graf-cab p { margin-top: 4px; font-size: 13px; color: var(--tinta2); }
+.rk-graf-cab .ice-subtitulo { margin-bottom: 0; color: var(--negro); }
+.rk-grafica .grafica { margin-top: 10px; }
 
 /* Mix */
 .tabla-mix th, .tabla-mix td { border-left: 1px solid var(--gris-2); }

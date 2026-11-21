@@ -71,7 +71,10 @@ const PDF = (function () {
     return '(' + s + ')';
   }
 
+  // '#F40000', '#000' o 'rgb(227,0,0)' -> 'r g b' de PDF (0 a 1)
   function rgb(color) {
+    const m = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i.exec(String(color || ''));
+    if (m) return [m[1], m[2], m[3]].map(v => (Math.min(255, +v) / 255).toFixed(3)).join(' ');
     const h = String(color || '#000').replace('#', '');
     const n = h.length === 3 ? h.split('').map(x => x + x).join('') : h.padEnd(6, '0');
     return [0, 2, 4].map(i => (parseInt(n.slice(i, i + 2), 16) / 255).toFixed(3)).join(' ');
@@ -150,6 +153,17 @@ const PDF = (function () {
         }
       });
       this.ops.push(`q ${g(m)} 0 0 ${g(-m)} ${g(x + 4 * m)} ${g(this.H - y - 4 * m)} cm 0 0 0 rg\n${tramos.join('\n')}\nf Q`);
+    }
+
+    /** Signo de integral (∫) de `alto` puntos con su base en (x, y): las fuentes
+     *  estándar de PDF no lo traen, así que se dibuja como trazo. Devuelve su ancho. */
+    integral(x, y, alto, { color = '#000000' } = {}) {
+      const a = alto, p = (dx, dy) => `${f(x + dx * a)} ${f(this.H - (y + dy * a))}`;
+      this.ops.push(`q ${rgb(color)} RG ${f(Math.max(0.6, a * 0.085))} w 1 J ` +
+                    `${p(0.50, -0.86)} m ${p(0.44, -1.00)} ${p(0.29, -0.98)} ${p(0.27, -0.70)} c ` +
+                    `${p(0.25, -0.40)} ${p(0.25, -0.30)} ${p(0.23, -0.05)} c ` +
+                    `${p(0.21, 0.13)} ${p(0.06, 0.15)} ${p(0.0, 0.02)} c S Q`);
+      return a * 0.5;
     }
 
     /** fn(número de página, total) se llama en cada página al cerrar el documento. */

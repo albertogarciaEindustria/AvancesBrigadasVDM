@@ -367,7 +367,7 @@ main{max-width:920px;padding:0 clamp(12px,3vw,40px) 24px}
 .leyenda span{display:inline-flex;align-items:center;gap:5px}
 .leyenda i{display:inline-block;width:14px;height:14px}
 .tabla{margin-top:10px}
-.fila{display:grid;grid-template-columns:14px 6em minmax(0,1fr) 4.2em minmax(0,.8fr);align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #E0E0E0;font-size:13px;line-height:1.25;color:#000;text-decoration:none}
+.fila{display:grid;grid-template-columns:14px 6em minmax(0,1fr) 2.6em 4.2em minmax(0,.8fr);align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #E0E0E0;font-size:13px;line-height:1.25;color:#000;text-decoration:none}
 .fila.enc{padding:6px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#4D4D4D;border-bottom:2px solid #000}
 .fila.enc .cal{text-align:right}
 a.fila{cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.08)}
@@ -376,6 +376,7 @@ a.fila:hover{background:#F6F6F6}
 .fila .nom{font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .fila .cal{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
 .fila .falto{font-size:12px}
+.fila .can{font-size:11px;font-weight:800;text-align:center;color:#4D4D4D}
 .bola{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid transparent}
 .bola.p1{background:#F40000;border-color:#F40000}
 .bola.p2{background:#000;border-color:#000}
@@ -437,7 +438,9 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
 .alerta{display:inline-block;margin-left:6px;padding:0 6px;font-size:10.5px;font-weight:800;text-transform:uppercase;background:#F40000;color:#fff}
 .pie{display:flex;justify-content:space-between;gap:12px;margin:22px clamp(12px,3vw,40px) 18px;padding-top:12px;border-top:1px solid #8C8C8C;font-size:10.5px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:#4D4D4D}
 @media (max-width:440px){
-.fila{grid-template-columns:12px 5.7em minmax(0,1fr) 3.7em minmax(0,.8fr);gap:6px;padding:8px 2px;font-size:12.5px}
+.fila{grid-template-columns:12px 5.7em minmax(0,1fr) 2.7em 3.7em minmax(0,.8fr);gap:6px;padding:8px 2px;font-size:12.5px}
+.fila .can{font-size:10.5px}
+.fila.enc .can{letter-spacing:0;font-size:8px}
 .fila.enc{padding:6px 2px;font-size:9px;letter-spacing:.04em}
 .fila .sap{font-size:11px}.fila .falto{font-size:11.5px}.bola{width:12px;height:12px}
 .calor{min-width:2.9em;padding:3px 2px}
@@ -465,6 +468,7 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     var TIPO = { 0: 'Fuera del universo ICE', 1: 'Prioridad 1', 2: 'Prioridad 2', 3: 'Prioridad 3', 4: 'No prioritario' };
     var LETRA = { L: 'lunes', M: 'martes', R: 'miércoles', J: 'jueves', V: 'viernes', F: 'viernes', S: 'sábado', D: 'domingo' };
     var FARMER = '__farmer__';            // valor de la opción Farmer en la lista de jefaturas
+    var CANAL_CORTO = { 'Home Market': 'HM', 'On Premise': 'OP' };   // columna Canal de las listas
     var CLAVE = 'MisClientesICE:' + D.unidad;
     var est = { g: '', j: '', r: '', dia: 'hoy', tab: 'p' };
     var vista = '', desdeLista = false, scrollLista = 0, fichaU = null;
@@ -583,11 +587,12 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
         + '<span class="bola p' + c[2] + '" title="' + TIPO[c[2]] + '"></span>'
         + '<span class="sap">' + esc(c[0]) + '</span>'
         + '<span class="nom">' + esc(c[1] || 'Cliente sin nombre') + '</span>'
+        + '<span class="can" title="' + esc(D.canales[c[11]] || 'Sin canal') + '">' + esc(CANAL_CORTO[D.canales[c[11]]] || '—') + '</span>'
         + '<span class="cal">' + cal + '</span>'
         + '<span class="falto' + (f.gris ? ' gris' : '') + '">' + esc(f.t) + '</span></a>';
     }
     function tabla(lista, ev) {
-      return '<div class="tabla"><div class="fila enc" aria-hidden="true"><span></span><span>SAP</span><span>Cliente</span>'
+      return '<div class="tabla"><div class="fila enc" aria-hidden="true"><span></span><span>SAP</span><span>Cliente</span><span class="can">Canal</span>'
         + '<span class="cal">' + (ev ? 'ICE ' + esc(D.mes.slice(0, 3)) + '.' : 'Último ICE') + '</span><span>Le faltó</span></div>'
         + lista.map(function (i) { return filaCliente(i, ev); }).join('') + '</div>';
     }
@@ -902,7 +907,7 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
       <dt><span class="bola p3"></span>Prioridad 3</dt><dd>Clientes aleatorios que no se evaluaron en ${esc(P.mes_anterior)}, pero sí alguna vez antes.</dd>
       <dt><span class="bola p4"></span>No prioritario</dt><dd>Clientes del universo ICE que nunca se han evaluado. El tipo se fija al iniciar ${esc(D.mes)}: uno que se evalúa por primera vez este mes sigue como no prioritario.</dd>
     </dl>
-    <p class="nota">«Le faltó» es la submétrica que más puntos le quitó en su última evaluación ICE. Las pestañas de prioridad y de no prioritarios solo traen a los clientes que todavía no tienen ICE en ${esc(D.mes)}, en el orden de tu ruta; los ya evaluados están en la tercera pestaña, con su calificación del mes: verde 85 o más, naranja de 70 a 84.9 y rojo menos de 70. Toca un cliente para ver su ficha.</p></details>
+    <p class="nota">Canal: <b>HM</b> = Home Market, <b>OP</b> = On Premise. «Le faltó» es la submétrica que más puntos le quitó en su última evaluación ICE. Las pestañas de prioridad y de no prioritarios solo traen a los clientes que todavía no tienen ICE en ${esc(D.mes)}, en el orden de tu ruta; los ya evaluados están en la tercera pestaña, con su calificación del mes: verde 85 o más, naranja de 70 a 84.9 y rojo menos de 70. Toca un cliente para ver su ficha.</p></details>
     <p class="nota">Este archivo es una foto del ${esc(D.generado)}: descárgalo de nuevo cada día.</p>
   </section>
   <section id="vFicha" hidden></section>
