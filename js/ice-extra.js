@@ -460,7 +460,8 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     //  17 promedio ICE, 18 última evaluación [fecha, canal, ICE, submétricas, la que más
     //  quitó, puntos, formato con que se calificó, formato de la Master Data] o 0, 19 evaluación del mes [fecha, ICE, auditor, ubicación] o 0,
     //  20 ÉPICA del mes [brigadistas, preventa, farmers]: [fecha, calificación, NoGeo, foto de foto] o 0,
-    //  21 fecha y 22 ICE de su última evaluación antes del mes]
+    //  21 fecha y 22 ICE de su última evaluación antes del mes, 23 meses con ICE en la ventana de
+    //  prioridad y 24 puntos de prioridad (null fuera del universo)]
     var $ = function (id) { return document.getElementById(id); };
     var ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ESC[c]; }); };
@@ -631,7 +632,7 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
         html = pri.length ? tabla(pri, false)
           : '<p class="vacio">' + (delDia.length ? 'No te quedan clientes prioridad 1, 2 o 3 sin ICE ' + cuando + '.' + nota : 'Tu ' + (farmer ? 'recorrido' : 'ruta') + ' no tiene clientes ICE ' + cuando + ' (' + esc(dia.dia.toLowerCase()) + ').') + '</p>';
       } else if (est.tab === 'np') {
-        resumen = np.length ? '<b>' + plural(np.length, 'cliente') + '</b> del universo ICE que ' + cuando + ' visitas y que nunca se ' + (np.length === 1 ? 'ha' : 'han') + ' evaluado.' : '';
+        resumen = np.length ? '<b>' + plural(np.length, 'cliente') + '</b> del universo ICE que ' + cuando + ' visitas y que no ' + (np.length === 1 ? 'tiene' : 'tienen') + ' ICE de ' + esc(D.prioridad.ventana) + ' (o nunca se ' + (np.length === 1 ? 'ha' : 'han') + ' evaluado).' : '';
         html = np.length ? tabla(np, false)
           : '<p class="vacio">' + (delDia.length ? 'No tienes clientes no prioritarios sin ICE ' + cuando + '.' : 'Tu ' + (farmer ? 'recorrido' : 'ruta') + ' no tiene clientes ICE ' + cuando + ' (' + esc(dia.dia.toLowerCase()) + ').') + '</p>';
       } else {
@@ -722,8 +723,8 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
         + (m ? fila('Evaluación anterior', c[21] ? esc(fecha(c[21])) + ' · ICE ' + dec1(c[22]) : '<span class="gris">Ninguna: es su primera evaluación</span>')
              : fila('Última evaluación', c[18] ? esc(fecha(c[18][0])) + ' · ICE ' + dec1(c[18][2]) : '<span class="gris">Nunca</span>'))
         + fila('Promedio ICE antes de ' + D.mes, c[17] != null ? dec1(c[17]) : '')
-        + fila('Visitas ICE en ' + D.prioridad.mes_anterior, c[12] != null ? String(c[12]) : '')
-        + fila('Visitas ICE antes', c[13] != null ? String(c[13]) : '')
+        + fila('Puntos de prioridad', c[24] != null ? '<b>' + c[24] + '</b> <span class="gris">(' + c[23] + ' de ' + D.prioridad.meses_ventana
+             + ' meses con ICE' + (c[12] ? ' + 1 por ' + esc(D.prioridad.mes_anterior) : '') + ')</span>' : '')
         + fila('Semana del mes', semana)
         + fila('ÉPICA de ' + D.mes, ['Brigadistas', 'Preventa', 'Farmers'].map(function (q, k) {
           return '<span class="ep">' + q + ': ' + textoEpica(ep[k]) + '</span>';
@@ -794,9 +795,9 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
       const r = c
         ? [sap, c[1] || '', c[4], c[2], c[3], c[13] || '', D.zonas[c[5]] || '', limpio(c[6]), c[7] || '', c[19] || '', c[20] || '',
            c[18] != null ? c[18] : (ult ? ult[1] : null), c[9], c[8], c[14] || 0, c[15] || 0, c[16] || 0, c[12], ult, mes, ep,
-           c[10] || '', c[11]]
+           c[10] || '', c[11], c[21], c[22]]
         : [sap, e[1] || '', e[11] || 0, e[2], e[3], '', D.zonas[e[10]] || '', limpio(e[14]), '', e[15] || '', '',
-           e[4], null, null, 0, 0, 0, null, ult, mes, ep, '', null];
+           e[4], null, null, 0, 0, 0, null, ult, mes, ep, '', null, null, null];
       if (r[3] == null && lat != null) { r[3] = lat; r[4] = lon; }   // coordenadas de la Master Data
       indice.set(sap, clientes.length);
       clientes.push(r);
@@ -844,7 +845,7 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     const dia = R => ({ dia: R.dia, fecha: R.fecha, texto: R.texto });
     return {
       unidad: D.unidad, mes: D.mes, generado: D.generado, corte: D.corte ? D.corte.texto : '',
-      prioridad: { mes_anterior: D.prioridad.mes_anterior, min_visitas: D.prioridad.min_visitas },
+      prioridad: { mes_anterior: D.prioridad.mes_anterior, meses_ventana: D.prioridad.meses_ventana, ventana: D.prioridad.ventana },
       metricas: D.metricas.map(m => [m.nombre, CORTO_HOJA[m.id] || m.nombre, Ice.util.svgIcono(m.id)]),
       canales: D.canales.map(n => n === 'Traditional' ? 'Home Market' : n),   // como las pestañas del sitio
       pesos: D.canales.map(n => (D.desglose && D.desglose.pesos && D.desglose.pesos[n]) || []),
@@ -901,11 +902,11 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     </div>
     <p class="resumen" id="resumen"></p>
     <div id="tabla" role="tabpanel"></div>
-    <details class="tipos"><summary>¿Qué es cada tipo de cliente?</summary><dl>
-      <dt><span class="bola p1"></span>Prioridad 1</dt><dd>Evaluados en ${esc(P.mes_anterior)} y con ${esc(P.min_visitas)} o más visitas ICE en los meses anteriores.</dd>
-      <dt><span class="bola p2"></span>Prioridad 2</dt><dd>Evaluados en ${esc(P.mes_anterior)}, sin esa recurrencia.</dd>
-      <dt><span class="bola p3"></span>Prioridad 3</dt><dd>Clientes aleatorios que no se evaluaron en ${esc(P.mes_anterior)}, pero sí alguna vez antes.</dd>
-      <dt><span class="bola p4"></span>No prioritario</dt><dd>Clientes del universo ICE que nunca se han evaluado. El tipo se fija al iniciar ${esc(D.mes)}: uno que se evalúa por primera vez este mes sigue como no prioritario.</dd>
+    <details class="tipos"><summary>¿Qué es cada tipo de cliente?</summary><p class="nota">${esc(P.formula)}</p><dl>
+${[[1, 'Prioridad 1'], [2, 'Prioridad 2'], [3, 'Prioridad 3'], [4, 'No prioritario']].map(([p, nombre]) => {
+      const t = P.tipos[p];
+      return `      <dt><span class="bola p${p}"></span>${nombre}</dt><dd><b>${esc(t[0])}</b>${t[1] ? `: ${esc(t[1])}` : ''} (${esc(t[2])}).${p === 4 ? ` El tipo se fija al iniciar ${esc(D.mes)}: uno que se evalúa por primera vez este mes sigue como no prioritario.` : ''}</dd>`;
+    }).join('\n')}
     </dl>
     <p class="nota">Canal: <b>HM</b> = Home Market, <b>OP</b> = On Premise. «Le faltó» es la submétrica que más puntos le quitó en su última evaluación ICE. Las pestañas de prioridad y de no prioritarios solo traen a los clientes que todavía no tienen ICE en ${esc(D.mes)}, en el orden de tu ruta; los ya evaluados están en la tercera pestaña, con su calificación del mes: verde 85 o más, naranja de 70 a 84.9 y rojo menos de 70. Toca un cliente para ver su ficha.</p></details>
     <p class="nota">Este archivo es una foto del ${esc(D.generado)}: descárgalo de nuevo cada día.</p>

@@ -314,15 +314,19 @@ const Ice = (function () {
   }
 
   // ── Tipos de cliente (la explicación se repite donde se mencionan) ─────
+  // Textos de Programas/publica_ice.py (_tipos_prioridad): [puntos, descripción, ejemplo]
+  const textoTipo = t => `${t[0]}${t[1] ? `: ${t[1]}` : ''} (${t[2]}).`;
+  // Puntos de prioridad de un cliente (elementos 21 y 22): «5 (4 de 6 meses con ICE + 1 por octubre)»
+  function textoPuntos(meses, puntos, vant) {
+    if (puntos == null) return '';
+    const P = D.prioridad;
+    return `<b>${num(puntos)}</b> <span class="muted">(${num(meses)} de ${num(P.meses_ventana)} meses con ICE${vant ? ` + 1 por ${esc(P.mes_anterior)}` : ''})</span>`;
+  }
   function tiposCliente(abierto) {
-    const ant = esc(D.prioridad.mes_anterior);
-    const lista = [
-      [1, `Evaluados en <b>${ant}</b> y con <b>${num(D.prioridad.min_visitas)} o más visitas</b> ICE en los meses anteriores.`],
-      [2, `Evaluados en <b>${ant}</b>, sin esa recurrencia.`],
-      [3, `Clientes aleatorios que no se evaluaron en ${ant}, pero <b>sí alguna vez antes</b>.`],
-      [4, `Clientes del universo ICE (UniversoICE.db) que <b>nunca se han evaluado</b>.`],
-    ].map(([p, t]) => `<div><dt><span class="prio ${PRIO[p].clase}">${PRIO[p].corto}</span>${esc(PRIO[p].nombre)}</dt><dd>${t}</dd></div>`).join('');
-    const cuerpo = `<dl class="tipos-lista">${lista}</dl>
+    const T = D.prioridad.tipos;
+    const lista = [1, 2, 3, 4].map(p => `<div><dt><span class="prio ${PRIO[p].clase}">${PRIO[p].corto}</span>${esc(PRIO[p].nombre)}</dt>`
+      + `<dd><b>${esc(T[p][0])}</b>${T[p][1] ? `: ${esc(T[p][1])}` : ''} (${esc(T[p][2])}).</dd></div>`).join('');
+    const cuerpo = `<p class="tipos-nota">${esc(D.prioridad.formula)}</p><dl class="tipos-lista">${lista}</dl>
       <p class="tipos-nota">El tipo se fija al iniciar ${esc(D.mes)} con el histórico ICE anterior: un cliente que se evalúa por primera vez este mes sigue como No prioritario hasta el mes siguiente.</p>`;
     return abierto ? `<div class="tipos-cliente"><h3>Qué es cada tipo de cliente</h3>${cuerpo}</div>`
       : `<details class="tipos-cliente"><summary>¿Qué es cada tipo de cliente?</summary>${cuerpo}</details>`;
@@ -1071,7 +1075,7 @@ const Ice = (function () {
 
   // extra: HTML debajo de los botones; destino: [lat, lon] de "Cómo llegar" si no son las del universo
   function popupCliente(c, extra = '', destino = null) {
-    const [sap, nombre, lat, lon, prio, zi, ruta, zpv, vprev, vant, ultima, ultimoIce, promHist, dir, semana, enSemana, conFecha, ult] = c;
+    const [sap, nombre, lat, lon, prio, zi, ruta, zpv, , vant, ultima, ultimoIce, promHist, dir, semana, enSemana, conFecha, ult] = c;
     const evs = porSapEval[sap] || [];
     // La del mes si ya se evaluó (misma forma que la última evaluación)
     const u = evs.length ? [evs[0][5], evs[0][4], evs[0][6], evs[0][7], evs[0][8], evs[0][9], evs[0][16], evs[0][17]] : ult;
@@ -1080,7 +1084,7 @@ const Ice = (function () {
         <span>${PRIO[prio].nombre} · ${evs.length ? `evaluado en ${esc(D.mes)}: ICE ${dec1(evs[0][6])}` : `sin evaluar en ${esc(D.mes)}`}</span></div>
       ${destino ? enlacesMapa(destino[0], destino[1]) : enlacesMapa(lat, lon)}${extra}
       <dl class="pc-cuerpo">${fila('Dirección', esc(dir))}${fila('Zona', esc(D.zonas[zi]))}${fila('Ruta', esc(ruta))}${fila('Frecuencia', esc(zpv))}
-        ${fila(`Visitas en ${D.prioridad.mes_anterior}`, num(vant))}${fila('Visitas antes', num(vprev))}
+        ${fila('Puntos de prioridad', textoPuntos(c[21], c[22], vant))}
         ${fila('Última visita ICE', ultima ? `${esc(fechaCorta(ultima))} · ${dec1(ultimoIce)}` : 'sin visitas')}
         ${fila('Promedio ICE', dec1(promHist))}${semana ? fila('Semana del mes', `${num(semana)} <span class="muted">(${num(enSemana)} de ${plural(conFecha, 'visita')})</span>`) : ''}
         ${fila(`ÉPICA de ${D.mes}`, textoEpica(sap))}
@@ -1172,7 +1176,7 @@ const Ice = (function () {
       }
       if (falto) {
         const pend = lista.filter(c => !porSapEval[c[0]]).length;
-        $('leyendaFalto').innerHTML = `<p class="leyenda-texto">Símbolo = submétrica que más puntos le quitó a cada cliente en su última evaluación ICE (prioridad 1, 2 y 3; los no prioritarios nunca se han evaluado; color = tipo de cliente). <b>${num(lista.length)}</b> en el mapa${lista.length > pend ? `, <b>${num(pend)}</b> aún sin ICE en ${esc(D.mes)}; <span class="visto-mini" aria-hidden="true">${svgIcono('ok')}</span> = ya evaluado (su evaluación de ${esc(D.mes)})` : `, todos aún sin ICE en ${esc(D.mes)}`}:</p>${leyendaSimbolos(contar(lista, c => idPeor(c[17])))}`;
+        $('leyendaFalto').innerHTML = `<p class="leyenda-texto">Símbolo = submétrica que más puntos le quitó a cada cliente en su última evaluación ICE (solo clientes que alguna vez se han evaluado; color = tipo de cliente). <b>${num(lista.length)}</b> en el mapa${lista.length > pend ? `, <b>${num(pend)}</b> aún sin ICE en ${esc(D.mes)}; <span class="visto-mini" aria-hidden="true">${svgIcono('ok')}</span> = ya evaluado (su evaluación de ${esc(D.mes)})` : `, todos aún sin ICE en ${esc(D.mes)}`}:</p>${leyendaSimbolos(contar(lista, c => idPeor(c[17])))}`;
       }
     };
     pintar();
@@ -1902,7 +1906,7 @@ const Ice = (function () {
     if (mapaS) { setTimeout(() => mapaS.invalidateSize(), 50); return; }
     const hoy = new Date(), sHoy = semanaDe(hoy.getDate()), sSig = sHoy === 4 ? 1 : sHoy + 1;
     const mesSig = MESES[(hoy.getMonth() + (sHoy === 4 ? 1 : 0)) % 12];
-    // Prioridad 1, 2 y 3 (P3 = aleatorios evaluados alguna vez: también tienen semana)
+    // Prioridad 1, 2 y 3 (todos con ICE en la ventana de prioridad: también tienen semana)
     const prior = D.clientes.filter(c => c[4] >= 1 && c[4] <= 3 && c[14]);
     const cuenta = { 1: 0, 2: 0, 3: 0, 4: 0 };
     for (const c of prior) cuenta[c[14]]++;
@@ -2113,7 +2117,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${(S ? S.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada botón baja un <b>ZIP con una carpeta por jefatura</b> y, dentro, <b>un PDF por ${esc(V.uno)}</b>, para mandarle a cada jefatura lo suyo y que cada ${esc(V.quienUno)} se lleve su hoja: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios, que nunca se han evaluado. En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
+        <p class="mapa-ayuda">Cada botón baja un <b>ZIP con una carpeta por jefatura</b> y, dentro, <b>un PDF por ${esc(V.uno)}</b>, para mandarle a cada jefatura lo suyo y que cada ${esc(V.quienUno)} se lleve su hoja: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios (sin ICE en ${esc(D.prioridad.ventana)}). En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de ${esc(V.losVarios)}">
@@ -2597,19 +2601,18 @@ const Ice = (function () {
   // Encabezado de la hoja de una ruta (h = {codigo, jefatura, resumen}), con qué
   // es cada tipo de cliente (los criterios de tiposCliente)
   function hojaRuta(ctx, R, h, sigue) {
-    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M, ant = D.prioridad.mes_anterior;
+    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M;
     cabezaHoja(ctx, R);
     ctx.rutaPaginas[doc.paginas.length - 1] = h.codigo;
     const w = doc.texto(PDF_M, 50, `${V.Uno.toUpperCase()} ${h.codigo}`, { tam: 20, negrita: true, color: ROJO });
     if (sigue) doc.texto(PDF_M + w + 8, 50, '(continuación)', { tam: 9, color: GRIS_OSC });
     doc.texto(doc.W - PDF_M, 50, nombreJefatura(h.jefatura).toUpperCase(), { tam: 11, negrita: true, color: NEGRO, alinear: 'der', max: 240 });
     doc.texto(PDF_M, 65, h.resumen, { tam: 8.5, color: NEGRO, max: ancho });
-    const tipos = [[1, `Evaluado en ${ant} y con ${num(D.prioridad.min_visitas)} o más visitas ICE en los meses anteriores.`],
-                   [2, `Evaluado en ${ant}, sin esa recurrencia.`],
-                   [3, `Cliente aleatorio que no se evaluó en ${ant}, pero sí alguna vez antes.`]];
+    const tipos = [1, 2, 3].map(p => [p, textoTipo(D.prioridad.tipos[p])]);
     let y = 73;
     doc.rect(PDF_M, y, ancho, 54, { relleno: '#F4F4F4' });
-    doc.texto(PDF_M + 8, y + 11, 'QUÉ ES CADA TIPO DE CLIENTE', { tam: 6.5, negrita: true, color: GRIS_OSC });
+    const wt = doc.texto(PDF_M + 8, y + 11, 'QUÉ ES CADA TIPO DE CLIENTE', { tam: 6.5, negrita: true, color: GRIS_OSC });
+    doc.texto(PDF_M + 16 + wt, y + 11, D.prioridad.formula, { tam: 6.5, color: GRIS_OSC, max: ancho - 24 - wt });
     tipos.forEach(([p, texto], i) => {
       const yy = y + 23 + i * 11.5;
       insigniaPdf(doc, PDF_M + 8, yy, p);
@@ -2826,7 +2829,7 @@ const Ice = (function () {
   const limpioArchivo = s => String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'archivo';
 
   // Rutas de preventa o de farmers: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en
-  // el mes (los no prioritarios nunca se han evaluado y no traen nada que trabajar). Un PDF
+  // el mes (los no prioritarios no tienen ICE en los últimos meses y no van). Un PDF
   // por ruta (o farmer) y todos en un ZIP con una carpeta por jefatura, para mandarle a cada
   // jefatura lo suyo. Devuelve cuántas rutas, hojas y carpetas salieron.
   async function pdfRutas(V, R, titulo, archivo, todos) {

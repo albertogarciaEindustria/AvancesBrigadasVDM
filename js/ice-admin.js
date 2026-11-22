@@ -846,7 +846,7 @@ const IceAdmin = (function () {
         <div class="chips" id="admP1Unidades" role="group" aria-label="Unidades en el mapa">
           ${D.unidades.map((u, i) => { const de = P.filter(p => p[4] === i); return `<button type="button" class="chip" aria-pressed="true" data-unidad="${i}"><span class="adm-sw redondo" style="background:${color(u)}" aria-hidden="true"></span>${esc(u)} · ${num(de.filter(p => p[7]).length)}/${num(de.length)}</button>`; }).join('')}
         </div>
-        <p class="mapa-ayuda">Prioridad 1 = clientes evaluados el mes anterior y con visitas ICE recurrentes antes: los más probables de volver a evaluarse. Punto lleno = por evaluar; punto hueco = ya evaluado en ${esc(D.mes)}. El color es la unidad y las líneas finas son los límites de las jefaturas. ${TACTIL ? 'Toca' : 'Haz clic en'} un cliente para ver sus datos.</p>
+        <p class="mapa-ayuda">Prioridad 1 = clientes con <b>${esc(D.prioridad.tipos[1][0])}</b>: los más probables de volver a evaluarse. ${esc(D.prioridad.formula)} Punto lleno = por evaluar; punto hueco = ya evaluado en ${esc(D.mes)}. El color es la unidad y las líneas finas son los límites de las jefaturas. ${TACTIL ? 'Toca' : 'Haz clic en'} un cliente para ver sus datos.</p>
       </div>
       <div id="mapaAdmP1" class="mapa mapa-admin"></div>`;
     mapaP = L.map('mapaAdmP1', { preferCanvas: true });
