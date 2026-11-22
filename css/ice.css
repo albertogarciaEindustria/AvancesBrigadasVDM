@@ -231,6 +231,9 @@ button, input, select { font: inherit; }
 .sem-marca.p1 { background: var(--coke); }
 .sem-marca.hecho { background: var(--blanco); color: var(--negro); border: 2.5px solid var(--negro); }
 .sem-marca.p1.hecho { color: var(--coke-osc); border-color: var(--coke); }
+/* Prioridad 3: blanca con borde gris; ya evaluada en el mes = borde punteado y número gris */
+.sem-marca.p3 { background: var(--blanco); color: var(--negro); border: 2.5px solid var(--tinta2); }
+.sem-marca.p3.hecho { color: var(--tinta2); border: 2.5px dashed var(--tinta2); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
 /* Lo que le faltó en su última evaluación: símbolo de la submétrica sobre el color de la prioridad;
    la insignia chica es la semana (pestaña Semanas) o la palomita de ya evaluado en el mes (Mapa) */
 .falta-marca { position: relative; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: var(--blanco); background: var(--negro);
@@ -435,6 +438,37 @@ body.ck-abierto { overflow: hidden; }
 .adm-frases p b { color: var(--negro); }
 .adm-favor, .adm-contra { font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; color: var(--negro); }
 .adm-contra { color: var(--coke-osc); }
+.adm-igual { font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; color: var(--tinta3); }
+/* Administrador: botones de qué comparar (calificación ICE o una submétrica, con su símbolo) */
+.segmento.adm-ver { flex-wrap: wrap; }
+.segmento.adm-ver button { display: inline-flex; align-items: center; gap: 7px; }
+.segmento.adm-ver .icono-metrica { width: 20px; height: 20px; }
+.segmento.adm-ver .icono-metrica svg { width: 12px; height: 12px; }
+.segmento.adm-ver button[aria-pressed="true"] .icono-metrica { background: var(--blanco); color: var(--negro); }
+.segmento.adm-temas { flex-wrap: wrap; }
+/* Lista de la calificación ICE y sus submétricas (pestaña Submétricas) */
+.adm-metricas { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 4px 0 18px; }
+.adm-met { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
+  min-height: 58px; padding: 9px 12px; background: var(--blanco); color: var(--negro); border: 2px solid var(--gris-2); cursor: pointer; font: inherit; }
+.adm-met:hover { border-color: var(--negro); }
+.adm-met[aria-pressed="true"] { border-color: var(--negro); background: var(--negro); color: var(--blanco); }
+.adm-met .icono-metrica { grid-row: 1 / span 2; width: 30px; height: 30px; }
+.adm-met .icono-metrica svg { width: 17px; height: 17px; }
+.adm-met-nombre { font-size: 14px; font-weight: 800; }
+.adm-met-dato { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.adm-met-dato small { display: block; font-size: 11px; font-weight: 600; opacity: .75; }
+.icono-metrica.adm-met-ice { font-size: 9px; font-weight: 800; letter-spacing: .02em; background: var(--coke); color: var(--blanco); }
+.adm-met-cab { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0 10px; }
+.adm-met-cab .ice-subtitulo { display: flex; align-items: center; gap: 10px; }
+.adm-met-mini { display: inline-block; vertical-align: -3px; margin-right: 3px; }
+.adm-met-mini svg { width: 15px; height: 15px; }
+.adm-met-th { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.adm-met-th .icono-metrica { width: 22px; height: 22px; }
+.adm-met-th .icono-metrica svg { width: 13px; height: 13px; }
+/* Matriz de diferencias entre unidades (fila − columna) */
+.adm-matriz td.adm-diag { text-align: center; color: var(--tinta3); background: var(--gris-1); }
+.adm-matriz th { white-space: nowrap; }
+.adm-ranking { max-width: 860px; }
 .mapa-admin { height: max(520px, calc(100vh - 210px)); }
 @media (max-width: 860px) { .mapa-admin { height: 68vh; } }
 .g-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }

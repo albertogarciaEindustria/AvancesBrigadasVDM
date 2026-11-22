@@ -208,7 +208,7 @@ const Ice = (function () {
     // Pestañas Preventa (id 'rutas', antes Rutas) y Farmers: la misma vista con otros datos
     vistasRuta = { rutas: crearVistaRuta('rutas'), farmers: crearVistaRuta('farmers'), cercanos: crearVistaCercanos() };
     farmersSub = 'recorridos';
-    farmersCanal = null;
+    canalSel.rutas = canalSel.farmers = null;
     cineticaLista = false;
     preventaLista = false;
     canalesListos = {};
@@ -712,27 +712,38 @@ const Ice = (function () {
   }
 
   // Top = promedio de `umbral` o más; Bottom = debajo. Cada grupo en el orden del ranking
-  // (por trabajo); # es el lugar en el ranking general y el mapa de calor es el de la página
+  // (por trabajo); # es el lugar en el ranking general y el mapa de calor es el de la página.
+  // Cada grupo empieza en su propia hoja, con el mismo encabezado, para ponerlas lado a lado;
+  // si no cabe completo, los renglones bajan hasta PDF_FILA_MIN y, si aún no cabe, sigue en
+  // otra hoja con la franja del grupo («continuación»)
+  const PDF_FILA_MIN = 10.5;
   function pdfRankingTopBottom(C, nombre) {
     const todas = C.ranking_rutas, u = C.umbral, calor = calorRanking(todas, 'wice');
     const conCalor = todas.map((f, i) => ({ f, c: calor[i] }));
     const bottom = conCalor.filter(x => esBottom(x.f.promedio, u)), top = conCalor.filter(x => !esBottom(x.f.promedio, u));
     const titulo = `Ranking de rutas Top / Bottom · ${nombre}`;
     const ctx = documentoRanking(titulo), { doc } = ctx;
-    const notas = [`Rutas de preventa de ${nombre} con clientes evaluados en ${D.mes}, separadas en Top (promedio ICE de ${u} o más) y Bottom (promedio debajo de ${u}); en cada grupo, de mayor a menor trabajo. #: lugar en el ranking general por trabajo. Jefatura: la de la mayoría de los clientes de la ruta.`, notaWice(u)];
-    hojaRanking(ctx, titulo, notas, false);
+    const notas = [`Rutas de preventa de ${nombre} con clientes evaluados en ${D.mes}, separadas en Top (promedio ICE de ${u} o más) y Bottom (promedio debajo de ${u}), cada grupo en su propia hoja para compararlos lado a lado; en cada grupo, de mayor a menor trabajo. #: lugar en el ranking general por trabajo. Jefatura: la de la mayoría de los clientes de la ruta.`, notaWice(u)];
     const columnas = [{ titulo: '#', ancho: 30 }, { titulo: 'Jefatura', ancho: 110 }, { titulo: 'Ruta', ancho: 110 },
                       { titulo: 'f(x) TRABAJO (WIce)', ancho: 104, alinear: 'der', integral: true, literal: true }, { titulo: 'Promedio ICE', ancho: 92, alinear: 'der' },
                       { titulo: 'Clientes evaluados', ancho: 102, alinear: 'der' }];
-    for (const [nombreG, lista, regla] of [['Top', top, `promedio de ${u} o más`], ['Bottom', bottom, `promedio debajo de ${u}`]]) {
-      if (ctx.y + 64 > doc.H - 42) hojaRanking(ctx, titulo, notas, true);
+    const franja = (nombreG, regla, n, sigue) => {
       const y = ctx.y + 14;
       doc.rect(PDF_M, y, doc.W - 2 * PDF_M, 22, { relleno: nombreG === 'Top' ? NEGRO : ROJO });
-      doc.texto(PDF_M + 10, y + 15, `${nombreG.toUpperCase()} · ${regla.toUpperCase()}`, { tam: 11, negrita: true, color: BLANCO });
-      doc.texto(doc.W - PDF_M - 10, y + 15, plural(lista.length, 'ruta'), { tam: 10, negrita: true, color: BLANCO, alinear: 'der' });
+      doc.texto(PDF_M + 10, y + 15, `${nombreG.toUpperCase()} · ${regla.toUpperCase()}${sigue ? ' (CONTINUACIÓN)' : ''}`, { tam: 11, negrita: true, color: BLANCO });
+      doc.texto(doc.W - PDF_M - 10, y + 15, plural(n, 'ruta'), { tam: 10, negrita: true, color: BLANCO, alinear: 'der' });
       ctx.y = y + 26;
-      if (lista.length) tablaPdf(ctx, columnas, lista.map(x => filaPdfRanking(x.f, x.c, u, true, 'ruta')), () => hojaRanking(ctx, titulo, notas, true));
-      else { doc.texto(PDF_M, ctx.y + 12, `Ninguna ruta en ${nombreG} este mes.`, { tam: 9, negrita: true, color: NEGRO }); ctx.y += 18; }
+    };
+    for (const [nombreG, lista, regla] of [['Top', top, `promedio de ${u} o más`], ['Bottom', bottom, `promedio debajo de ${u}`]]) {
+      hojaRanking(ctx, titulo, notas, false);
+      franja(nombreG, regla, lista.length, false);
+      if (lista.length) {
+        // Alto de renglón para que el grupo quepa en la hoja (15 = encabezados de la tabla)
+        const libre = doc.H - 42 - ctx.y - 15;
+        const alto = Math.max(PDF_FILA_MIN, Math.min(PDF_FILA, libre / lista.length));
+        tablaPdf(ctx, columnas, lista.map(x => filaPdfRanking(x.f, x.c, u, true, 'ruta')),
+                 () => { hojaRanking(ctx, titulo, notas, true); franja(nombreG, regla, lista.length, true); }, alto);
+      } else { doc.texto(PDF_M, ctx.y + 12, `Ninguna ruta en ${nombreG} este mes.`, { tam: 9, negrita: true, color: NEGRO }); ctx.y += 18; }
     }
     PDF.descargar(doc.blob(), `RankingICE_TopBottom_${nombre.replace(/\s+/g, '')}_${D.unidad}_${D.anio}-${String(D.mes_num).padStart(2, '0')}.pdf`);
     return `PDF listo: ${plural(top.length, 'ruta')} en Top y ${plural(bottom.length, 'ruta')} en Bottom (promedio debajo de ${u}). Revisa tus descargas.`;
@@ -1268,7 +1279,18 @@ const Ice = (function () {
     jefaturas: { nombre: 'Jefaturas' },
     restan: { nombre: 'Zonas que más restan', color: NEGRO, linea: { 50: NEGRO, 75: NEGRO, 90: GRIS_OSC },
               niveles: { 50: 'Foco', 75: 'Zona de pérdida', 90: 'Zona amplia' } },
+    // Dónde quita más puntos cada submétrica (enfriador, bono...): la misma densidad, cada
+    // evaluación pesa los puntos que le quitó esa submétrica. El color es el de la submétrica
+    submetricas: { nombre: 'Pérdida por submétrica', niveles: { 50: 'Foco', 75: 'Zona de pérdida', 90: 'Zona amplia' } },
   };
+  // Un color por submétrica (sin el rojo, que es la concentración ICE); también en el administrador
+  const COLOR_METRICA = { enfriador: '#2F5BD0', portafolio: '#9B30C9', precio: '#B88A00', activacion: '#E87D0D',
+                          plataformas: '#0F8F8F', sovi: '#4E9A2A', local: '#8B5A3C', bono: '#D6408E' };
+  const colorMetrica = i => COLOR_METRICA[D.metricas[i].id] || NEGRO;
+  // Estilo de una submétrica como el de TIPOS_POL
+  const tipoMetrica = i => ({ ...TIPOS_POL.submetricas, color: colorMetrica(i), linea: { 50: colorMetrica(i), 75: colorMetrica(i), 90: colorMetrica(i) } });
+  // Muestra de relleno de un nivel con el color dado
+  const muestraPol = (color, a) => { const [r, g, b] = [1, 3, 5].map(k => parseInt(color.slice(k, k + 2), 16)); return `background:rgba(${r},${g},${b},${a});border-color:${color}`; };
   const RELLENO_POL = { 50: 0.42, 75: 0.24, 90: 0.12 }, GROSOR_POL = { 50: 2, 75: 1.5, 90: 1.2 };
   // Colores de las jefaturas (los mapas de límites usan un color por zona)
   const COLORES_JEF = ['#E8B500', '#111111', '#2F5BD0', '#9B30C9', '#4E9A2A', '#F40000', '#8B5A3C', '#0FA3A3',
@@ -1356,6 +1378,17 @@ const Ice = (function () {
   function popupPoligono(tipo, p, k, q, R, M) {
     const T = TIPOS_POL[tipo], nombre = `${T.niveles[p]} ${k + 1}`;
     const huecos = q.anillos.length > 1 ? fila('Huecos', `${num(q.anillos.length - 1)} <span class="muted">(áreas fuera de la zona)</span>`) : '';
+    if (tipo === 'submetricas') {
+      const m = D.metricas[M.i], c = colorMetrica(M.i);
+      return `<div class="pc"><div class="pc-cab" style="background:${c};color:${Graficas.tintaSobre(c)}"><b>${esc(nombre)} · ${esc(m.nombre)}</b>
+          <span>Nivel ${p} %: las zonas que juntan el ${p} % de los puntos que quitó ${esc(m.nombre.toLowerCase())}</span></div>
+        <dl class="pc-cuerpo">${fila(`Puntos de ICE que quitó aquí`, `<b>${num(q.puntos, 1)}</b> <span class="muted">(${partePct(q.puntos, M.total)} de la unidad)</span>`)}
+          ${fila('Quita por evaluación', `<b>${num(q.perdido, 2)}</b> <span class="muted">(unidad ${num(M.perdido, 2)})</span>`)}
+          ${fila(`Cumplimiento de ${esc(m.nombre.toLowerCase())}`, `${num(q.cumplimiento, 1)} % <span class="muted">(unidad ${num(M.cumplimiento, 1)} %)</span>`)}
+          ${fila('Evaluaciones', `${num(q.evaluaciones)} <span class="muted">(${plural(q.clientes, 'cliente')})</span>`)}
+          ${fila('Superficie', `${num(q.area_km2, 2)} km²`)}${huecos}</dl>
+        ${htmlRutasCruzan([q.anillos])}</div>`;
+    }
     if (tipo === 'restan') {
       const peor = (q.peor || []).map(([i, pts]) => `${esc(D.metricas[i].nombre)} <b>−${num(pts, 1)}</b>`).join(' · ');
       return `<div class="pc"><div class="pc-cab"><b>${esc(nombre)}</b>
@@ -1399,7 +1432,9 @@ const Ice = (function () {
     const restan = tipo === 'restan', lista = (datosPuntos().calificaciones || {})[pt[3]] || [];
     const resumen = restan
       ? `${esc(periodoPol(M))}: ICE promedio <b>${num(pt[5], 1)}</b> en ${plural(pt[4], 'evaluación', 'evaluaciones')} · <b>${num(pt[2], 1)}</b> puntos debajo del promedio de la unidad`
-      : `${esc(periodoPol(M))}: <b>${plural(pt[2], 'evaluación', 'evaluaciones')}</b>`;
+      : tipo === 'submetricas'
+        ? `${esc(periodoPol(M))}: ${esc(D.metricas[M.i].nombre)} le quitó <b>${num(pt[2], 1)}</b> puntos de ICE en ${plural(pt[4], 'evaluación', 'evaluaciones')}`
+        : `${esc(periodoPol(M))}: <b>${plural(pt[2], 'evaluación', 'evaluaciones')}</b>`;
     const filas = lista.map(([f, ci, v]) => {
       const canal = D.canales[ci], ref = restan ? M.promedio[canal] : null;
       const bajo = v != null && ref != null && v < ref;
@@ -1433,10 +1468,14 @@ const Ice = (function () {
       return;
     }
     const JEF = PG.jefaturas || [];
-    const hay = { ice: true, jefaturas: JEF.length > 0, restan: !!PG.restan };
+    // Pérdida por submétrica (publicaciones desde el 22-nov): la que más quita va primero
+    const SM = PG.submetricas && PG.submetricas.metricas && PG.submetricas.metricas.length ? PG.submetricas : null;
+    const hay = { ice: true, jefaturas: JEF.length > 0, restan: !!PG.restan, submetricas: !!SM };
     const cuadrado = !!((PG.recientes.resultado || {}).calles);
     const falta = { jefaturas: 'Las jefaturas se trazan con las calles de OpenStreetMap; aparecen en la siguiente publicación en que se puedan bajar.',
-                    restan: 'Aparece a partir de la siguiente publicación del sitio.' };
+                    restan: 'Aparece a partir de la siguiente publicación del sitio.',
+                    submetricas: 'Aparece a partir de la siguiente publicación del sitio.' };
+    const mayorPerdida = SM ? SM.metricas.reduce((a, m) => m.total > a.total ? m : a).i : null;
     panel.innerHTML = `
       <div class="mapa-barra">
         <div class="mapa-controles">
@@ -1448,11 +1487,17 @@ const Ice = (function () {
             <button type="button" data-modo="historico" aria-pressed="false">${esc(nombreModoPol('historico'))}</button>
           </div>
         </div>
+        <div class="chips poli-metricas" id="poliMetrica" role="group" aria-label="Submétrica" hidden>
+          <span class="poli-rutas-tit">Submétrica:</span>
+          ${SM ? [...SM.metricas].sort((a, b) => b.total - a.total).map(m => `<button type="button" class="chip" data-metrica="${m.i}" aria-pressed="${m.i === mayorPerdida}">
+            <span class="icono-metrica" style="background:${colorMetrica(m.i)}" aria-hidden="true">${svgIcono(D.metricas[m.i].id)}</span>${esc(D.metricas[m.i].nombre)} · −${num(m.total, 0)} pts</button>`).join('') : ''}
+        </div>
         <div class="poli-descargas" id="poliDescargas" role="group" aria-label="Descargas en KMZ">
           <span class="poli-rutas-tit">Descargar KMZ:</span>
           <button type="button" class="ice-btn rojo" data-kmz="ice">${svgIcono('descarga')}Concentración ICE</button>
           <button type="button" class="ice-btn" data-kmz="jefaturas"${hay.jefaturas ? '' : ' disabled'}>${svgIcono('descarga')}Jefaturas</button>
           <button type="button" class="ice-btn sec" data-kmz="restan"${hay.restan ? '' : ' disabled'}>${svgIcono('descarga')}Zonas que más restan</button>
+          <button type="button" class="ice-btn sec" data-kmz="submetricas"${hay.submetricas ? '' : ' disabled'}>${svgIcono('descarga')}Pérdida por submétrica</button>
         </div>
         <p class="mapa-resumen" id="poliResumen"></p>
         <div class="chips" id="poliNiveles" role="group" aria-label="Zonas en el mapa"></div>
@@ -1477,13 +1522,14 @@ const Ice = (function () {
     const S = D.rutas_semana;
     // dia = índice en S.dias (null = sin rutas); jefs = jefaturas encendidas
     const estado = { tipo: 'ice', modo: 'recientes', niveles: new Set([50, 75, 90]), jefs: new Set(JEF.map((_, k) => k)),
-                     puntos: false, dia: null };
+                     puntos: false, dia: null, metrica: mayorPerdida };
     let capas = {}, lineas = {}, resaltada = null, encuadrado = false;
     const calles = cuadrado ? 'Los límites corren por las calles: cada zona es la unión de las manzanas (calles de OpenStreetMap) que cubre. ' : '';
     const AYUDA = {
       ice: `Cada zona sombreada es la superficie más chica que reúne el 50, 75 o 90 % de la densidad de probabilidad de las evaluaciones ICE (kernel gaussiano adaptativo: más fino donde hay muchos clientes evaluados y más amplio donde hay pocos; cada cliente pesa las veces que se evaluó). ${calles}Las zonas se enciman: el núcleo está dentro de la zona alta y esta dentro de la amplia. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver cuántas evaluaciones y clientes reúne y qué rutas la cruzan. Con <b>Clientes evaluados</b> encendido, ${TACTIL ? 'toca' : 'haz clic en'} un punto para ver sus calificaciones ICE, cómo llegar y sus datos.`,
       jefaturas: `Cada polígono encierra a los clientes activos de una jefatura (Master Data y JefaturasFrecuencia). Cada manzana es de la jefatura con más clientes dentro y los límites se emparejan por las calles (calles de OpenStreetMap), así que algún cliente puede quedar del otro lado: cada jefatura dice qué parte de sus clientes quedó dentro. ${TACTIL ? 'Toca' : 'Haz clic en'} una jefatura para ver sus clientes, su ICE del mes y sus rutas.`,
       restan: `Zonas donde se juntan los puntos que las evaluaciones ICE quedaron por debajo del promedio de la unidad en su canal: ahí es donde más baja la calificación de la unidad (una evaluación arriba del promedio no pesa). ${calles}El foco reúne el 50 % de esos puntos, la zona de pérdida el 75 % y la amplia el 90 %. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver su ICE, cuánto le resta al promedio de la unidad, las submétricas que más quitan ahí y <b>las rutas que la cruzan</b>. Con <b>Clientes debajo del promedio</b> encendido, ${TACTIL ? 'toca' : 'haz clic en'} un punto para ver sus calificaciones ICE, cómo llegar y sus datos.`,
+      submetricas: `Elige una submétrica: las zonas pintadas son donde se juntan los puntos de ICE que esa submétrica les quitó a los clientes evaluados (puntos del manual ICE para el tipo de cliente con que se calificó cada evaluación). ${calles}El foco reúne el 50 % de esos puntos, la zona de pérdida el 75 % y la amplia el 90 %; los botones van de la submétrica que más quita a la que menos. ${TACTIL ? 'Toca' : 'Haz clic en'} una zona para ver cuántos puntos se pierden ahí, cuánto quita por evaluación contra el promedio de la unidad y <b>las rutas que la cruzan</b>. Con <b>Clientes con pérdida</b> encendido, ${TACTIL ? 'toca' : 'haz clic en'} un punto para ver sus calificaciones ICE.`,
     };
     const ayudaComun = ' Con <b>Rutas</b> se dibujan las del día elegido (solo líneas y su código, que aparece al acercar el mapa). Cada tipo de polígono se descarga en su botón de KMZ, sin clientes ni rutas, para abrirlo en Google Earth, Google My Maps o QGIS.';
     const ponerEtiquetas = () => {
@@ -1492,7 +1538,14 @@ const Ice = (function () {
     mapaP.on('zoomend', ponerEtiquetas);
     if (S) $('poliRutas').innerHTML = '<span class="poli-rutas-tit">Rutas:</span><button type="button" class="chip" aria-pressed="true" data-dia="">Sin rutas</button>'
       + S.dias.map((d, i) => `<button type="button" class="chip" aria-pressed="false" data-dia="${i}">${esc(d.dia)}${d.hoy ? ' · hoy' : ''}</button>`).join('');
-    const datosDe = tipo => tipo === 'ice' ? PG[estado.modo] : tipo === 'restan' ? PG.restan : null;
+    // Una submétrica con la forma de los otros tipos: puntos = [lat, lon, puntos que quitó, sap, evaluaciones]
+    const datosMetrica = i => {
+      const m = SM.metricas.find(x => x.i === i) || SM.metricas[0];
+      return { ...m, desde: SM.desde, hasta: SM.hasta,
+               puntos: SM.clientes.map((c, k) => [c[0], c[1], m.pts[k], c[2], c[3]]).filter(p => p[2] >= 0.05) };
+    };
+    const datosDe = tipo => tipo === 'ice' ? PG[estado.modo] : tipo === 'restan' ? PG.restan
+      : tipo === 'submetricas' ? (SM ? datosMetrica(estado.metrica) : null) : null;
 
     // Rutas del día elegido sobre los polígonos: líneas, etiquetas y, por
     // ruta, cuántos de sus clientes caen en cada zona (R = niveles; null en
@@ -1589,27 +1642,35 @@ const Ice = (function () {
     };
 
     const pintar = () => {
-      const tipo = estado.tipo, T = TIPOS_POL[tipo];
+      const tipo = estado.tipo, M = datosDe(tipo), sub = tipo === 'submetricas';
+      const T = sub ? tipoMetrica(M.i) : TIPOS_POL[tipo];
       capaPol.clearLayers();
       capaPts.clearLayers();
       capaNombres.clearLayers();
       capas = {};
       $('poliPeriodo').hidden = tipo !== 'ice';
+      $('poliMetrica').hidden = !sub;
       $('poliAyuda').innerHTML = AYUDA[tipo] + ayudaComun;
       if (tipo === 'jefaturas') { pintarJefaturas(); encuadrar(); return; }
-      const M = datosDe(tipo), R = M.resultado, total = R ? (tipo === 'restan' ? R.puntos : R.evaluaciones) : 0;
-      const peso = q => tipo === 'restan' ? q.puntos : q.evaluaciones;
-      const notas = [M.sin_coord ? `${plural(M.sin_coord, tipo === 'restan' ? 'cliente' : 'evaluación', tipo === 'restan' ? 'clientes' : 'evaluaciones')} sin coordenadas en la Master Data` : '',
+      const porPuntos = tipo === 'restan' || sub;      // el peso de las zonas son puntos, no evaluaciones
+      const R = M.resultado, total = R ? (porPuntos ? R.puntos : R.evaluaciones) : 0;
+      const peso = q => porPuntos ? q.puntos : q.evaluaciones;
+      const nombreM = sub ? D.metricas[M.i].nombre : '';
+      const notas = [M.sin_coord ? `${plural(M.sin_coord, porPuntos ? 'cliente' : 'evaluación', porPuntos ? 'clientes' : 'evaluaciones')} sin coordenadas en la Master Data` : '',
                      R && R.fuera ? `${num(R.fuera)} con coordenadas lejos de la unidad` : '']
         .filter(Boolean).join(' y ');
       const [textoRutas, listaRutas] = pintarRutas(R, T.niveles);
       $('poliResumen').innerHTML = (tipo === 'restan'
         ? `<b>Zonas que más restan</b>: ${esc(periodoPol(M))} · <b>${num(M.debajo)}</b> de <b>${num(M.clientes)}</b> clientes evaluados quedaron debajo del promedio de la unidad (${Object.entries(M.promedio).filter(([, v]) => v != null).map(([c, v]) => `${esc(c)} ${num(v, 1)}`).join(', ')}) y juntan <b>${num(M.total_puntos)}</b> puntos por debajo`
-        : `<b>${esc(nombreModoPol(estado.modo))}</b>${estado.modo === 'historico' ? ' (clientes del universo ICE)' : ''}: ${esc(periodoPol(M))} · <b>${num(M.evaluaciones)}</b> evaluaciones ICE de <b>${num(M.clientes)}</b> clientes`)
-        + `${notas ? ` (${esc(notas)} no cuentan)` : ''}.${R ? ` Ancho de banda base ${num(R.ancho_m)} m.` : ''}${textoRutas}`;
+        : sub
+          ? `<b>Pérdida por submétrica · ${esc(nombreM)}</b>: ${esc(periodoPol(M))} · le quitó <b>${num(M.total, 0)}</b> puntos de ICE a <b>${num(M.con_perdida)}</b> clientes en ${plural(M.evaluaciones, 'evaluación', 'evaluaciones')} (<b>${num(M.perdido, 2)}</b> por evaluación; cumplimiento promedio ${num(M.cumplimiento, 1)} %)`
+          : `<b>${esc(nombreModoPol(estado.modo))}</b>${estado.modo === 'historico' ? ' (clientes del universo ICE)' : ''}: ${esc(periodoPol(M))} · <b>${num(M.evaluaciones)}</b> evaluaciones ICE de <b>${num(M.clientes)}</b> clientes`)
+        + `${notas ? ` (${esc(notas)} no ${(M.sin_coord || 0) + (R && R.fuera || 0) === 1 ? 'cuenta' : 'cuentan'})` : ''}.${R ? ` Ancho de banda base ${num(R.ancho_m)} m.` : ''}${textoRutas}`;
+      const muestra = p => sub ? `<span class="poli-sw" style="${muestraPol(T.color, RELLENO_POL[p])}" aria-hidden="true"></span>`
+        : `<span class="poli-sw${tipo === 'restan' ? ' negro' : ''}" style="--a:${RELLENO_POL[p]}" aria-hidden="true"></span>`;
       $('poliNiveles').innerHTML = (R ? R.niveles.map(n =>
-        `<button type="button" class="chip" aria-pressed="${estado.niveles.has(n.p)}" data-nivel="${n.p}"><span class="poli-sw${tipo === 'restan' ? ' negro' : ''}" style="--a:${RELLENO_POL[n.p]}" aria-hidden="true"></span>${esc(T.niveles[n.p])} (${n.p} %) · ${partePct(peso(n), total)} de ${tipo === 'restan' ? 'los puntos' : 'las evaluaciones'} · ${num(n.area_km2, 1)} km²</button>`).join('') : '')
-        + `<button type="button" class="chip" aria-pressed="${estado.puntos}" data-puntos="1"><span class="poli-pt" aria-hidden="true"></span>${tipo === 'restan' ? 'Clientes debajo del promedio' : 'Clientes evaluados'} (${num(M.puntos.length)})</button>`;
+        `<button type="button" class="chip" aria-pressed="${estado.niveles.has(n.p)}" data-nivel="${n.p}">${muestra(n.p)}${esc(T.niveles[n.p])} (${n.p} %) · ${partePct(peso(n), total)} de ${porPuntos ? 'los puntos' : 'las evaluaciones'} · ${num(n.area_km2, 1)} km²</button>`).join('') : '')
+        + `<button type="button" class="chip" aria-pressed="${estado.puntos}" data-puntos="1"><span class="poli-pt" aria-hidden="true"${sub ? ` style="background:${T.color}"` : ''}></span>${tipo === 'restan' ? 'Clientes debajo del promedio' : sub ? 'Clientes con pérdida' : 'Clientes evaluados'} (${num(M.puntos.length)})</button>`;
 
       // De la zona más amplia a la más chica: la chica queda encima
       if (R) for (const n of [...R.niveles].sort((a, b) => b.p - a.p)) {
@@ -1620,6 +1681,7 @@ const Ice = (function () {
           capa.orden = n.p;
           if (!TACTIL) capa.bindTooltip(tipo === 'restan'
             ? `<b>${esc(T.niveles[n.p])} ${k + 1}</b> · ICE ${num(q.ice, 1)} · ${num(q.evaluaciones)} evaluaciones`
+            : sub ? `<b>${esc(T.niveles[n.p])} ${k + 1} · ${esc(nombreM)}</b> · quitó ${num(q.puntos, 1)} puntos · ${num(q.perdido, 2)} por evaluación`
             : `<b>${esc(T.niveles[n.p])} ${k + 1}</b> · ${num(q.evaluaciones)} evaluaciones · ${num(q.area_km2, 2)} km²`, { sticky: true, opacity: 0.95 });
           capas[`${n.p}-${k}`] = capa;
           if (estado.niveles.has(n.p)) capa.addTo(capaPol);
@@ -1630,12 +1692,13 @@ const Ice = (function () {
       for (const pt of [...M.puntos].sort((a, b) => b[2] - a[2])) {
         const [lat, lon, n, sap] = pt;
         const nombre = `<b>${esc(nombrePunto(sap))}</b> · SAP ${esc(sap)}`;
-        const m = L.circleMarker([lat, lon], { renderer: rendRutas, radius: Math.min(7, 2.5 + Math.sqrt(tipo === 'restan' ? n / 4 : n)), color: BLANCO, weight: 1,
-                                               fillColor: tipo === 'restan' ? ROJO : NEGRO, fillOpacity: 0.85 })
+        const m = L.circleMarker([lat, lon], { renderer: rendRutas, radius: Math.min(7, 2.5 + Math.sqrt(porPuntos ? n / 4 : n)), color: BLANCO, weight: 1,
+                                               fillColor: tipo === 'restan' ? ROJO : sub ? T.color : NEGRO, fillOpacity: 0.85 })
           .bindPopup(() => popupPuntoPol(pt, tipo, M), { maxWidth: 330, maxHeight: altoFicha, className: 'ficha-punto' })
           .on('popupopen', e => e.target.closeTooltip());
         if (!TACTIL) m.bindTooltip(tipo === 'restan'
           ? `${nombre} · ICE ${num(pt[5], 1)} en ${plural(pt[4], 'evaluación', 'evaluaciones')} · ${num(n, 1)} puntos debajo del promedio`
+          : sub ? `${nombre} · ${esc(nombreM)} le quitó ${num(n, 1)} puntos en ${plural(pt[4], 'evaluación', 'evaluaciones')}`
           : `${nombre} · ${plural(n, 'evaluación', 'evaluaciones')}`, { direction: 'top', offset: [0, -4], opacity: 0.95 });
         m.addTo(capaPts);
       }
@@ -1644,12 +1707,13 @@ const Ice = (function () {
       $('listaPoli').innerHTML = listaRutas + (R ? R.niveles.map(n => `
         <li class="poli-grupo">${esc(T.niveles[n.p])} · ${n.p} % <span>${plural(n.poligonos.length, 'zona')}</span></li>
         ${n.poligonos.map((q, k) => `<li><button type="button" class="ruta-item" data-capa="${n.p}-${k}">
-          <span class="poli-sw${tipo === 'restan' ? ' negro' : ''}" style="--a:${RELLENO_POL[n.p]}" aria-hidden="true"></span>
+          ${muestra(n.p)}
           <span class="ruta-cod">${esc(T.niveles[n.p])} ${k + 1}</span><span>${num(q.area_km2, 2)} km²</span>
           <span class="ruta-info">${tipo === 'restan'
             ? `ICE ${num(q.ice, 1)} · ${num(q.evaluaciones)} evaluaciones${q.impacto > 0 ? ` · resta ${num(q.impacto, 2)}` : ''}`
+            : sub ? `Quitó ${num(q.puntos, 1)} puntos (${partePct(q.puntos, M.total)}) · ${num(q.perdido, 2)} por evaluación · ${num(q.evaluaciones)} evaluaciones`
             : `${num(q.evaluaciones)} evaluaciones (${partePct(q.evaluaciones, total)}) · ${plural(q.clientes, 'cliente')}`}</span></button></li>`).join('')}`).join('')
-        : `<li class="poli-grupo">Muy pocos clientes ${tipo === 'restan' ? 'debajo del promedio' : 'evaluados'} con coordenadas para calcular zonas.</li>`);
+        : `<li class="poli-grupo">Muy pocos clientes ${tipo === 'restan' ? 'debajo del promedio' : sub ? `con pérdida en ${esc(nombreM.toLowerCase())}` : 'evaluados'} con coordenadas para calcular zonas.</li>`);
       encuadrar();
     };
     pintar();
@@ -1674,6 +1738,15 @@ const Ice = (function () {
     }));
     segmento('poliTipo', 'tipo', 'tipo');
     segmento('poliPeriodo', 'modo', 'modo');
+    $('poliMetrica').addEventListener('click', e => {
+      const b = e.target.closest('[data-metrica]');
+      if (!b || +b.dataset.metrica === estado.metrica) return;
+      $('poliMetrica').querySelectorAll('[data-metrica]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      estado.metrica = +b.dataset.metrica;
+      $('kmzEstado').textContent = '';
+      mapaP.closePopup();
+      pintar();
+    });
     $('poliNiveles').addEventListener('click', e => {
       const b = e.target.closest('button');
       if (!b) return;
@@ -1750,6 +1823,28 @@ const Ice = (function () {
           }) }],
           `Jefaturas_${D.unidad}_${D.hoy}.kmz`];
       }
+      if (tipo === 'submetricas') {
+        // Una carpeta por submétrica (de la que más quita a la que menos) y, dentro, sus niveles
+        const carpetas = [...SM.metricas].filter(m => m.resultado).sort((a, b) => b.total - a.total).map(m => {
+          const T = tipoMetrica(m.i), nm = D.metricas[m.i].nombre, R = m.resultado;
+          return {
+            nombre: `${nm}: quitó ${num(m.total, 1)} puntos de ICE (${num(m.perdido, 2)} por evaluación)`,
+            carpetas: [...R.niveles].sort((a, b) => b.p - a.p).map(n => ({
+              nombre: `${nm} · ${T.niveles[n.p]} (${n.p} %): ${partePct(n.puntos, R.puntos)} de los puntos, ${num(n.area_km2, 1)} km²`,
+              marcas: n.poligonos.map((q, k) => {
+                const rutas = rutasQueCruzan([q.anillos]).map(r => r.codigo).join(', ');
+                return { nombre: `${nm} · ${T.niveles[n.p]} ${k + 1}`, color: T.color, relleno: RELLENO_POL[n.p], ancho: GROSOR_POL[n.p], poligonos: [q.anillos],
+                         descripcion: `${nm} quitó ${num(q.puntos, 1)} puntos de ICE aquí (${partePct(q.puntos, m.total)} de la unidad), ${num(q.perdido, 2)} por evaluación (unidad ${num(m.perdido, 2)}); cumplimiento ${num(q.cumplimiento, 1)} % (unidad ${num(m.cumplimiento, 1)} %) · ${num(q.evaluaciones)} evaluaciones de ${num(q.clientes)} clientes · ${num(q.area_km2, 2)} km²${rutas ? ` · rutas que la cruzan: ${rutas}` : ''}`,
+                         datos: { submetrica: nm, nivel_pct: n.p, zona: `${T.niveles[n.p]} ${k + 1}`, puntos_perdidos: q.puntos, perdido_por_evaluacion: q.perdido == null ? '' : q.perdido,
+                                  cumplimiento_pct: q.cumplimiento == null ? '' : q.cumplimiento, evaluaciones: q.evaluaciones, clientes: q.clientes, area_km2: q.area_km2, rutas_que_cruzan: rutas } };
+              }),
+            })),
+          };
+        });
+        return [`Pérdida por submétrica · ${D.unidad}`,
+                `Dónde quita más puntos de ICE cada submétrica en la unidad ${D.unidad}, ${periodoPol(SM)}: cada evaluación pesa los puntos que le quitó la submétrica (puntos del manual ICE para el tipo de cliente con que se calificó). Cada nivel es la superficie más chica que reúne el 50, 75 o 90 % de esos puntos.${fuente} Publicado ${D.generado}.`,
+                carpetas, `PerdidaPorSubmetrica_${D.unidad}_ultimos_${PG.meses}_meses_${SM.hasta}.kmz`];
+      }
       const M = datosDe(tipo), R = M.resultado, T = TIPOS_POL[tipo], restan = tipo === 'restan';
       const total = restan ? R.puntos : R.evaluaciones, peso = q => restan ? q.puntos : q.evaluaciones;
       const carpetas = [...R.niveles].sort((a, b) => b.p - a.p).map(n => ({
@@ -1778,7 +1873,8 @@ const Ice = (function () {
       const boton = e.target.closest('[data-kmz]'), aviso = $('kmzEstado');
       if (!boton || boton.disabled) return;
       const tipo = boton.dataset.kmz, M = datosDe(tipo);
-      if (tipo !== 'jefaturas' && !(M && M.resultado)) { aviso.textContent = 'No hay zonas que descargar: muy pocos clientes con coordenadas.'; return; }
+      const hayZonas = tipo === 'jefaturas' || (tipo === 'submetricas' ? SM.metricas.some(m => m.resultado) : !!(M && M.resultado));
+      if (!hayZonas) { aviso.textContent = 'No hay zonas que descargar: muy pocos clientes con coordenadas.'; return; }
       boton.disabled = true;
       aviso.textContent = 'Generando el KMZ...';
       try {
@@ -1806,13 +1902,14 @@ const Ice = (function () {
     if (mapaS) { setTimeout(() => mapaS.invalidateSize(), 50); return; }
     const hoy = new Date(), sHoy = semanaDe(hoy.getDate()), sSig = sHoy === 4 ? 1 : sHoy + 1;
     const mesSig = MESES[(hoy.getMonth() + (sHoy === 4 ? 1 : 0)) % 12];
-    const prior = D.clientes.filter(c => (c[4] === 1 || c[4] === 2) && c[14]);
+    // Prioridad 1, 2 y 3 (P3 = aleatorios evaluados alguna vez: también tienen semana)
+    const prior = D.clientes.filter(c => c[4] >= 1 && c[4] <= 3 && c[14]);
     const cuenta = { 1: 0, 2: 0, 3: 0, 4: 0 };
     for (const c of prior) cuenta[c[14]]++;
     const etiqueta = s => `Semana ${s}${s === sHoy ? ' · esta' : s === sSig ? ' · próxima' : ''} (${num(cuenta[s])})`;
     panel.innerHTML = `
       <div class="mapa-barra">
-        <p class="mapa-resumen">Clientes <b>prioridad 1 y 2</b> según la semana del mes en que más veces los ha evaluado el auditor (todo su histórico ICE; si hay empate, la de su visita más reciente): <b>semana 1</b> = días 1–7, <b>2</b> = 8–14, <b>3</b> = 15–21 y <b>4</b> = del 22 al fin de mes. Hoy, ${hoy.getDate()} de ${MESES[hoy.getMonth()]}, es la <b>semana ${sHoy}</b>; la próxima es la <b>semana ${sSig}</b>${sHoy === 4 ? ` de ${esc(mesSig)}` : ''}.</p>
+        <p class="mapa-resumen">Clientes <b>prioridad 1, 2 y 3</b> según la semana del mes en que más veces los ha evaluado el auditor (todo su histórico ICE; si hay empate, la de su visita más reciente): <b>semana 1</b> = días 1–7, <b>2</b> = 8–14, <b>3</b> = 15–21 y <b>4</b> = del 22 al fin de mes. Hoy, ${hoy.getDate()} de ${MESES[hoy.getMonth()]}, es la <b>semana ${sHoy}</b>; la próxima es la <b>semana ${sSig}</b>${sHoy === 4 ? ` de ${esc(mesSig)}` : ''}.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="chips" role="group" aria-label="Semana del mes" id="botonesSemana">
@@ -1821,13 +1918,13 @@ const Ice = (function () {
             <button type="button" class="chip grande" data-s="1,2,3,4" aria-pressed="false">Todas (${num(prior.length)})</button>
           </div>
           <div class="chips">
-            ${[1, 2].map(p => `<button type="button" class="chip on" aria-pressed="true" data-p="${p}"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</button>`).join('')}
+            ${[1, 2, 3].map(p => `<button type="button" class="chip on" aria-pressed="true" data-p="${p}"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre} (${num(prior.filter(c => c[4] === p).length)})</button>`).join('')}
             <button type="button" class="chip" aria-pressed="false" id="semPendientes">Solo sin ICE en ${esc(D.mes)}</button>
             <button type="button" class="chip grande" aria-pressed="false" id="semFalto"><span class="icono-metrica" aria-hidden="true">${svgIcono('lista')}</span>Lo que les faltó en su última evaluación</button>
           </div>
         </div>
         <div class="leyenda-metricas" id="leyendaFaltoS" hidden></div>
-        <p class="mapa-ayuda">El número de cada punto es su semana. Relleno: aún sin ICE en ${esc(D.mes)}; solo borde: ya evaluado este mes. ${TACTIL ? 'Toca' : 'Haz clic en'} un cliente para ver su ficha; abajo del mapa está la lista.</p>
+        <p class="mapa-ayuda">El número de cada punto es su semana. Relleno: aún sin ICE en ${esc(D.mes)}; solo borde: ya evaluado este mes (en prioridad 3, que va en blanco, el borde punteado). ${TACTIL ? 'Toca' : 'Haz clic en'} un cliente para ver su ficha; abajo del mapa está la lista.</p>
       </div>
       <div id="mapaSemanas" class="mapa"></div>
       <section class="ruta-detalle" id="semanaLista"></section>`;
@@ -1837,20 +1934,20 @@ const Ice = (function () {
     botonUbicacion(mapaS);
     const capa = L.layerGroup().addTo(mapaS);
     // falto: solo los que se ven y aún no tienen ICE en el mes, con lo que les faltó en su última evaluación
-    const estado = { semanas: [sHoy, sSig], prios: new Set([1, 2]), pendientes: false, falto: false };
+    const estado = { semanas: [sHoy, sSig], prios: new Set([1, 2, 3]), pendientes: false, falto: false };
     const visibles = () => prior.filter(c => estado.semanas.includes(c[14]) && estado.prios.has(c[4]) &&
                                              (!(estado.pendientes || estado.falto) || !porSapEval[c[0]]));
     const pintar = encuadrar => {
       capa.clearLayers();
       const lista = visibles(), limites = [];
-      // Prioridad 2 abajo y prioridad 1 encima
+      // Prioridad 3 abajo, luego la 2 y la prioridad 1 encima
       for (const c of [...lista].sort((a, b) => b[4] - a[4])) {
         if (c[2] == null) continue;
         const hecho = !!porSapEval[c[0]], ult = estado.falto && c[17];
         const html = ult ? `<span class="falta-marca p${c[4]}">${svgIcono(idPeor(ult))}<i>${num(c[14])}</i></span>`
           : `<span class="sem-marca p${c[4]}${hecho ? ' hecho' : ''}">${num(c[14])}</span>`;
         const tam = ult ? 26 : 24;
-        const m = L.marker([c[2], c[3]], { keyboard: false, zIndexOffset: c[4] === 1 ? 200 : 0, riseOnHover: true,
+        const m = L.marker([c[2], c[3]], { keyboard: false, zIndexOffset: c[4] === 1 ? 200 : c[4] === 2 ? 100 : 0, riseOnHover: true,
           icon: L.divIcon({ className: 'ev-icono', html, iconSize: [tam, tam], iconAnchor: [tam / 2, tam / 2], popupAnchor: [0, -tam / 2] }) })
           .bindPopup(() => popupCliente(c), { maxWidth: 320 });
         if (!TACTIL) m.bindTooltip(`<b>${esc(c[1])}</b> · semana ${num(c[14])}${hecho ? ` · ICE ${esc(D.mes)}: ${dec1(porSapEval[c[0]][0][6])}` : ''}${ult ? ` · le faltó: ${esc(nombrePeor(ult))}` : ''}`,
@@ -1938,6 +2035,8 @@ const Ice = (function () {
       botonHoy: 'Impresión Hoy Rutas', tituloHoy: 'Rutas de hoy', archivoHoy: 'ICE_Rutas_Hoy',
       tituloDia: dia => `Lista de preventa del ${dia}`, archivoDia: 'ICE_Preventa', listaDias: 'Lista de preventa por día',
       nota: '',
+      porCanal: 'rutas',                   // botón de canal propio, arriba de la pestaña (canalSel.rutas)
+      canalPropio: true,
     },
     farmers: {
       datos: () => D.farmers, semana: () => D.farmers_semana, epica: () => D.epica_farmers || {},
@@ -1949,7 +2048,7 @@ const Ice = (function () {
       nota: ' Cada cliente va con su farmer y se visita los días de su frecuencia Farmer (clave y frecuencia Farmer de JefaturasFrecuencia, /addjefaturas); la jefatura de cada farmer es la de la mayoría de sus clientes.',
       sinDatos: 'Esta publicación no trae los recorridos de los farmers: la base de jefaturas (JefaturasFrecuencia) no tiene las columnas de clave y frecuencia Farmer. Hay que volver a mandar el Excel de OBJETIVOS con /addjefaturas y publicar de nuevo.',
       panel: 'p-farmers-recorridos',      // dentro de la pestaña Farmers (farmersPestana)
-      porCanal: true,                      // botón de canal de la pestaña (farmersCanal)
+      porCanal: 'farmers',                 // botón de canal de la pestaña Farmers (canalSel.farmers)
     },
   };
   // Farmers, vista Zona y cercanos (crearVistaCercanos): sus PDF agregan los cercanos
@@ -2000,7 +2099,9 @@ const Ice = (function () {
         return;
       }
       const H = datos.hoy, M = datos.manana, S = V.semana();
+      const canal = V.canalPropio ? botonCanal(V, I('Canal'), `Por omisión van <b>todos los canales</b>. Con <b>On Premise</b> o <b>Home Market</b>, el mapa, la lista y los PDF (el de hoy y los de cada día) quedan solo con los clientes de ese canal: prioridad 1, 2 y 3 de cada ruta (y los no ICE, si los incluyes).`) : '';
       panel.innerHTML = `
+      ${canal ? `<div class="ice-subpestanas farmers-barra">${canal}</div>` : ''}
       <div class="mapa-barra">
         <div class="mapa-controles">
           <div class="rutas-acciones">
@@ -2045,8 +2146,8 @@ const Ice = (function () {
       pintarDia('hoy');
       mapa.on('zoomend', pintarEtiquetas);
 
-      panel.querySelectorAll('.segmento button').forEach(b => b.addEventListener('click', () => {
-        panel.querySelectorAll('.segmento button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      panel.querySelectorAll('.segmento button[data-dia]').forEach(b => b.addEventListener('click', () => {
+        panel.querySelectorAll('.segmento button[data-dia]').forEach(x => x.setAttribute('aria-pressed', x === b));
         pintarDia(b.dataset.dia);
       }));
       $(I('Busca')).addEventListener('input', filtrarLista);
@@ -2054,6 +2155,7 @@ const Ice = (function () {
       $(I('Etiquetas')).addEventListener('change', pintarEtiquetas);
       panel.querySelectorAll('[data-pdf], [data-pdf-dia]').forEach(b => b.addEventListener('click', () =>
         imprimir(V, b, $(I('PdfEstado')), $(I('PdfTodos')).checked)));
+      if (V.canalPropio) alElegirCanal(V, I('Canal'), () => { $(I('PdfEstado')).textContent = ''; pintarDia(diaSel); });
     }
 
     function filtrarLista() {
@@ -2187,10 +2289,34 @@ const Ice = (function () {
   // D.canales ('Traditional' = Home Market). Lo respetan la pantalla y los PDF de las dos
   // vistas: solo quedan los clientes de ese canal (P1, P2, P3 y cercanos) y los cercanos
   // se escogen solo entre los de ese canal (farmers_semana.dias[].zonas_canal).
-  let farmersCanal = null;
+  // Preventa tiene su propio botón (canalSel.rutas), con los mismos efectos en sus rutas y PDF.
+  const canalSel = { rutas: null, farmers: null };
   const nombreCanalCorto = i => D.canales[i] === 'Traditional' ? 'Home Market' : D.canales[i];
-  const canalVista = V => V.porCanal && farmersCanal != null ? farmersCanal : null;
-  const conCanales = () => D.clientes.length > 0 && D.clientes[0].length > 18 && D.farmers.hoy.rutas.every(r => r.canales);
+  const canalVista = V => V.porCanal && canalSel[V.porCanal] != null ? canalSel[V.porCanal] : null;
+  // ¿La publicación trae el canal de cada punto? (antes del 22-nov Preventa no lo traía)
+  const conCanales = V => D.clientes.length > 0 && D.clientes[0].length > 18 && !!V.datos()
+    && ['hoy', 'manana'].every(d => V.datos()[d].rutas.every(r => r.canales));
+  // Botón de canal (Todos, On Premise, Home Market) de una vista; null si no hay datos de canal
+  function botonCanal(V, id, texto) {
+    if (!conCanales(V)) return '';
+    const sel = canalSel[V.porCanal];
+    const opciones = [[null, 'Todos los canales'], ...['On Premise', 'Traditional'].map(c => [D.canales.indexOf(c), c === 'Traditional' ? 'Home Market' : c])];
+    return `<div class="farmers-canal"><span class="poli-rutas-tit">Canal:</span>
+      <div class="segmento" id="${id}" role="group" aria-label="Canal de los clientes de la pestaña ${esc(V.Varios === 'Rutas' ? 'Preventa' : V.Varios)}">
+        ${opciones.map(([i, n]) => `<button type="button" data-canal="${i == null ? '' : i}" aria-pressed="${i === sel}">${esc(n)}</button>`).join('')}
+      </div></div>
+      <p class="mapa-ayuda farmers-canal-ayuda">${texto}</p>`;
+  }
+  function alElegirCanal(V, id, refrescar) {
+    if (!$(id)) return;
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('[data-canal]');
+      if (!b) return;
+      canalSel[V.porCanal] = b.dataset.canal === '' ? null : +b.dataset.canal;
+      $(id).querySelectorAll('[data-canal]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      refrescar();
+    });
+  }
 
   // Rutas de hoy o de mañana de una vista (D.rutas.hoy, D.farmers.hoy...), solo con los
   // clientes del canal elegido (rutas[].canales: canal de cada punto)
@@ -2204,28 +2330,16 @@ const Ice = (function () {
     if (!D.farmers) { vistasRuta.farmers.abrir(); return; }   // aviso: la base no trae farmers
     const p = $('p-farmers');
     if (!$('farmersSub')) {
-      const canales = conCanales() ? [[null, 'Todos los canales'], ...['On Premise', 'Traditional'].map(c => [D.canales.indexOf(c), c === 'Traditional' ? 'Home Market' : c])] : [];
       p.innerHTML = `<div class="ice-subpestanas farmers-barra"><div class="segmento" id="farmersSub" role="group" aria-label="Vista de la pestaña Farmers">
           <button type="button" data-sub="recorridos" aria-pressed="true">Recorridos</button>
           <button type="button" data-sub="cercanos" aria-pressed="false">Zona y clientes cercanos</button></div>
-          ${canales.length ? `<div class="farmers-canal"><span class="poli-rutas-tit">Canal:</span>
-          <div class="segmento" id="farmersCanal" role="group" aria-label="Canal de los clientes de la pestaña Farmers">
-            ${canales.map(([i, n]) => `<button type="button" data-canal="${i == null ? '' : i}" aria-pressed="${i === farmersCanal}">${esc(n)}</button>`).join('')}
-          </div></div>
-          <p class="mapa-ayuda farmers-canal-ayuda">Con <b>On Premise</b> o <b>Home Market</b>, el mapa, la lista y los PDF de las dos vistas quedan solo con los clientes de ese canal: prioridad 1, 2 y 3 de cada recorrido y, en Zona y clientes cercanos, sus cercanos, que se escogen solo entre los de ese canal.</p>` : ''}</div>
+          ${botonCanal(VISTAS_RUTA.farmers, 'farmersCanal', 'Con <b>On Premise</b> o <b>Home Market</b>, el mapa, la lista y los PDF de las dos vistas quedan solo con los clientes de ese canal: prioridad 1, 2 y 3 de cada recorrido y, en Zona y clientes cercanos, sus cercanos, que se escogen solo entre los de ese canal.')}</div>
         <div id="p-farmers-recorridos"></div><div id="p-farmers-cercanos" hidden></div>`;
       $('farmersSub').addEventListener('click', e => {
         const b = e.target.closest('[data-sub]');
         if (b) { farmersSub = b.dataset.sub; farmersPestana(); }
       });
-      if ($('farmersCanal')) $('farmersCanal').addEventListener('click', e => {
-        const b = e.target.closest('[data-canal]');
-        if (!b) return;
-        farmersCanal = b.dataset.canal === '' ? null : +b.dataset.canal;
-        $('farmersCanal').querySelectorAll('[data-canal]').forEach(x => x.setAttribute('aria-pressed', x === b));
-        vistasRuta.farmers.refrescar();
-        vistasRuta.cercanos.refrescar();
-      });
+      alElegirCanal(VISTAS_RUTA.farmers, 'farmersCanal', () => { vistasRuta.farmers.refrescar(); vistasRuta.cercanos.refrescar(); });
     }
     $('farmersSub').querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === farmersSub));
     $('p-farmers-recorridos').hidden = farmersSub !== 'recorridos';
@@ -2511,9 +2625,11 @@ const Ice = (function () {
     ctx.y = y + 8;
   }
 
-  // Tabla con cortes de hoja: hojaNueva() abre la siguiente y se repiten los encabezados
-  function tablaPdf(ctx, columnas, filas, hojaNueva) {
-    const { doc } = ctx, limite = doc.H - 42;
+  // Tabla con cortes de hoja: hojaNueva() abre la siguiente y se repiten los encabezados.
+  // alto: alto de cada renglón (PDF_FILA si no se da; el ranking Top / Bottom lo baja para que
+  // cada grupo quepa en su hoja); con renglones bajos la letra baja de 8 a 7
+  function tablaPdf(ctx, columnas, filas, hojaNueva, alto = PDF_FILA) {
+    const { doc } = ctx, limite = doc.H - 42, base = alto * 11 / 16, tam = alto < 13 ? 7 : 8;
     const cabecera = () => {
       let x = PDF_M;
       for (const c of columnas) {
@@ -2528,21 +2644,21 @@ const Ice = (function () {
     };
     cabecera();
     filas.forEach((f, k) => {
-      if (ctx.y + PDF_FILA > limite) { hojaNueva(); cabecera(); }
-      if (k % 2) doc.rect(PDF_M, ctx.y, doc.W - 2 * PDF_M, PDF_FILA, { relleno: '#F4F4F4' });
+      if (ctx.y + alto > limite) { hojaNueva(); cabecera(); }
+      if (k % 2) doc.rect(PDF_M, ctx.y, doc.W - 2 * PDF_M, alto, { relleno: '#F4F4F4' });
       let x = PDF_M;
       columnas.forEach((c, j) => {
         const v = f[j];
-        if (v && v.tipo != null) insigniaPdf(doc, x + 4, ctx.y + 11, v.tipo);
+        if (v && v.tipo != null) insigniaPdf(doc, x + 4, ctx.y + base, v.tipo);
         else {
           const t = v && typeof v === 'object' ? v : { texto: v };
-          if (t.fondo) doc.rect(x, ctx.y, c.ancho, PDF_FILA, { relleno: t.fondo });
-          doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + 11, t.texto == null ? '' : String(t.texto),
-                    { tam: 8, negrita: !!t.negrita, color: t.color || NEGRO, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 7 });
+          if (t.fondo) doc.rect(x, ctx.y, c.ancho, alto, { relleno: t.fondo });
+          doc.texto(c.alinear === 'der' ? x + c.ancho - 4 : x + 4, ctx.y + base, t.texto == null ? '' : String(t.texto),
+                    { tam, negrita: !!t.negrita, color: t.color || NEGRO, alinear: c.alinear === 'der' ? 'der' : 'izq', max: c.ancho - 7 });
         }
         x += c.ancho;
       });
-      ctx.y += PDF_FILA;
+      ctx.y += alto;
     });
     doc.linea(PDF_M, ctx.y, doc.W - PDF_M, ctx.y, { color: GRIS, grosor: 0.5 });
   }
@@ -2797,5 +2913,5 @@ const Ice = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();
   // Lo que comparte con el administrador (js/ice-admin.js)
-  return { util: { capaBase, limitesRobustos, svgIcono } };
+  return { util: { capaBase, limitesRobustos, svgIcono, calorRanking, COLOR_METRICA } };
 })();

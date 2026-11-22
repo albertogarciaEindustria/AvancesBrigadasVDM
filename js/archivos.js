@@ -156,16 +156,19 @@ ${n.poligonos.map((q, k) => `<Placemark>
       if (!estilos.has(clave)) estilos.set(clave, `e${estilos.size}`);
       return estilos.get(clave);
     };
-    const cuerpo = carpetas.map(c => `<Folder>
+    // Una carpeta trae sus marcas y, si las tiene, sus subcarpetas (`carpetas`)
+    const carpeta = c => `<Folder>
 <name>${esc(c.nombre)}</name>
-${c.marcas.map(m => `<Placemark>
+${(c.marcas || []).map(m => `<Placemark>
 <name>${esc(m.nombre)}</name>
 <description>${esc(m.descripcion || '')}</description>
 <styleUrl>#${estilo(m)}</styleUrl>
 <ExtendedData>${Object.entries(m.datos || {}).map(([k, v]) => `<Data name="${esc(k)}"><value>${esc(v)}</value></Data>`).join('')}</ExtendedData>
 ${m.poligonos.length === 1 ? poligono(m.poligonos[0]) : `<MultiGeometry>${m.poligonos.map(poligono).join('')}</MultiGeometry>`}
 </Placemark>`).join('\n')}
-</Folder>`).join('\n');
+${(c.carpetas || []).map(carpeta).join('\n')}
+</Folder>`;
+    const cuerpo = carpetas.map(carpeta).join('\n');
     const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
