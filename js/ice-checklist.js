@@ -144,8 +144,10 @@ function programaChecklist() {
       var p = it.pts;
       if (r.puntaje === 'portafolio' && r.reglas) p = it.tipo === 'core' ? r.reglas.core / nCore : it.tipo === 'estr' ? r.reglas.estr / nEstr : p;
       var meta = it.tool === 'share' ? c.metas[it.meta] : undefined;
-      cuerpo += '<div class="ck-item"><div class="ck-fila"><span class="ck-t">' + esc(it.t) + '</span>'
-        + (p != null ? '<b class="ck-pts">' + pts(p) + ' pts</b>' : '') + '</div>'
+      // Bolita (cada renglón es un punto distinto) y casilla para palomear en la visita: solo se ve, no cambia nada ni se guarda
+      cuerpo += '<div class="ck-item"><label class="ck-fila"><span class="ck-bola" aria-hidden="true"></span>'
+        + '<input type="checkbox" class="ck-caja"><span class="ck-t">' + esc(it.t) + '</span>'
+        + (p != null ? '<b class="ck-pts">' + pts(p) + ' pts</b>' : '') + '</label>'
         + (it.d ? '<p class="ck-d">' + esc(it.d) + '</p>' : '')
         + (it.llena ? '<div class="ck-llena"><span>Se llena así</span>' + esc(it.llena) + '</div>' : '')
         + (it.formula ? '<p class="ck-formula">' + esc(it.formula) + ' · Meta: ' + (meta != null ? '<b>' + meta + '%</b>' : 'pendiente') + '</p>' : '')
@@ -184,8 +186,14 @@ function programaChecklist() {
     '.ck-grupo{margin:14px 0 0;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#4D4D4D}',
     '.ck-gnota{margin:2px 0 0;font-size:12px;color:#C40000;font-weight:600}',
     '.ck-item{padding:8px 0;border-bottom:1px solid #E6E6E6}',
-    '.ck-fila{display:flex;align-items:baseline;justify-content:space-between;gap:10px}',
-    '.ck-t{font-weight:800}',
+    '.ck-fila{display:flex;align-items:flex-start;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent}',
+    '.ck-bola{flex:none;width:8px;height:8px;margin-top:5.5px;border-radius:50%;background:#F40000}',
+    '.ck-caja{-webkit-appearance:none;appearance:none;flex:none;width:19px;height:19px;margin:0;border:2px solid #000;border-radius:0;background:#fff center/14px no-repeat;cursor:pointer;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+    '.ck-caja:checked{background-color:#000;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M2.5 8.5l3.5 3.5 7.5-8%27 fill=%27none%27 stroke=%27%23fff%27 stroke-width=%272.6%27/%3E%3C/svg%3E")}',
+    '.ck-caja:focus-visible{outline:2px solid #F40000;outline-offset:2px}',
+    '.ck-fila:hover .ck-caja{border-color:#F40000}',
+    '.ck-t{flex:1;min-width:0;font-weight:800}',
+    '.ck-item>:not(.ck-fila){margin-left:43px}',
     '.ck-pts{flex:none;min-width:4.2em;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}',
     '.ck-d{margin:2px 0 0;color:#333}',
     '.ck-ojo{margin:3px 0 0;color:#C40000;font-size:12px}',
