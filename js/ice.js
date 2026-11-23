@@ -3,7 +3,7 @@
  * Market con sus rankings, mapa, semanas del mes, cinética de los auditores
  * (js/ice-extra.js), ÉPICAS de preventa y de farmers (js/ice-preventa.js), Mix de tipos de cliente,
  * rutas de preventa y de farmers (con la zona de cada farmer y sus clientes
- * cercanos) con sus impresiones en PDF y polígonos en KMZ: concentración ICE,
+ * cercanos) con sus impresiones (ZIP con PDF y tablas PNG, js/tablas-png.js) y polígonos en KMZ: concentración ICE,
  * jefaturas y zonas que más restan). Un usuario administrador entra a
  * js/ice-admin.js (todas las unidades) y desde ahí abre cualquier unidad.
  *
@@ -2117,7 +2117,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${(S ? S.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada botón baja un <b>ZIP con una carpeta por jefatura</b> y, dentro, <b>un PDF por ${esc(V.uno)}</b>, para mandarle a cada jefatura lo suyo y que cada ${esc(V.quienUno)} se lleve su hoja: los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios (sin ICE en ${esc(D.prioridad.ventana)}). En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
+        <p class="mapa-ayuda">Cada botón baja un <b>ZIP con una carpeta por jefatura</b>, para mandarle a cada jefatura lo suyo. Dentro de cada una: la carpeta <b>PDF</b>, con <b>un PDF por ${esc(V.uno)}</b> para que cada ${esc(V.quienUno)} se lleve su hoja; la carpeta <b>Tablas_PNG</b>, con la tabla de cada ${esc(V.uno)} en imagen (para mandarla por chat), y <b>Todas_las_tablas.pdf</b>, con las tablas de todas sus ${esc(V.varios)} una tras otra. Todo sale con lo que elijas en los botones (día${V.porCanal ? ', canal' : ''}). En la hoja de cada ${esc(V.uno)} van los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios (sin ICE en ${esc(D.prioridad.ventana)}). En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de ${esc(V.losVarios)}">
@@ -2389,7 +2389,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${S.dias.map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen de ${num(K.margen)} m alrededor; si dentro hay menos de ${num(K.min)} clientes para agregar, el margen crece de ${num(K.paso)} en ${num(K.paso)} m hasta ${num(K.margen_max)} m. En su zona se le agregan <b>hasta ${num(K.max)} clientes prioridad 1 y 2 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)}: los más cercanos al camino que une a sus clientes en orden (◆ en el mapa). Un cliente que cae en varias zonas va solo con el farmer que lo tiene más cerca. Cada botón baja un <b>ZIP con una carpeta por jefatura</b> (la del farmer ese día) y, dentro, <b>un PDF por farmer</b> con sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen de ${num(K.margen)} m alrededor; si dentro hay menos de ${num(K.min)} clientes para agregar, el margen crece de ${num(K.paso)} en ${num(K.paso)} m hasta ${num(K.margen_max)} m. En su zona se le agregan <b>hasta ${num(K.max)} clientes prioridad 1 y 2 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)}: los más cercanos al camino que une a sus clientes en orden (◆ en el mapa). Un cliente que cae en varias zonas va solo con el farmer que lo tiene más cerca. Cada botón baja un <b>ZIP con una carpeta por jefatura</b> (la del farmer ese día) y, dentro, la carpeta <b>PDF</b> con <b>un PDF por farmer</b>, la carpeta <b>Tablas_PNG</b> con sus tablas en imagen y <b>Todas_las_tablas.pdf</b> con las de todos sus farmers. Cada PDF lleva sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento dias" role="group" aria-label="Día en el mapa">
@@ -2608,8 +2608,14 @@ const Ice = (function () {
     if (sigue) doc.texto(PDF_M + w + 8, 50, '(continuación)', { tam: 9, color: GRIS_OSC });
     doc.texto(doc.W - PDF_M, 50, nombreJefatura(h.jefatura).toUpperCase(), { tam: 11, negrita: true, color: NEGRO, alinear: 'der', max: 240 });
     doc.texto(PDF_M, 65, h.resumen, { tam: 8.5, color: NEGRO, max: ancho });
+    ctx.y = cajaTipos(ctx, 73);
+  }
+
+  // Qué es cada tipo de cliente (los criterios de tiposCliente) y qué dicen las columnas
+  // Más le quitó y ÉPICA, desde y; devuelve la y de abajo
+  function cajaTipos(ctx, y) {
+    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M;
     const tipos = [1, 2, 3].map(p => [p, textoTipo(D.prioridad.tipos[p])]);
-    let y = 73;
     doc.rect(PDF_M, y, ancho, 54, { relleno: '#F4F4F4' });
     const wt = doc.texto(PDF_M + 8, y + 11, 'QUÉ ES CADA TIPO DE CLIENTE', { tam: 6.5, negrita: true, color: GRIS_OSC });
     doc.texto(PDF_M + 16 + wt, y + 11, D.prioridad.formula, { tam: 6.5, color: GRIS_OSC, max: ancho - 24 - wt });
@@ -2620,13 +2626,13 @@ const Ice = (function () {
       doc.texto(PDF_M + 38 + wn, yy, texto, { tam: 8, color: NEGRO, max: ancho - 46 - wn });
     });
     y += 54 + 4;
-    const nota = `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ${V.colEpica}: la ÉPICA de ${D.mes} hecha por ${V.quien}${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`;
-    for (const linea of PDF.renglones(nota, ancho, 7)) {
+    for (const linea of PDF.renglones(notaColumnas(V), ancho, 7)) {
       y += 9;
       doc.texto(PDF_M, y, linea, { tam: 7, color: GRIS_OSC });
     }
-    ctx.y = y + 8;
+    return y + 8;
   }
+  const notaColumnas = V => `Más le quitó: la submétrica que más puntos le quitó en su última evaluación ICE. ${V.colEpica}: la ÉPICA de ${D.mes} hecha por ${V.quien}${epicaAl() ? ` (datos al ${fechaLarga(epicaAl())})` : ''}, con calificación y fecha, o Pendiente.`;
 
   // Tabla con cortes de hoja: hojaNueva() abre la siguiente y se repiten los encabezados.
   // alto: alto de cada renglón (PDF_FILA si no se da; el ranking Top / Bottom lo baja para que
@@ -2800,11 +2806,28 @@ const Ice = (function () {
 
   // Clientes cercanos a la ruta que no están en ella (Farmers, vista Zona y cercanos): su
   // propia tabla debajo de la de la ruta, con cortes de hoja como la principal
-  function cercanosPdf(ctx, R, h, cerc) {
-    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M;
+  function notaCercanos(V, R, h) {
     const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';
-    const nota = PDF.renglones(`Clientes${canal} prioridad 1 y 2 sin frecuencia Farmer y sin ICE en ${D.mes} que quedan dentro de la zona de tu recorrido del ${R.dia.toLowerCase()} ` +
-      `(tus clientes del día más ${num(h.margen)} m alrededor). No están en tu ruta: son los más cercanos a ella. A tu ruta: distancia al camino que une a tus clientes en orden.`, ancho, 7);
+    return `Clientes${canal} prioridad 1 y 2 sin frecuencia Farmer y sin ICE en ${D.mes} que quedan dentro de la zona de tu recorrido del ${R.dia.toLowerCase()} ` +
+      `(tus clientes del día más ${num(h.margen)} m alrededor). No están en tu ruta: son los más cercanos a ella. A tu ruta: distancia al camino que une a tus clientes en orden.`;
+  }
+  // png: ancho de la columna en la tabla PNG (js/tablas-png.js), en píxeles a escala 1
+  const columnasCercanos = V => [
+    { titulo: '#', ancho: 20, png: 40 }, { titulo: 'Tipo', ancho: 28, png: 60 }, { titulo: 'SAP', ancho: 52, png: 108 },
+    { titulo: 'Cliente', ancho: 92, png: 196 }, { titulo: 'Canal', ancho: 58, png: 112 }, { titulo: 'Dirección', ancho: 74, png: 160 },
+    { titulo: 'A tu ruta', ancho: 42, alinear: 'der', png: 84 }, { titulo: 'Últ. ICE', ancho: 34, alinear: 'der', png: 78 },
+    { titulo: 'Más le quitó', ancho: 70, png: 148 }, { titulo: V.colEpica, ancho: 78, png: 168 }];
+  function filasCercanos(V, cerc) {
+    return cerc.map((p, k) => {
+      const c = porSapCliente[p[2]], u = c && c[17];
+      return [`C${k + 1}`, { tipo: p[4] }, p[2], p[3], canalPdf(p[2]), c ? c[13] : '', `${num(p[5])} m`, c && c[11] != null ? dec1(c[11]) : '',
+              u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', epicaPdf(V, p[2])];
+    });
+  }
+
+  function cercanosPdf(ctx, R, h, filas) {
+    const { doc, V } = ctx, ancho = doc.W - 2 * PDF_M;
+    const nota = PDF.renglones(notaCercanos(V, R, h), ancho, 7);
     const alto = 18 + 24 + (nota.length - 1) * 9 + 6 + 15 + PDF_FILA;
     if (ctx.y + alto > doc.H - 42) hojaRuta(ctx, R, h, true);
     const y = ctx.y + 18;
@@ -2812,15 +2835,7 @@ const Ice = (function () {
     doc.texto(PDF_M + 10, y + 10.5, 'CLIENTES CERCANOS A TU RUTA (NO ESTÁN EN ELLA)', { tam: 10.5, negrita: true, color: NEGRO });
     nota.forEach((linea, i) => doc.texto(PDF_M, y + 24 + i * 9, linea, { tam: 7, color: GRIS_OSC }));
     ctx.y = y + 24 + (nota.length - 1) * 9 + 6;
-    const columnas = [{ titulo: '#', ancho: 20 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 92 },
-                      { titulo: 'Canal', ancho: 58 }, { titulo: 'Dirección', ancho: 74 }, { titulo: 'A tu ruta', ancho: 42, alinear: 'der' },
-                      { titulo: 'Últ. ICE', ancho: 34, alinear: 'der' }, { titulo: 'Más le quitó', ancho: 70 }, { titulo: V.colEpica, ancho: 78 }];
-    const filas = cerc.map((p, k) => {
-      const c = porSapCliente[p[2]], u = c && c[17];
-      return [`C${k + 1}`, { tipo: p[4] }, p[2], p[3], canalPdf(p[2]), c ? c[13] : '', `${num(p[5])} m`, c && c[11] != null ? dec1(c[11]) : '',
-              u ? { texto: cortoPeor(u), negrita: u[4] != null } : '', epicaPdf(V, p[2])];
-    });
-    tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
+    tablaPdf(ctx, columnasCercanos(V), filas, () => hojaRuta(ctx, R, h, true));
   }
 
   // Canal del cliente en los PDF (clientes[18]: Master Data o su último canal ICE)
@@ -2829,10 +2844,14 @@ const Ice = (function () {
   const limpioArchivo = s => String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'archivo';
 
   // Rutas de preventa o de farmers: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en
-  // el mes (los no prioritarios no tienen ICE en los últimos meses y no van). Un PDF
-  // por ruta (o farmer) y todos en un ZIP con una carpeta por jefatura, para mandarle a cada
-  // jefatura lo suyo. Devuelve cuántas rutas, hojas y carpetas salieron.
-  async function pdfRutas(V, R, titulo, archivo, todos) {
+  // el mes (los no prioritarios no tienen ICE en los últimos meses y no van). Un ZIP con una
+  // carpeta por jefatura, para mandarle a cada jefatura lo suyo, y en cada una:
+  //   PDF/         un PDF por ruta (o farmer): su hoja para llevársela
+  //   Tablas_PNG/  la tabla de cada ruta en imagen (y la de sus cercanos), para mandarla por chat
+  //   Todas_las_tablas.pdf  las tablas de todas sus rutas, una tras otra
+  // Todo sale de los mismos clientes, así que cambia igual con los botones (día, canal, vista,
+  // Incluir no ICE). avisar(texto): avance para la página. Devuelve cuántas rutas, hojas y carpetas salieron.
+  async function pdfRutas(V, R, titulo, archivo, todos, avisar = () => {}) {
     const evaluado = p => !!porSapEval[p[2]];
     const nunca = p => p[4] === 4 && !evaluado(p);
     const jefDe = x => x.r.jefatura || SIN_JEFATURA;
@@ -2841,11 +2860,13 @@ const Ice = (function () {
       .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
     const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';   // botón de canal de Farmers
     let conQr = 0, conP3 = 0, cercanos = 0, hojas = 0;
-    const columnas = [{ titulo: '#', ancho: 18 }, { titulo: 'Tipo', ancho: 28 }, { titulo: 'SAP', ancho: 52 }, { titulo: 'Cliente', ancho: 112 },
-                      { titulo: 'Canal', ancho: 58 }, { titulo: 'Dirección', ancho: 96 }, { titulo: 'Últ. ICE', ancho: 36, alinear: 'der' },
-                      { titulo: 'Más le quitó', ancho: 70 }, { titulo: V.colEpica, ancho: 78 }];
+    // png: ancho de la columna en la tabla PNG (js/tablas-png.js), en píxeles a escala 1
+    const columnas = [{ titulo: '#', ancho: 18, png: 36 }, { titulo: 'Tipo', ancho: 28, png: 60 }, { titulo: 'SAP', ancho: 52, png: 108 },
+                      { titulo: 'Cliente', ancho: 112, png: 232 }, { titulo: 'Canal', ancho: 58, png: 112 }, { titulo: 'Dirección', ancho: 96, png: 212 },
+                      { titulo: 'Últ. ICE', ancho: 36, alinear: 'der', png: 78 }, { titulo: 'Más le quitó', ancho: 70, png: 148 },
+                      { titulo: V.colEpica, ancho: 78, png: 168 }];
     if (!rutasPdf.length) return { rutas: 0, hojas: 0, carpetas: 0, conQr, conP3, cercanos };
-    const raiz = limpioArchivo(archivo), entradas = [], carpetas = new Set();
+    const raiz = limpioArchivo(archivo), carpetas = new Map();
     for (const x of rutasPdf) {
       const ctx = documentoRutas(V, titulo);
       const { r, puntos: pendientes, cerc } = x, t = cuentaTipos(pendientes), fuera = r.puntos.filter(evaluado).length;
@@ -2861,31 +2882,125 @@ const Ice = (function () {
                            `${todos && t[0] ? ` + ${plural(t[0], `cliente no ICE${canal}`, `clientes no ICE${canal}`)}` : ''}` +
                            ` de ${plural(r.total != null ? r.total : r.puntos.length, `cliente${canal}`, `clientes${canal}`)} ${V.delUno}` +
                            `${fuera ? ` · ${plural(fuera, 'ya evaluado', 'ya evaluados')} en ${D.mes}, no se ${fuera === 1 ? 'imprime' : 'imprimen'}` : ''}` };
+      const vacio = `Ningún cliente${canal} prioridad 1, 2 o 3 de tu recorrido está pendiente este día.`;
+      const filasC = cerc.length ? filasCercanos(V, cerc) : null;
       hojaRuta(ctx, R, h, false);
       if (filas.length) tablaPdf(ctx, columnas, filas, () => hojaRuta(ctx, R, h, true));
       else {
         ctx.y += 12;
-        ctx.doc.texto(PDF_M, ctx.y, `Ningún cliente${canal} prioridad 1, 2 o 3 de tu recorrido está pendiente este día.`, { tam: 9, negrita: true, color: NEGRO });
+        ctx.doc.texto(PDF_M, ctx.y, vacio, { tam: 9, negrita: true, color: NEGRO });
       }
-      if (cerc.length) { cercanosPdf(ctx, R, h, cerc); cercanos += cerc.length; }
+      if (cerc.length) { cercanosPdf(ctx, R, h, filasC); cercanos += cerc.length; }
       if (ubicacionesPdf(ctx, puntos.concat(cerc))) conQr++;
       else if (cerc.length && ubicacionesPdf(ctx, cerc, true)) conQr++;   // si no caben todos, los de los cercanos
       if (semanasP3Pdf(ctx, puntos, R)) conP3++;
-      const carpeta = limpioArchivo(nombreJefatura(jefDe(x)));
-      carpetas.add(carpeta);
+      const carpeta = limpioArchivo(nombreJefatura(jefDe(x))), nombre = limpioArchivo(`${V.Uno}_${r.codigo}_${R.dia}_${R.fecha}`);
+      if (!carpetas.has(carpeta)) carpetas.set(carpeta, { jefatura: jefDe(x), pdfs: [], tablas: [] });
+      const C = carpetas.get(carpeta);
       hojas += ctx.doc.paginas.length;
-      entradas.push({ nombre: `${raiz}/${carpeta}/${limpioArchivo(`${V.Uno}_${r.codigo}_${R.dia}_${R.fecha}`)}.pdf`,
-                      datos: new Uint8Array(await ctx.doc.blob().arrayBuffer()) });
+      C.pdfs.push({ nombre: `${raiz}/${carpeta}/PDF/${nombre}.pdf`, datos: new Uint8Array(await ctx.doc.blob().arrayBuffer()) });
+      C.tablas.push({ nombre, h, filas, vacio, cercanos: filasC && { filas: filasC, nota: notaCercanos(V, R, h) } });
+    }
+    // Las tablas en PNG: en workers, uno por núcleo (ver js/tablas-png.js)
+    const todas = [...carpetas.values()].flatMap(C => C.tablas);
+    avisar(`Dibujando las tablas en PNG: 0 de ${num(todas.length)}...`);
+    const hecho = await TablasPng.hacer(todas.map(T => modeloTablaPng(V, R, titulo, T, columnas)),
+                                        (k, n) => avisar(`Dibujando las tablas en PNG: ${num(k)} de ${num(n)}...`));
+    avisar('Armando el ZIP...');
+    const entradas = [];
+    let k = 0, hojasTodas = 0;
+    for (const [carpeta, C] of carpetas) {
+      entradas.push(...C.pdfs);
+      // Los PNG ya vienen comprimidos: van al ZIP tal cual
+      for (const T of C.tablas) entradas.push({ nombre: `${raiz}/${carpeta}/Tablas_PNG/${T.nombre}.png`, datos: hecho.pngs[k++], guardar: true });
+      const doc = pdfTodasTablas(V, R, titulo, C.jefatura, C.tablas, columnas);
+      hojasTodas += doc.paginas.length;
+      entradas.push({ nombre: `${raiz}/${carpeta}/Todas_las_tablas.pdf`, datos: new Uint8Array(await doc.blob().arrayBuffer()) });
     }
     Archivos.descargar(await Archivos.zip(entradas), `${raiz}.zip`);
-    return { rutas: rutasPdf.length, hojas, carpetas: carpetas.size, conQr, conP3, cercanos };
+    return { rutas: rutasPdf.length, hojas, carpetas: carpetas.size, conQr, conP3, cercanos, pngs: hecho.pngs.length,
+             hojasTodas, trabajadores: hecho.trabajadores, enPagina: hecho.enPagina };
+  }
+
+  // Insignias de tipo de cliente en la tabla PNG (como insigniaPdf)
+  const TIPOS_PNG = Object.fromEntries([0, 1, 2, 3, 4].map(p => [p, { relleno: p ? PRIO[p].relleno : null, borde: p >= 3 ? GRIS_OSC : PRIO[p].relleno, corto: PRIO[p].corto }]));
+
+  // Modelo de la tabla PNG de una ruta (T = {h, filas, vacio, cercanos}) para js/tablas-png.js:
+  // mismo encabezado que su PDF, su tabla, la de sus cercanos y qué es cada tipo de cliente
+  function modeloTablaPng(V, R, titulo, T, columnas) {
+    const cols = lista => lista.map(c => ({ titulo: c.titulo, ancho: c.png, alinear: c.alinear }));
+    const secciones = [{ titulo: 'Clientes por evaluar', sub: T.h.resumen, columnas: cols(columnas), filas: T.filas, vacio: T.vacio }];
+    if (T.cercanos) secciones.push({ titulo: 'Clientes cercanos a tu ruta (no están en ella)', sub: T.cercanos.nota, columnas: cols(columnasCercanos(V)), filas: T.cercanos.filas });
+    return {
+      marca: `REPORTE ICE · ${titulo.toUpperCase()} · UNIDAD ${D.unidad.toUpperCase()}`,
+      titulo: `${V.Uno.toUpperCase()} ${T.h.codigo}`,
+      derecha1: nombreJefatura(T.h.jefatura).toUpperCase(),
+      derecha2: `${R.dia} ${fechaLarga(R.fecha)} · frecuencia ${V.frecuencia} ${R.letra}`,
+      pie: [`BRIGADAS VDM · ICE · ${D.unidad.toUpperCase()}`, 'USO INTERNO'],
+      tipos: TIPOS_PNG,
+      leyenda: [1, 2, 3].map(p => ({ tipo: p, texto: `${PRIO[p].nombre}: ${textoTipo(D.prioridad.tipos[p])}` })),
+      notas: [D.prioridad.formula, notaColumnas(V)],
+      secciones,
+    };
+  }
+
+  // Todas_las_tablas.pdf de una jefatura: la tabla de cada ruta (y la de sus cercanos) una tras
+  // otra, sin QR ni semanas de P3; arriba, qué es cada tipo de cliente. Una tabla empieza en la
+  // hoja siguiente si ya no cabe su título con sus primeras filas (3, o todas si tiene menos).
+  function pdfTodasTablas(V, R, titulo, jefatura, tablas, columnas) {
+    const nombreJ = nombreJefatura(jefatura);
+    const doc = new PDF.Documento({ titulo: `${titulo} · Todas las tablas · ${nombreJ} · ${D.unidad}` });
+    const ctx = { doc, y: 0, titulo, V }, ancho = doc.W - 2 * PDF_M, limite = doc.H - 42;
+    doc.pie((n, total) => {
+      doc.linea(PDF_M, doc.H - 30, doc.W - PDF_M, doc.H - 30, { color: GRIS, grosor: 0.5 });
+      doc.texto(PDF_M, doc.H - 19, `BRIGADAS VDM · ${titulo.toUpperCase()} · UNIDAD ${D.unidad.toUpperCase()} · ${nombreJ.toUpperCase()} · TODAS LAS TABLAS`, { tam: 6.5, color: GRIS_OSC, max: doc.W - 2 * PDF_M - 90 });
+      doc.texto(doc.W - PDF_M, doc.H - 19, `Página ${n} de ${total}`, { tam: 6.5, color: GRIS_OSC, alinear: 'der' });
+    });
+    const t = tablas.reduce((a, T) => { for (const f of T.filas) { const p = f[1].tipo; a[p] = (a[p] || 0) + 1; } return a; }, {});
+    const nCerc = tablas.reduce((a, T) => a + (T.cercanos ? T.cercanos.filas.length : 0), 0);
+    cabezaHoja(ctx, R);
+    doc.texto(PDF_M, 50, 'TODAS LAS TABLAS', { tam: 20, negrita: true, color: ROJO });
+    doc.texto(doc.W - PDF_M, 50, nombreJ.toUpperCase(), { tam: 11, negrita: true, color: NEGRO, alinear: 'der', max: 240 });
+    doc.texto(PDF_M, 65, `${plural(tablas.length, V.uno, V.varios)} · por evaluar: ${plural((t[1] || 0) + (t[2] || 0) + (t[3] || 0), 'cliente ICE', 'clientes ICE')} ` +
+                         `(P1 ${t[1] || 0} · P2 ${t[2] || 0} · P3 ${t[3] || 0})${t[0] ? ` + ${plural(t[0], 'cliente no ICE', 'clientes no ICE')}` : ''}` +
+                         `${nCerc ? ` · ${plural(nCerc, 'cliente cercano', 'clientes cercanos')}` : ''}`, { tam: 8.5, color: NEGRO, max: ancho });
+    ctx.y = cajaTipos(ctx, 73);
+    // Título de una tabla (ruta o sus cercanos); si sigue de la hoja anterior, «(continuación)»
+    const tituloTabla = (texto, sub, sigue) => {
+      doc.rect(PDF_M, ctx.y, 4, 13, { relleno: ROJO });
+      const w = doc.texto(PDF_M + 10, ctx.y + 10.5, texto, { tam: 10.5, negrita: true, color: NEGRO, max: ancho - 90 });
+      if (sigue) doc.texto(PDF_M + 18 + w, ctx.y + 10.5, '(continuación)', { tam: 8, color: GRIS_OSC });
+      if (sub && !sigue) { doc.texto(PDF_M, ctx.y + 24, sub, { tam: 7.5, color: GRIS_OSC, max: ancho }); ctx.y += 12; }
+      ctx.y += 16;
+    };
+    const hojaNueva = (texto) => () => { cabezaHoja(ctx, R); ctx.y = 40; tituloTabla(texto, null, true); };
+    const primeras = filas => Math.min(3, Math.max(1, filas.length)) * PDF_FILA;
+    for (const T of tablas) {
+      const nombre = `${V.Uno.toUpperCase()} ${T.h.codigo}`;
+      // Título, resumen, encabezados y sus primeras filas
+      if (ctx.y + 14 + 28 + 15 + primeras(T.filas) > limite) { cabezaHoja(ctx, R); ctx.y = 40; } else ctx.y += 14;
+      tituloTabla(nombre, T.h.resumen, false);
+      if (T.filas.length) tablaPdf(ctx, columnas, T.filas, hojaNueva(nombre));
+      else {
+        ctx.y += 10;
+        doc.texto(PDF_M, ctx.y, T.vacio, { tam: 9, negrita: true, color: NEGRO });
+      }
+      if (T.cercanos) {
+        const sub = `${nombre} · CLIENTES CERCANOS (NO ESTÁN EN SU RUTA)`;
+        if (ctx.y + 10 + 16 + 15 + primeras(T.cercanos.filas) > limite) { cabezaHoja(ctx, R); ctx.y = 40; } else ctx.y += 10;
+        tituloTabla(sub, null, false);
+        tablaPdf(ctx, columnasCercanos(V), T.cercanos.filas, hojaNueva(sub));
+      }
+    }
+    return doc;
   }
 
   // Botón de impresión de una vista: el de hoy (data-pdf) o el de un día de la semana (data-pdf-dia)
   function imprimir(V, boton, estado, todos) {
     boton.disabled = true;
     estado.textContent = 'Generando los PDF y el ZIP...';
-    // Con el botón de canal de Farmers el título y el archivo dicen el canal
+    const avisar = texto => { estado.textContent = texto; };
+    // Con el botón de canal el título y el archivo dicen el canal
     const sel = canalVista(V), canal = sel == null ? '' : nombreCanalCorto(sel);
     const tit = t => canal ? `${t} · ${canal}` : t, arch = a => canal ? `${a}_${canal.replace(/\s+/g, '')}` : a;
     // Deja que el navegador pinte el aviso antes de armar el documento
@@ -2894,15 +3009,17 @@ const Ice = (function () {
         let hecho;
         if (boton.dataset.pdfDia != null) {
           const R = rutasDeSemana(V, +boton.dataset.pdfDia);
-          hecho = await pdfRutas(V, R, tit(V.tituloDia(R.dia.toLowerCase())), `${arch(V.archivoDia)}_${R.dia}_${D.unidad}_${R.fecha}`, false);
+          hecho = await pdfRutas(V, R, tit(V.tituloDia(R.dia.toLowerCase())), `${arch(V.archivoDia)}_${R.dia}_${D.unidad}_${R.fecha}`, false, avisar);
         } else if (V.cercanos) {
           const R = rutasDeSemana(V, V.semana().dias.findIndex(d => d.hoy));
-          hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, false);
+          hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, false, avisar);
         } else {
           const R = rutasVista(V, 'hoy');
-          hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, todos);
+          hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, todos, avisar);
         }
-        estado.textContent = hecho.rutas ? `ZIP listo${canal ? ` (solo ${canal})` : ''}: ${plural(hecho.carpetas, 'carpeta de jefatura', 'carpetas de jefatura')} con ${plural(hecho.rutas, `PDF de ${V.uno}`, `PDF de ${V.varios}`)} (${plural(hecho.hojas, 'hoja')} en total), ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}. Revisa tus descargas.`
+        estado.textContent = hecho.rutas ? `ZIP listo${canal ? ` (solo ${canal})` : ''}: ${plural(hecho.carpetas, 'carpeta de jefatura', 'carpetas de jefatura')}, cada una con su carpeta PDF, su carpeta Tablas_PNG y Todas_las_tablas.pdf. ` +
+          `${plural(hecho.rutas, `PDF de ${V.uno}`, `PDF de ${V.varios}`)} (${plural(hecho.hojas, 'hoja')} en total), ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}; ` +
+          `${plural(hecho.pngs, 'tabla en PNG', 'tablas en PNG')} y ${plural(hecho.hojasTodas, 'hoja')} de todas las tablas. Revisa tus descargas.`
           : `Este día no hay ${V.varios} con clientes${canal ? ` ${canal}` : ''} por evaluar: no se descargó nada.`;
       } catch (e) {
         console.error(e);

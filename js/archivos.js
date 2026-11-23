@@ -48,7 +48,8 @@ const Archivos = (function () {
     return v;
   }
 
-  /** ZIP de [{nombre, datos: Uint8Array o texto}] (nombres en UTF-8). */
+  /** ZIP de [{nombre, datos: Uint8Array o texto, guardar}] (nombres en UTF-8). guardar: va
+   *  tal cual, sin comprimir (PNG y otros que ya vienen comprimidos: no se ganaría nada). */
   async function zip(entradas, tipo = 'application/zip') {
     const f = new Date();
     const hora = (f.getHours() << 11) | (f.getMinutes() << 5) | (f.getSeconds() >> 1);
@@ -57,7 +58,7 @@ const Archivos = (function () {
     let desplazamiento = 0, tamCentral = 0;
     for (const e of entradas) {
       const datos = bytesDe(e.datos), n = new TextEncoder().encode(e.nombre), crc = crc32(datos);
-      const [cuerpo, metodo] = await comprimir(datos);
+      const [cuerpo, metodo] = e.guardar ? [datos, 0] : await comprimir(datos);
       const local = campos(30, [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, metodo, 2], [10, hora, 2], [12, dia, 2],
         [14, crc, 4], [18, cuerpo.length, 4], [22, datos.length, 4], [26, n.length, 2], [28, 0, 2]]);
       const cab = campos(46, [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, metodo, 2], [12, hora, 2],
