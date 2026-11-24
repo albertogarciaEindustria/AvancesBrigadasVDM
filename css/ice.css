@@ -368,6 +368,7 @@ body.ck-abierto { overflow: hidden; }
 .cercano-rombo { display: block; width: 11px; height: 11px; margin: 3.5px; transform: rotate(45deg); border: 2px solid var(--blanco); box-shadow: 0 0 0 2px var(--c, #000), 0 1px 4px rgba(0,0,0,.45); }
 .cercano-rombo.p1, .punto-cercano.p1 { background: var(--coke); }
 .cercano-rombo.p2, .punto-cercano.p2 { background: var(--negro); }
+.cercano-rombo.p3, .punto-cercano.p3 { background: var(--blanco); border-color: var(--tinta2); }
 .punto-cercano { display: inline-block; width: 10px; height: 10px; margin: 0 1px; flex: none; transform: rotate(45deg); border: 1.5px solid var(--blanco); box-shadow: 0 0 0 1.5px var(--tinta2); }
 .zona-muestra { display: inline-block; width: 16px; height: 11px; flex: none; border: 1.5px dashed var(--tinta2); background: rgba(0,0,0,.06); }
 .prio.cercano { background: var(--blanco); border-color: var(--coke); color: var(--coke); }

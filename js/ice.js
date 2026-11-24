@@ -2394,7 +2394,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${S.dias.map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen de ${num(K.margen)} m alrededor; si dentro hay menos de ${num(K.min)} clientes para agregar, el margen crece de ${num(K.paso)} en ${num(K.paso)} m hasta ${num(K.margen_max)} m. En su zona se le agregan <b>hasta ${num(K.max)} clientes prioridad 1 y 2 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)}: los más cercanos al camino que une a sus clientes en orden (◆ en el mapa). Un cliente que cae en varias zonas va solo con el farmer que lo tiene más cerca. Cada botón baja un <b>ZIP con una carpeta por jefatura</b> (la del farmer ese día) y, dentro, la carpeta <b>PDF</b> con <b>un PDF por farmer</b>, la carpeta <b>Tablas_PNG</b> con sus tablas en imagen y <b>Todas_las_tablas.pdf</b> con las hojas de todos sus farmers juntas (una hoja por farmer, con sus QR y semanas de prioridad 3). Cada PDF lleva sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen alrededor. A cada farmer se le buscan <b>${num(K.objetivo)} clientes prioridad 1, 2 y 3 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)} (◆ en el mapa), y el margen <b>se agranda o se achica lo justo para abarcarlos</b>: nunca menos de ${num(K.margen_min)} m ni más de ${num(K.margen_max)} m (si ni así llega a ${num(K.objetivo)}, se queda con los que haya). Se reparten de lo más cercano a lo más lejano, así ningún cliente se repite: va con el primer farmer que lo alcanza y, si queda a la misma distancia de dos zonas, con el que lo tiene más cerca del camino que une a sus clientes en orden; si dentro de su polígono hay más, se queda con los más cercanos a ese camino. Con el botón de canal se buscan solo entre los de ese canal. Cada botón baja un <b>ZIP con una carpeta por jefatura</b> (la del farmer ese día) y, dentro, la carpeta <b>PDF</b> con <b>un PDF por farmer</b>, la carpeta <b>Tablas_PNG</b> con sus tablas en imagen y <b>Todas_las_tablas.pdf</b> con las hojas de todos sus farmers juntas (una hoja por farmer, con sus QR y semanas de prioridad 3). Cada PDF lleva sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento dias" role="group" aria-label="Día en el mapa">
@@ -2404,6 +2404,7 @@ const Ice = (function () {
             ${[1, 2, 3].map(p => `<span class="chip" style="cursor:default"><span class="punto-prio p${p}" aria-hidden="true"></span>${PRIO[p].nombre}</span>`).join('')}
             <span class="chip" style="cursor:default"><span class="punto-cercano p1" aria-hidden="true"></span>Cercano P1</span>
             <span class="chip" style="cursor:default"><span class="punto-cercano p2" aria-hidden="true"></span>Cercano P2</span>
+            <span class="chip" style="cursor:default"><span class="punto-cercano p3" aria-hidden="true"></span>Cercano P3</span>
             <span class="chip" style="cursor:default"><span class="zona-muestra" aria-hidden="true"></span>Zona del recorrido</span>
           </div>
         </div>
@@ -2505,8 +2506,8 @@ const Ice = (function () {
       pintarEtiquetas();
 
       const tipos = cuentaTipos(R.rutas.flatMap(r => r.puntos)), tc = cuentaTipos(R.rutas.flatMap(r => r.cercanos));
-      const nc = (tc[1] || 0) + (tc[2] || 0), con = R.rutas.filter(r => r.cercanos.length).length;
-      $(I('Resumen')).innerHTML = `Zonas de los farmers del <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia Farmer <b>${esc(R.letra)}</b>)${sel != null ? `, solo clientes <b>${esc(nombreCanalCorto(sel))}</b>` : ''}: <b>${num(R.rutas.length)}</b> farmers · ICE en sus recorridos: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> prioridad 3 · <b>${num(nc)}</b> clientes cercanos (<b>${num(tc[1] || 0)}</b> P1 y <b>${num(tc[2] || 0)}</b> P2) para <b>${num(con)}</b> de ellos. Las líneas punteadas son la zona de cada farmer y la línea continua su recorrido del día.`;
+      const nc = (tc[1] || 0) + (tc[2] || 0) + (tc[3] || 0), con = R.rutas.filter(r => r.cercanos.length).length;
+      $(I('Resumen')).innerHTML = `Zonas de los farmers del <b>${esc(R.dia.toLowerCase())} ${esc(fechaLarga(R.fecha))}</b> (frecuencia Farmer <b>${esc(R.letra)}</b>)${sel != null ? `, solo clientes <b>${esc(nombreCanalCorto(sel))}</b>` : ''}: <b>${num(R.rutas.length)}</b> farmers · ICE en sus recorridos: <b>${num(tipos[1] || 0)}</b> prioridad 1, <b>${num(tipos[2] || 0)}</b> prioridad 2 y <b>${num(tipos[3] || 0)}</b> prioridad 3 · <b>${num(nc)}</b> clientes cercanos (<b>${num(tc[1] || 0)}</b> P1, <b>${num(tc[2] || 0)}</b> P2 y <b>${num(tc[3] || 0)}</b> P3) para <b>${num(con)}</b> de ellos. Las líneas punteadas son la zona de cada farmer y la línea continua su recorrido del día.`;
       $(I('Lista')).innerHTML = R.rutas.map((r, k) => {
         const t = cuentaTipos(r.puntos);
         return `<li><button type="button" class="ruta-item" data-i="${k}">
@@ -2554,7 +2555,7 @@ const Ice = (function () {
         <h4 class="cercanos-tit">Clientes cercanos a su ruta (no están en ella)</h4>
         <div class="tabla-scroll"><table class="ice-tabla">
           <thead><tr><th class="izq">#</th><th class="izq">Tipo</th><th class="izq">SAP</th><th class="izq">Cliente</th><th class="izq">Dirección</th><th>A su recorrido</th><th>Último ICE</th><th class="izq">Le faltó</th><th class="izq">ÉPICA del mes</th></tr></thead>
-          <tbody>${r.cercanos.length ? r.cercanos.map((p, j) => filaCercano(p, j + 1)).join('') : `<tr><td class="izq muted" colspan="9">No hay clientes${canalVista(V) != null ? ` ${esc(nombreCanalCorto(canalVista(V)))}` : ''} prioridad 1 o 2 sin frecuencia Farmer en su zona (ni con ${num(D.farmers_zonas_criterio.margen_max)} m de margen).</td></tr>`}</tbody>
+          <tbody>${r.cercanos.length ? r.cercanos.map((p, j) => filaCercano(p, j + 1)).join('') : `<tr><td class="izq muted" colspan="9">No hay clientes${canalVista(V) != null ? ` ${esc(nombreCanalCorto(canalVista(V)))}` : ''} prioridad 1, 2 o 3 sin frecuencia Farmer cerca de su recorrido (ni a ${num(D.farmers_zonas_criterio.margen_max)} m).</td></tr>`}</tbody>
         </table></div>`;
     }
 
@@ -2683,22 +2684,34 @@ const Ice = (function () {
   const QR_COLUMNAS = 3, QR_ALTO = 80, QR_SEP = 6;
   const urlUbicacion = (lat, lon) => `https://www.google.com/maps/search/?api=1&query=${(+lat).toFixed(6)},${(+lon).toFixed(6)}`;
 
+  // Clientes con QR de ubicación: los P1 y P2 de la hoja y todos sus cercanos (P1, P2 o P3: no
+  // están en su ruta). Lo usan el PDF y la tabla PNG de cada ruta
+  const conUbicacion = puntos => puntos.filter(p => p[4] === 1 || p[4] === 2 || esCercano(p));
+  const textoUbicacion = (lista, soloCercanos) => `${soloCercanos ? 'Clientes cercanos a tu ruta (no están en ella)'
+    : `Clientes prioridad 1 y 2 de esta hoja${lista.some(esCercano) ? ' y tus clientes cercanos (los marcados CERCANO no están en tu ruta)' : ''}`}. Escanea el QR con la cámara del celular para abrir su ubicación en Google Maps.`;
+  const cacheQr = new Map();
+  function qrDe(lat, lon) {
+    const url = urlUbicacion(lat, lon);
+    if (!cacheQr.has(url)) cacheQr.set(url, QR.crear(url, { nivel: 'M' }));
+    return cacheQr.get(url);
+  }
+
   // soloCercanos: solo los clientes cercanos a la ruta (Farmers, Zona y cercanos)
   function ubicacionesPdf(ctx, puntos, soloCercanos = false) {
-    const lista = puntos.filter(p => p[4] === 1 || p[4] === 2);
+    const lista = conUbicacion(puntos);
     if (!lista.length) return false;
     const { doc } = ctx, ancho = doc.W - 2 * PDF_M, filas = Math.ceil(lista.length / QR_COLUMNAS);
     let y = ctx.y + 18;
     if (y + 30 + filas * (QR_ALTO + QR_SEP) - QR_SEP > doc.H - 42) return false;
     doc.rect(PDF_M, y, 4, 13, { relleno: ROJO });
     doc.texto(PDF_M + 10, y + 10.5, soloCercanos ? 'UBICACIÓN DE LOS CLIENTES CERCANOS' : 'UBICACIÓN DE CLIENTES PRIORITARIOS', { tam: 10.5, negrita: true, color: NEGRO });
-    doc.texto(PDF_M, y + 24, `${soloCercanos ? 'Clientes cercanos a tu ruta (no están en ella)' : `Clientes prioridad 1 y 2 de esta hoja${lista.some(esCercano) ? ' (los marcados CERCANO no están en tu ruta)' : ''}`}. Escanea el QR con la cámara del celular para abrir su ubicación en Google Maps.`, { tam: 7, color: GRIS_OSC, max: ancho });
+    doc.texto(PDF_M, y + 24, textoUbicacion(lista, soloCercanos), { tam: 7, color: GRIS_OSC, max: ancho });
     y += 30;
     const w = (ancho - (QR_COLUMNAS - 1) * QR_SEP) / QR_COLUMNAS, lado = QR_ALTO - 8;
     lista.forEach((p, k) => {
       const x = PDF_M + (k % QR_COLUMNAS) * (w + QR_SEP), yy = y + Math.floor(k / QR_COLUMNAS) * (QR_ALTO + QR_SEP);
       doc.rect(x, yy, w, QR_ALTO, { borde: GRIS, grosor: 0.6 });
-      if (p[0] != null && p[1] != null) doc.qr(x + 4, yy + 4, lado, QR.crear(urlUbicacion(p[0], p[1]), { nivel: 'M' }));
+      if (p[0] != null && p[1] != null) doc.qr(x + 4, yy + 4, lado, qrDe(p[0], p[1]));
       else {
         doc.rect(x + 4, yy + 4, lado, lado, { relleno: '#F4F4F4' });
         doc.texto(x + 4 + lado / 2, yy + 4 + lado / 2 - 2, 'Sin', { tam: 7, color: GRIS_OSC, alinear: 'centro' });
@@ -2725,16 +2738,25 @@ const Ice = (function () {
   // Anchos: el SAP de 10 dígitos en negritas y el encabezado «SEMANA MÁS EVALUADA»; lo demás es del nombre
   const P3_FILA = 13, P3_SEP = 14, P3_ANCHO_SAP = 52, P3_ANCHO_SEMANA = 89;
 
+  // Clientes prioridad 3 de la hoja (con sus cercanos P3) ordenados por la semana en que más se evalúan
+  const listaSemanasP3 = puntos => puntos.filter(p => p[4] === 3)
+    .map((p, k) => ({ p, k, s: (porSapCliente[p[2]] || [])[14] || null }))
+    .sort((a, b) => (a.s || 9) - (b.s || 9) || a.k - b.k);
+  const nombreSemanas = p => `${p[3] || 'Cliente sin nombre'}${esCercano(p) ? ' (cercano)' : ''}`;
+  // Semana de la fecha de la hoja, días de cada semana del mes y la nota de la sección
+  function infoSemanas(R) {
+    const f = partes(R.fecha), semHoja = semanaDe(f.d), finMes = new Date(f.a, f.m, 0).getDate();
+    return { semHoja, dias: { 1: '1–7', 2: '8–14', 3: '15–21', 4: `22–${finMes}` },
+             nota: `Semana del mes en que más veces lo ha evaluado el auditor (si hay empate, la de su visita más reciente). ` +
+                   `El ${R.dia.toLowerCase()} ${f.d} de ${MESES[f.m - 1]} es semana ${semHoja}: esos van en negritas.` };
+  }
+
   function semanasP3Pdf(ctx, puntos, R) {
-    const lista = puntos.filter(p => p[4] === 3)
-      .map((p, k) => ({ p, k, s: (porSapCliente[p[2]] || [])[14] || null }))
-      .sort((a, b) => (a.s || 9) - (b.s || 9) || a.k - b.k);
+    const lista = listaSemanasP3(puntos);
     if (!lista.length) return false;
     const { doc } = ctx, ancho = doc.W - 2 * PDF_M;
-    const f = partes(R.fecha), semHoja = semanaDe(f.d), finMes = new Date(f.a, f.m, 0).getDate();
-    const dias = { 1: '1–7', 2: '8–14', 3: '15–21', 4: `22–${finMes}` };
-    const nota = PDF.renglones(`Semana del mes en que más veces lo ha evaluado el auditor (si hay empate, la de su visita más reciente). ` +
-      `El ${R.dia.toLowerCase()} ${f.d} de ${MESES[f.m - 1]} es semana ${semHoja}: esos van en negritas.`, ancho, 7);
+    const { semHoja, dias, nota: textoNota } = infoSemanas(R);
+    const nota = PDF.renglones(textoNota, ancho, 7);
     const filas = Math.ceil(lista.length / 2);
     let y = ctx.y + 18;
     const ty = y + 24 + (nota.length - 1) * 9 + 6;
@@ -2756,7 +2778,7 @@ const Ice = (function () {
       let yy = ty + 15;
       bloque.forEach(({ p, s }, k) => {
         if (k % 2) doc.rect(x0, yy, w, P3_FILA, { relleno: '#F4F4F4' });
-        const negrita = s === semHoja, valores = [p[2], p[3] || 'Cliente sin nombre', s ? `${s} (días ${dias[s]})` : 'Sin fecha'];
+        const negrita = s === semHoja, valores = [p[2], nombreSemanas(p), s ? `${s} (días ${dias[s]})` : 'Sin fecha'];
         let xc = x0;
         columnas.forEach(([, a], j) => {
           doc.texto(xc + 4, yy + 9.3, String(valores[j]), { tam: 8, negrita, color: s || j < 2 ? NEGRO : GRIS_OSC, max: a - 7 });
@@ -2813,8 +2835,8 @@ const Ice = (function () {
   // propia tabla debajo de la de la ruta, con cortes de hoja como la principal
   function notaCercanos(V, R, h) {
     const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';
-    return `Clientes${canal} prioridad 1 y 2 sin frecuencia Farmer y sin ICE en ${D.mes} que quedan dentro de la zona de tu recorrido del ${R.dia.toLowerCase()} ` +
-      `(tus clientes del día más ${num(h.margen)} m alrededor). No están en tu ruta: son los más cercanos a ella. A tu ruta: distancia al camino que une a tus clientes en orden.`;
+    return `Clientes${canal} prioridad 1, 2 y 3 sin frecuencia Farmer y sin ICE en ${D.mes} alrededor de tu recorrido del ${R.dia.toLowerCase()}: ` +
+      `tu zona (tus clientes del día más ${num(h.margen)} m) se agranda o se achica hasta abarcar ${num(D.farmers_zonas_criterio.objetivo)}. No están en tu ruta: son los más cercanos a ella. A tu ruta: distancia al camino que une a tus clientes en orden.`;
   }
   // png: ancho de la columna en la tabla PNG (js/tablas-png.js), en píxeles a escala 1
   const columnasCercanos = V => [
@@ -2899,7 +2921,7 @@ const Ice = (function () {
       if (cerc.length) { cercanosPdf(ctx, R, h, filasC); cercanos += cerc.length; }
       if (ubicacionesPdf(ctx, puntos.concat(cerc))) conQr++;
       else if (cerc.length && ubicacionesPdf(ctx, cerc, true)) conQr++;   // si no caben todos, los de los cercanos
-      if (semanasP3Pdf(ctx, puntos, R)) conP3++;
+      if (semanasP3Pdf(ctx, puntos.concat(cerc), R)) conP3++;
       const carpeta = limpioArchivo(nombreJefatura(jefDe(x))), nombre = limpioArchivo(`${V.Uno}_${r.codigo}_${R.dia}_${R.fecha}`);
       if (!carpetas.has(carpeta)) carpetas.set(carpeta, { jefatura: jefDe(x), pdfs: [], tablas: [], hojas: [], rutaPaginas: [] });
       const C = carpetas.get(carpeta);
@@ -2908,7 +2930,8 @@ const Ice = (function () {
       C.hojas.push(...ctx.doc.paginas.map(ops => ops.slice()));
       C.rutaPaginas.push(...ctx.doc.paginas.map((_, i) => ctx.rutaPaginas[i]));
       C.pdfs.push({ nombre: `${raiz}/${carpeta}/PDF/${nombre}.pdf`, datos: new Uint8Array(await ctx.doc.blob().arrayBuffer()) });
-      C.tablas.push({ nombre, h, filas, vacio, cercanos: filasC && { filas: filasC, nota: notaCercanos(V, R, h) } });
+      C.tablas.push({ nombre, h, filas, vacio, cercanos: filasC && { filas: filasC, nota: notaCercanos(V, R, h) },
+                      ubicacion: conUbicacion(puntos.concat(cerc)), p3: listaSemanasP3(puntos.concat(cerc)) });
     }
     // Las tablas en PNG: en workers, uno por núcleo (ver js/tablas-png.js)
     const todas = [...carpetas.values()].flatMap(C => C.tablas);
@@ -2931,15 +2954,30 @@ const Ice = (function () {
              hojasTodas, trabajadores: hecho.trabajadores, enPagina: hecho.enPagina };
   }
 
+  // Módulos del QR para el worker: una cadena de '0' y '1' por fila
+  const modulosQr = q => ({ n: q.tamano, filas: q.modulos.map(f => f.map(b => b ? '1' : '0').join('')) });
+
   // Insignias de tipo de cliente en la tabla PNG (como insigniaPdf)
   const TIPOS_PNG = Object.fromEntries([0, 1, 2, 3, 4].map(p => [p, { relleno: p ? PRIO[p].relleno : null, borde: p >= 3 ? GRIS_OSC : PRIO[p].relleno, corto: PRIO[p].corto }]));
 
   // Modelo de la tabla PNG de una ruta (T = {h, filas, vacio, cercanos}) para js/tablas-png.js:
-  // mismo encabezado que su PDF, su tabla, la de sus cercanos y qué es cada tipo de cliente
+  // mismo encabezado que su PDF, su tabla, la de sus cercanos, la ubicación con QR, las semanas de
+  // sus P3 y qué es cada tipo de cliente
   function modeloTablaPng(V, R, titulo, T, columnas) {
     const cols = lista => lista.map(c => ({ titulo: c.titulo, ancho: c.png, alinear: c.alinear }));
     const secciones = [{ titulo: 'Clientes por evaluar', sub: T.h.resumen, columnas: cols(columnas), filas: T.filas, vacio: T.vacio }];
     if (T.cercanos) secciones.push({ titulo: 'Clientes cercanos a tu ruta (no están en ella)', sub: T.cercanos.nota, columnas: cols(columnasCercanos(V)), filas: T.cercanos.filas });
+    // Ubicación con QR y semanas de P3, como en su PDF (en la imagen siempre caben)
+    if (T.ubicacion.length) {
+      secciones.push({ tipo: 'qr', titulo: 'Ubicación de clientes prioritarios', sub: textoUbicacion(T.ubicacion, false),
+        tarjetas: T.ubicacion.map(p => ({ tipo: p[4], cercano: esCercano(p), nombre: p[3] || 'Cliente sin nombre', sap: p[2],
+          qr: p[0] != null && p[1] != null ? modulosQr(qrDe(p[0], p[1])) : null })) });
+    }
+    if (T.p3.length) {
+      const I = infoSemanas(R);
+      secciones.push({ tipo: 'semanas', titulo: 'Semanas de clientes prioridad 3', sub: I.nota,
+        filas: T.p3.map(({ p, s }) => ({ sap: p[2], nombre: nombreSemanas(p), semana: s ? `${s} (días ${I.dias[s]})` : 'Sin fecha', negrita: s === I.semHoja, gris: !s })) });
+    }
     return {
       marca: `REPORTE ICE · ${titulo.toUpperCase()} · UNIDAD ${D.unidad.toUpperCase()}`,
       titulo: `${V.Uno.toUpperCase()} ${T.h.codigo}`,

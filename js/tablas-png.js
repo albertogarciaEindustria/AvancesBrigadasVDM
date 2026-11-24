@@ -18,8 +18,10 @@
  * GPU o sin ella. Si el navegador no tiene workers con OffscreenCanvas, si un worker
  * falla o no puede cargar Montserrat, esas tablas se dibujan en la página.
  *
- * Modelo: {marca, titulo, derecha1, derecha2, pie, tipos, leyenda, notas,
- *          secciones: [{titulo, sub, columnas: [{titulo, ancho, alinear}], filas, vacio}]}
+ * Modelo: {marca, titulo, derecha1, derecha2, pie, tipos, leyenda, notas, secciones}. Secciones:
+ *   tabla:   {titulo, sub, columnas: [{titulo, ancho, alinear}], filas, vacio}
+ *   qr:      {tipo: 'qr', titulo, sub, tarjetas: [{tipo, cercano, nombre, sap, qr: {n, filas: ['0101…']} | null}]}
+ *   semanas: {tipo: 'semanas', titulo, sub, filas: [{sap, nombre, semana, negrita, gris}]} (dos bloques)
  * Celda: texto o número, {texto, negrita, color, fondo} o {tipo} (insignia P1, P2...). */
 const TablasPng = (function () {
   'use strict';
@@ -37,6 +39,8 @@ const TablasPng = (function () {
   const ROJO = '#F40000', NEGRO = '#000000', BLANCO = '#FFFFFF', GRIS = '#8C8C8C', GRIS_1 = '#F4F4F4', GRIS_2 = '#E6E6E6',
         GRIS_MARCA = '#C8C8C8', TINTA2 = '#4D4D4D', TINTA3 = '#6E6E6E';
   const MARGEN = 28, CAB = 84, PIE = 50, FILA = 30, CAB_TABLA = 38, RENGLON = 17;
+  const QR_COLUMNAS = 3, QR_ALTO = 150, QR_SEP = 12;               // tarjetas de ubicación
+  const SEM_SEP = 24, SEM_SAP = 112, SEM_SEMANA = 200;              // semanas de P3: dos bloques
 
   const nuevoLienzo = (w, h) => {
     if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
@@ -100,12 +104,15 @@ const TablasPng = (function () {
   function plano(M) {
     if (!medidor) medidor = contexto(nuevoLienzo(1, 1));
     const g = medidor;
-    const anchoTabla = Math.max(...M.secciones.map(s => s.columnas.reduce((a, c) => a + c.ancho, 0)));
+    const anchoTabla = Math.max(...M.secciones.filter(s => !s.tipo).map(s => s.columnas.reduce((a, c) => a + c.ancho, 0)));
     const ancho = anchoTabla + 2 * MARGEN, util = ancho - 2 * MARGEN;
     let alto = CAB + 26;
     const secciones = M.secciones.map(s => {
       const sub = renglones(g, s.sub, util - 24, 13);
-      const h = 34 + sub.length * 18 + 12 + (s.filas.length ? CAB_TABLA + s.filas.length * FILA : 40) + 26;
+      const cuerpo = s.tipo === 'qr' ? Math.ceil(s.tarjetas.length / QR_COLUMNAS) * (QR_ALTO + QR_SEP) - QR_SEP
+        : s.tipo === 'semanas' ? CAB_TABLA + Math.ceil(s.filas.length / 2) * FILA
+        : s.filas.length ? CAB_TABLA + s.filas.length * FILA : 40;
+      const h = 34 + sub.length * 18 + 12 + cuerpo + 26;
       alto += h;
       return { ...s, subRenglones: sub, alto: h };
     });
@@ -150,6 +157,85 @@ const TablasPng = (function () {
     return yy;
   }
 
+  // QR en píxeles reales del lienzo (módulos enteros, sin rayas entre ellos) con su zona blanca
+  // de 4 módulos, centrado en un cuadro de `lado` puntos
+  function dibujarQr(g, x, y, lado, qr, escala) {
+    const n = qr.n, total = n + 8, px = Math.max(1, Math.floor(lado * escala / total));
+    const ox = Math.round((x + (lado - px * total / escala) / 2) * escala), oy = Math.round((y + (lado - px * total / escala) / 2) * escala);
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = BLANCO;
+    g.fillRect(ox, oy, px * total, px * total);
+    g.fillStyle = NEGRO;
+    qr.filas.forEach((f, r) => {
+      for (let c = 0; c < n;) {
+        if (f[c] !== '1') { c++; continue; }
+        let k = c;
+        while (k < n && f[k] === '1') k++;
+        g.fillRect(ox + (c + 4) * px, oy + (r + 4) * px, (k - c) * px, px);
+        c = k;
+      }
+    });
+    g.restore();
+  }
+
+  // Ubicación: una tarjeta por cliente con su QR (abre su ubicación en Google Maps), tipo, nombre y SAP
+  function tarjetasQr(g, x0, y, util, tarjetas, tipos, escala) {
+    const w = (util - (QR_COLUMNAS - 1) * QR_SEP) / QR_COLUMNAS, lado = QR_ALTO - 16;
+    tarjetas.forEach((t, k) => {
+      const x = x0 + (k % QR_COLUMNAS) * (w + QR_SEP), yy = y + Math.floor(k / QR_COLUMNAS) * (QR_ALTO + QR_SEP);
+      g.strokeStyle = GRIS_MARCA;
+      g.lineWidth = 1;
+      g.strokeRect(x + 0.5, yy + 0.5, w - 1, QR_ALTO - 1);
+      if (t.qr) dibujarQr(g, x + 8, yy + 8, lado, t.qr, escala);
+      else {
+        g.fillStyle = GRIS_1;
+        g.fillRect(x + 8, yy + 8, lado, lado);
+        texto(g, x + 8 + lado / 2, yy + 8 + lado / 2 - 4, 'Sin', { tam: 12, color: TINTA2, alinear: 'center' });
+        texto(g, x + 8 + lado / 2, yy + 8 + lado / 2 + 12, 'coordenadas', { tam: 12, color: TINTA2, alinear: 'center' });
+      }
+      const tx = x + lado + 20, tw = w - lado - 28;
+      insignia(g, tx, yy + 28, t.tipo, tipos);
+      if (t.cercano) texto(g, tx + 50, yy + 28, 'CERCANO', { tam: 11, peso: 800, color: ROJO, espaciado: 0.5 });
+      const nombre = renglones(g, t.nombre, tw, 14, 700);
+      nombre.slice(0, 3).forEach((r, i) => {
+        const resto = i === 2 && nombre.length > 3 ? nombre.slice(2).join(' ') : r;
+        texto(g, tx, yy + 56 + i * 19, resto, { tam: 14, peso: 700, max: tw });
+      });
+      texto(g, tx, yy + QR_ALTO - 16, `SAP ${t.sap}`, { tam: 13, color: NEGRO, max: tw });
+    });
+  }
+
+  // Semanas de P3: dos bloques lado a lado (primero se llena el izquierdo); en negritas los de la
+  // semana de la fecha de la hoja
+  function semanas(g, x0, y, util, filas) {
+    const w = (util - SEM_SEP) / 2, cols = [['SAP', SEM_SAP], ['Cliente', w - SEM_SAP - SEM_SEMANA], ['Semana más evaluada', SEM_SEMANA]];
+    const mitad = Math.ceil(filas.length / 2);
+    [filas.slice(0, mitad), filas.slice(mitad)].forEach((bloque, b) => {
+      if (!bloque.length) return;
+      const xb = x0 + b * (w + SEM_SEP);
+      let x = xb;
+      for (const [titulo, a] of cols) {
+        texto(g, x + 10, y + 24, titulo.toUpperCase(), { tam: 10, peso: 700, color: TINTA2, espaciado: 1, max: a - 14 });
+        x += a;
+      }
+      g.fillStyle = NEGRO;
+      g.fillRect(xb, y + CAB_TABLA - 2, w, 2);
+      let yy = y + CAB_TABLA;
+      bloque.forEach((f, i) => {
+        if (i % 2) { g.fillStyle = GRIS_1; g.fillRect(xb, yy, w, FILA); }
+        let xc = xb;
+        [f.sap, f.nombre, f.semana].forEach((v, j) => {
+          texto(g, xc + 10, yy + 20, v, { tam: 13, peso: f.negrita ? 700 : 500, color: f.gris && j === 2 ? TINTA3 : NEGRO, max: cols[j][1] - 16 });
+          xc += cols[j][1];
+        });
+        g.fillStyle = GRIS_2;
+        g.fillRect(xb, yy + FILA - 1, w, 1);
+        yy += FILA;
+      });
+    });
+  }
+
   /** Dibuja el modelo en un lienzo nuevo (OffscreenCanvas si hay) y lo devuelve. */
   function dibujar(M) {
     const P = plano(M);
@@ -173,7 +259,9 @@ const TablasPng = (function () {
       texto(g, MARGEN + 18, y + 19, s.titulo.toUpperCase(), { tam: 17, peso: 800, max: ancho - 2 * MARGEN - 20 });
       s.subRenglones.forEach((r, k) => texto(g, MARGEN + 18, y + 44 + k * 18, r, { tam: 13, color: TINTA2 }));
       let yy = y + 34 + s.subRenglones.length * 18 + 12;
-      if (s.filas.length) tabla(g, MARGEN, yy, s.columnas, s.filas, M.tipos);
+      if (s.tipo === 'qr') tarjetasQr(g, MARGEN, yy, ancho - 2 * MARGEN, s.tarjetas, M.tipos, escala);
+      else if (s.tipo === 'semanas') semanas(g, MARGEN, yy, ancho - 2 * MARGEN, s.filas);
+      else if (s.filas.length) tabla(g, MARGEN, yy, s.columnas, s.filas, M.tipos);
       else {
         g.fillStyle = GRIS_1;
         g.fillRect(MARGEN, yy, ancho - 2 * MARGEN, 34);
