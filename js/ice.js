@@ -2058,6 +2058,7 @@ const Ice = (function () {
       sinDatos: 'Esta publicación no trae los recorridos de los farmers: la base de jefaturas (JefaturasFrecuencia) no tiene las columnas de clave y frecuencia Farmer. Hay que volver a mandar el Excel de OBJETIVOS con /addjefaturas y publicar de nuevo.',
       panel: 'p-farmers-recorridos',      // dentro de la pestaña Farmers (farmersPestana)
       porCanal: 'farmers',                 // botón de canal de la pestaña Farmers (canalSel.farmers)
+      carpetaUnica: 'Farmers',             // ZIP sin carpeta por jefatura: un farmer abarca varias
     },
   };
   // Farmers, vista Zona y cercanos (crearVistaCercanos): sus PDF agregan los cercanos
@@ -2122,7 +2123,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${(S ? S.dias : []).map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Cada botón baja un <b>ZIP con una carpeta por jefatura</b>, para mandarle a cada jefatura lo suyo. Dentro de cada una: la carpeta <b>PDF</b>, con <b>un PDF por ${esc(V.uno)}</b> para que cada ${esc(V.quienUno)} se lleve su hoja; la carpeta <b>Tablas_PNG</b>, con la tabla de cada ${esc(V.uno)} en imagen (para mandarla por chat), y <b>Todas_las_tablas.pdf</b>, con las hojas de todas sus ${esc(V.varios)} juntas (una hoja por ${esc(V.uno)}, con sus QR y semanas de prioridad 3), para imprimirlas de una vez. Todo sale con lo que elijas en los botones (día${V.porCanal ? ', canal' : ''}). En la hoja de cada ${esc(V.uno)} van los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios (sin ICE en ${esc(D.prioridad.ventana)}). En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
+        <p class="mapa-ayuda">${V.carpetaUnica ? `Cada botón baja un <b>ZIP con una sola carpeta, ${esc(V.carpetaUnica)}</b> (no se separa por jefatura: un ${esc(V.uno)} abarca varias). Dentro: ` : 'Cada botón baja un <b>ZIP con una carpeta por jefatura</b>, para mandarle a cada jefatura lo suyo. Dentro de cada una: '}la carpeta <b>PDF</b>, con <b>un PDF por ${esc(V.uno)}</b> para que cada ${esc(V.quienUno)} se lleve su hoja; la carpeta <b>Tablas_PNG</b>, con la tabla de cada ${esc(V.uno)} en imagen (para mandarla por chat), y <b>Todas_las_tablas.pdf</b>, con las hojas de ${V.carpetaUnica ? 'todos los' : 'todas sus'} ${esc(V.varios)} juntas (una hoja por ${esc(V.uno)}, con sus QR y semanas de prioridad 3), para imprimirlas de una vez. Todo sale con lo que elijas en los botones (día${V.porCanal ? ', canal' : ''}). En la hoja de cada ${esc(V.uno)} van los clientes <b>prioridad 1, 2 y 3</b> que visita ese día y que aún no tienen ICE en ${esc(D.mes)}, con su canal (On Premise o Home Market) y la submétrica que más puntos le quitó a cada uno en su última evaluación y, arriba, qué es cada tipo de cliente. Si cabe en la hoja, abajo va la <b>ubicación de los clientes prioridad 1 y 2</b>: nombre, SAP y un QR que abre su ubicación en Google Maps; debajo, si también cabe, las <b>semanas de los clientes prioridad 3</b>: SAP, nombre y la semana del mes en que más veces los ha evaluado el auditor. Los ya evaluados en el mes no se imprimen, ni los no prioritarios (sin ICE en ${esc(D.prioridad.ventana)}). En los PDF la ÉPICA del mes es solo la hecha por ${esc(V.quien)}; en esta página se ve la de brigadistas.${esc(V.nota)}</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento" role="group" aria-label="Día de ${esc(V.losVarios)}">
@@ -2394,7 +2395,7 @@ const Ice = (function () {
           <span class="poli-rutas-tit">${esc(V.listaDias)}:</span>
           ${S.dias.map((d, i) => `<button type="button" class="ice-btn sec" data-pdf-dia="${i}">${svgIcono('imprimir')}${esc(d.dia)}${d.hoy ? ' · hoy' : d.dia === M.dia ? ' · mañana' : ''}</button>`).join('')}
         </div>
-        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen alrededor. A cada farmer se le buscan <b>${num(K.objetivo)} clientes prioridad 1, 2 y 3 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)} (◆ en el mapa), y el margen <b>se agranda o se achica lo justo para abarcarlos</b>: nunca menos de ${num(K.margen_min)} m ni más de ${num(K.margen_max)} m (si ni así llega a ${num(K.objetivo)}, se queda con los que haya). Se reparten de lo más cercano a lo más lejano, así ningún cliente se repite: va con el primer farmer que lo alcanza y, si queda a la misma distancia de dos zonas, con el que lo tiene más cerca del camino que une a sus clientes en orden; si dentro de su polígono hay más, se queda con los más cercanos a ese camino. Con el botón de canal se buscan solo entre los de ese canal. Cada botón baja un <b>ZIP con una carpeta por jefatura</b> (la del farmer ese día) y, dentro, la carpeta <b>PDF</b> con <b>un PDF por farmer</b>, la carpeta <b>Tablas_PNG</b> con sus tablas en imagen y <b>Todas_las_tablas.pdf</b> con las hojas de todos sus farmers juntas (una hoja por farmer, con sus QR y semanas de prioridad 3). Cada PDF lleva sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
+        <p class="mapa-ayuda">Para cada farmer y cada día se arma la <b>zona de su recorrido</b>: el polígono que encierra a sus clientes de ese día (frecuencia Farmer) más un margen alrededor. A cada farmer se le buscan <b>${num(K.objetivo)} clientes prioridad 1, 2 y 3 que no tienen frecuencia Farmer</b> y aún no tienen ICE en ${esc(D.mes)} (◆ en el mapa), y el margen <b>se agranda o se achica lo justo para abarcarlos</b>: nunca menos de ${num(K.margen_min)} m ni más de ${num(K.margen_max)} m (si ni así llega a ${num(K.objetivo)}, se queda con los que haya). Se reparten de lo más cercano a lo más lejano, así ningún cliente se repite: va con el primer farmer que lo alcanza y, si queda a la misma distancia de dos zonas, con el que lo tiene más cerca del camino que une a sus clientes en orden; si dentro de su polígono hay más, se queda con los más cercanos a ese camino. Con el botón de canal se buscan solo entre los de ese canal. Cada botón baja un <b>ZIP con una sola carpeta, Farmers</b> (no se separa por jefatura: un farmer abarca varias) y, dentro, la carpeta <b>PDF</b> con <b>un PDF por farmer</b>, la carpeta <b>Tablas_PNG</b> con sus tablas en imagen y <b>Todas_las_tablas.pdf</b> con las hojas de todos los farmers juntas (una hoja por farmer, con sus QR y semanas de prioridad 3). Cada PDF lleva sus clientes prioridad 1, 2 y 3 del día (con su canal, On Premise o Home Market) y, aparte, sus <b>clientes cercanos, aclarando que están cerca de su ruta pero no en ella</b>; la ubicación con QR también los incluye (si no caben todos los QR en la hoja, van al menos los de los cercanos). En los PDF la ÉPICA del mes es solo la hecha por farmers; en esta página se ve la de brigadistas.</p>
         ${tiposCliente(false)}
         <div class="mapa-controles">
           <div class="segmento dias" role="group" aria-label="Día en el mapa">
@@ -2872,7 +2873,8 @@ const Ice = (function () {
 
   // Rutas de preventa o de farmers: solo clientes prioridad 1, 2 y 3 que aún no tienen ICE en
   // el mes (los no prioritarios no tienen ICE en los últimos meses y no van). Un ZIP con una
-  // carpeta por jefatura, para mandarle a cada jefatura lo suyo, y en cada una:
+  // carpeta por jefatura, para mandarle a cada jefatura lo suyo (farmers: una sola carpeta
+  // V.carpetaUnica, por clave, porque un farmer abarca varias jefaturas), y en cada una:
   //   PDF/         un PDF por ruta (o farmer): su hoja para llevársela
   //   Tablas_PNG/  la tabla de cada ruta en imagen (y la de sus cercanos), para mandarla por chat
   //   Todas_las_tablas.pdf  las hojas de todas sus rutas en un solo PDF: las mismas de PDF/ (una
@@ -2885,7 +2887,8 @@ const Ice = (function () {
     const jefDe = x => x.r.jefatura || SIN_JEFATURA;
     const rutasPdf = R.rutas.map(r => ({ r, puntos: r.puntos.filter(p => !evaluado(p) && !nunca(p)), cerc: (r.cercanos || []).filter(p => !evaluado(p)) }))
       .filter(x => (todos ? x.puntos.length : x.puntos.some(p => p[4])) || x.cerc.length)
-      .sort((a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
+      .sort(V.carpetaUnica ? (a, b) => String(a.r.codigo).localeCompare(String(b.r.codigo), 'es', { numeric: true })
+        : (a, b) => (jefDe(a) === SIN_JEFATURA) - (jefDe(b) === SIN_JEFATURA) || jefDe(a).localeCompare(jefDe(b), 'es', { numeric: true }));
     const canal = canalVista(V) != null ? ` ${nombreCanalCorto(canalVista(V))}` : '';   // botón de canal de Farmers
     let conQr = 0, conP3 = 0, cercanos = 0, hojas = 0;
     // png: ancho de la columna en la tabla PNG (js/tablas-png.js), en píxeles a escala 1
@@ -2922,8 +2925,8 @@ const Ice = (function () {
       if (ubicacionesPdf(ctx, puntos.concat(cerc))) conQr++;
       else if (cerc.length && ubicacionesPdf(ctx, cerc, true)) conQr++;   // si no caben todos, los de los cercanos
       if (semanasP3Pdf(ctx, puntos.concat(cerc), R)) conP3++;
-      const carpeta = limpioArchivo(nombreJefatura(jefDe(x))), nombre = limpioArchivo(`${V.Uno}_${r.codigo}_${R.dia}_${R.fecha}`);
-      if (!carpetas.has(carpeta)) carpetas.set(carpeta, { jefatura: jefDe(x), pdfs: [], tablas: [], hojas: [], rutaPaginas: [] });
+      const carpeta = limpioArchivo(V.carpetaUnica || nombreJefatura(jefDe(x))), nombre = limpioArchivo(`${V.Uno}_${r.codigo}_${R.dia}_${R.fecha}`);
+      if (!carpetas.has(carpeta)) carpetas.set(carpeta, { jefatura: V.carpetaUnica ? null : jefDe(x), pdfs: [], tablas: [], hojas: [], rutaPaginas: [] });
       const C = carpetas.get(carpeta);
       hojas += ctx.doc.paginas.length;
       // Copia de sus hojas (sin pie) para Todas_las_tablas.pdf
@@ -2996,7 +2999,8 @@ const Ice = (function () {
   // pie dice de qué ruta es cada hoja y la página dentro de este PDF
   function pdfTodasRutas(V, titulo, C) {
     const ctx = documentoRutas(V, titulo);
-    ctx.doc.titulo = `${titulo} · Todas las rutas · ${nombreJefatura(C.jefatura)} · ${D.unidad}`;
+    ctx.doc.titulo = V.carpetaUnica ? `${titulo} · Todos los ${V.varios} · ${D.unidad}`
+      : `${titulo} · Todas las rutas · ${nombreJefatura(C.jefatura)} · ${D.unidad}`;
     ctx.doc.paginas = C.hojas;
     ctx.rutaPaginas = C.rutaPaginas;
     return ctx.doc;
@@ -3024,9 +3028,11 @@ const Ice = (function () {
           const R = rutasVista(V, 'hoy');
           hecho = await pdfRutas(V, R, tit(V.tituloHoy), `${arch(V.archivoHoy)}_${D.unidad}_${R.fecha}`, todos, avisar);
         }
-        estado.textContent = hecho.rutas ? `ZIP listo${canal ? ` (solo ${canal})` : ''}: ${plural(hecho.carpetas, 'carpeta de jefatura', 'carpetas de jefatura')}, cada una con su carpeta PDF, su carpeta Tablas_PNG y Todas_las_tablas.pdf. ` +
+        estado.textContent = hecho.rutas ? `ZIP listo${canal ? ` (solo ${canal})` : ''}: ` +
+          (V.carpetaUnica ? `una carpeta ${V.carpetaUnica} con la carpeta PDF, la carpeta Tablas_PNG y Todas_las_tablas.pdf. `
+            : `${plural(hecho.carpetas, 'carpeta de jefatura', 'carpetas de jefatura')}, cada una con su carpeta PDF, su carpeta Tablas_PNG y Todas_las_tablas.pdf. `) +
           `${plural(hecho.rutas, `PDF de ${V.uno}`, `PDF de ${V.varios}`)} (${plural(hecho.hojas, 'hoja')} en total), ${num(hecho.conQr)} con la ubicación de sus clientes prioritarios y ${num(hecho.conP3)} con las semanas de sus clientes prioridad 3${V.cercanos ? `; ${plural(hecho.cercanos, 'cliente cercano agregado', 'clientes cercanos agregados')}` : ''}; ` +
-          `${plural(hecho.pngs, 'tabla en PNG', 'tablas en PNG')}; cada Todas_las_tablas.pdf junta esas mismas hojas de su jefatura (${plural(hecho.hojasTodas, 'hoja')} en total). Revisa tus descargas.`
+          `${plural(hecho.pngs, 'tabla en PNG', 'tablas en PNG')}; ${V.carpetaUnica ? `Todas_las_tablas.pdf junta esas mismas hojas (${plural(hecho.hojasTodas, 'hoja')})` : `cada Todas_las_tablas.pdf junta esas mismas hojas de su jefatura (${plural(hecho.hojasTodas, 'hoja')} en total)`}. Revisa tus descargas.`
           : `Este día no hay ${V.varios} con clientes${canal ? ` ${canal}` : ''} por evaluar: no se descargó nada.`;
       } catch (e) {
         console.error(e);
