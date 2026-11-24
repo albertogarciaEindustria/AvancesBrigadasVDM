@@ -33,7 +33,7 @@ const IceAdmin = (function () {
   const TACTIL = window.matchMedia('(pointer: coarse)').matches;
 
   let D = null, OP = null, mapaPol = null, mapaP = null, PESTANAS = [];
-  const estado = { periodo: 'mes', ver: {}, canal: null, metrica: {}, serie: 'acumulado' };
+  const estado = { periodo: 'mes', ver: {}, canal: null, metrica: {}, serie: 'acumulado', evol: 'semana' };
   const color = u => COLOR_UNIDAD[D.unidades.indexOf(u) % COLOR_UNIDAD.length];
   const plural = (n, s, p) => `${num(n)} ${n === 1 ? s : (p || s + 's')}`;
   const signo = (v, dec = 1) => v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${num(Math.abs(v), dec)}`;
@@ -204,7 +204,7 @@ const IceAdmin = (function () {
         ${con.length > 1 ? kpi('Brecha entre unidades', num(con[0].c.promedio - con[con.length - 1].c.promedio, 1), 'puntos entre la más alta y la más baja') : ''}
       </div>
       ${seccion(`Comparativo de unidades · ${nombreCanal(canal)}`, `Calificación ICE de ${esc(D.mes)} al corte, solo evaluaciones de ${esc(canal)}, de mayor a menor. Entre paréntesis, las evaluaciones del mes anterior; la estimación de cierre trae su rango probable y P1 evaluados son los clientes prioridad 1 de ${esc(canal)} ya evaluados en el mes.`, tabla)}
-      ${seccion('Distribución, promedios y ranking', `Elige el periodo: el violín, las barras, el ranking y el ANOVA de abajo se calculan con las evaluaciones de ${esc(canal)} de ese periodo.`,
+      ${seccion('Evolución, distribución, promedios y ranking', `Elige el periodo: las líneas, la tendencia, el violín, las barras, el ranking y el ANOVA de abajo se calculan con las evaluaciones de ${esc(canal)} de ese periodo.`,
         `<div class="adm-controles">${segmento(`admPeriodo${k}`, opcionesPeriodo(), estado.periodo, 'Periodo')}</div>
          <div id="admCanal${k}"></div>`)}`;
     alElegir(`admPeriodo${k}`, v => { estado.periodo = v; cuerpoCanal(k); });
@@ -219,6 +219,12 @@ const IceAdmin = (function () {
     const opciones = [['ice', 'Calificación ICE'], ...mets.map(m => [m.i, `<span class="icono-metrica" aria-hidden="true">${icono(m.id)}</span>${esc(m.nombre)}`])];
     const u = umbralDe(canal);
     cont.innerHTML = `
+      <h3 class="adm-sub">Cómo fue cambiando la calificación ICE · ${esc(P.nombre)}</h3>
+      <p class="adm-nota">Una línea por unidad con sus evaluaciones de ${esc(canal)} del periodo, para ver si va mejorando. Abajo, la <b>tendencia</b> de cada una: cuántos puntos sube o baja por semana su calificación según la recta que mejor sigue a todas sus evaluaciones, y si ese cambio es claro o puede ser azar.</p>
+      ${segmento(`admEvol${k}`, [['semana', 'Promedio por semana'], ['acumulado', 'Promedio acumulado'], ['dia', 'Promedio de cada día']], estado.evol, 'Tipo de línea')}
+      <div class="grafica" id="admEvolGraf${k}"></div>
+      <p class="adm-nota" id="admEvolNota${k}"></p>
+      ${tablaTendencia(An, canal)}
       <h3 class="adm-sub">Qué se compara en el violín y las barras</h3>
       ${segmento(`admVer${k}`, opciones, estado.ver[canal], 'Calificación que se compara', 'adm-ver')}
       <div id="admVerCuerpo${k}"></div>
@@ -230,6 +236,8 @@ const IceAdmin = (function () {
       <h3 class="adm-sub">ANOVA de un factor · grupos = unidades operativas · ${esc(canal)}, ${esc(P.nombre)}</h3>
       ${htmlAnova(An, canal)}`;
     alElegir(`admVer${k}`, v => { estado.ver[canal] = v; graficasVer(k); });
+    alElegir(`admEvol${k}`, v => { estado.evol = v; graficaEvolucion(k); });
+    graficaEvolucion(k);
     graficasVer(k);
     cont.querySelectorAll('tr[data-rk]').forEach(tr => {
       const elegir = () => {
@@ -240,6 +248,93 @@ const IceAdmin = (function () {
       tr.addEventListener('click', elegir);
       tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(); } });
     });
+  }
+
+  // ── Cómo fue cambiando la calificación (pestañas de canal) ──────────────
+  // Semana del mes como en la pestaña Semanas de la unidad: 1 = días 1–7 … 4 = del 22 al fin
+  const semanaMes = d => Math.min(4, Math.ceil(d / 7));
+  function etiquetaSemana(k) {
+    const [a, m, w] = k.split('-').map(Number), fin = w < 4 ? w * 7 : new Date(a, m, 0).getDate();
+    return `${(w - 1) * 7 + 1}–${fin} ${MESES[m - 1]}`;
+  }
+  // Una serie por unidad con sus evaluaciones (grupos[].puntos = [[sap, fecha, ICE]]): promedio por
+  // semana del mes, de cada día o acumulado desde el inicio del periodo; n = evaluaciones detrás
+  function seriesEvolucion(An, modo) {
+    const llave = f => modo === 'semana' ? `${f.slice(0, 7)}-${semanaMes(+f.slice(8, 10))}` : f.slice(0, 10);
+    const xs = [...new Set(An.grupos.flatMap(g => g.puntos.filter(p => p[1]).map(p => llave(p[1]))))].sort();
+    const series = An.grupos.map(g => {
+      const por = {};
+      for (const [, f, v] of g.puntos) {
+        if (!f) continue;
+        const d = por[llave(f)] || (por[llave(f)] = [0, 0]);
+        d[0] += v; d[1]++;
+      }
+      let suma = 0, n = 0;
+      const valores = [], cuantos = [];
+      for (const x of xs) {
+        const d = por[x];
+        if (modo === 'acumulado') {
+          if (d) { suma += d[0]; n += d[1]; }
+          valores.push(n ? suma / n : null); cuantos.push(n);
+        } else { valores.push(d ? d[0] / d[1] : null); cuantos.push(d ? d[1] : 0); }
+      }
+      return { nombre: g.unidad, color: color(g.unidad), valores, n: cuantos, ancho: 2.5 };
+    }).filter(s => s.valores.some(v => v != null));
+    return { xs, series };
+  }
+
+  function graficaEvolucion(k) {
+    const canal = D.canales[k], P = periodo(), An = P.analisis[canal], modo = estado.evol;
+    const { xs, series } = seriesEvolucion(An, modo), cont = $(`admEvolGraf${k}`);
+    const global = (An.global || {}).media;
+    $(`admEvolNota${k}`).innerHTML = (modo === 'semana'
+      ? 'Cada punto es el promedio de las evaluaciones de la unidad en esa semana del mes (1–7, 8–14, 15–21 y del 22 al fin, como en la pestaña Semanas de cada unidad).'
+      : modo === 'dia'
+        ? 'Cada punto es el promedio de las evaluaciones de ese día; los días sin evaluaciones de la unidad quedan en blanco. Los días con pocas evaluaciones brincan mucho: para ver la tendencia es mejor el promedio por semana.'
+        : 'Cada línea es el promedio acumulado de la unidad desde el inicio del periodo hasta ese día: es la calificación que llevaba en esa fecha, sin el ruido de los días con pocas evaluaciones, pero tarda en reflejar los cambios.')
+      + ` La línea punteada es el promedio de todas las unidades en el periodo. ${TACTIL ? 'Toca' : 'Pasa el cursor sobre'} la gráfica para ver los valores y cuántas evaluaciones hay detrás de cada uno.`;
+    if (!series.length) { cont.innerHTML = '<p class="muted">Sin evaluaciones con fecha.</p>'; return; }
+    Graficas.lineas(cont, {
+      titulo: `Calificación ICE por unidad, ${canal}, ${P.nombre}`, x: xs, series, alto: 340, marcas: modo !== 'acumulado',
+      etiquetaX: modo === 'semana' ? etiquetaSemana : f => fechaCorta(f),
+      tituloTip: modo === 'semana' ? x => `Semana del ${etiquetaSemana(x)}` : f => fecha(f),
+      formatoTip: (v, s, i) => `${num(v, 1)} <span class="muted">(${plural(s.n[i], modo === 'acumulado' ? 'evaluación hasta ese día' : 'evaluación', modo === 'acumulado' ? 'evaluaciones hasta ese día' : 'evaluaciones')})</span>`,
+      objetivo: global != null ? { valor: global, etiqueta: `Todas ${num(global, 1)}` } : null,
+    });
+  }
+
+  // Tendencia de cada unidad en el periodo (Programas/admin_ice.py, _tendencia): pendiente en puntos
+  // por semana con su intervalo de confianza, la p de la pendiente y la primera y última semana
+  function tablaTendencia(An, canal) {
+    const T = An.tendencia || {}, sem = seriesEvolucion(An, 'semana');
+    // Todas las unidades juntas, para la fila de abajo
+    const semTodas = seriesEvolucion({ grupos: [{ unidad: '', puntos: An.grupos.flatMap(g => g.puntos) }] }, 'semana');
+    const extremos = (u, S = sem) => {
+      const s = S.series.find(x => x.nombre === u);
+      if (!s) return [null, null];
+      const con = s.valores.map((v, i) => ({ v, n: s.n[i], x: S.xs[i] })).filter(d => d.v != null);
+      return [con[0], con.length > 1 ? con[con.length - 1] : null];
+    };
+    const lectura = t => {
+      if (!t) return '<span class="muted">Pocas evaluaciones</span>';
+      if (t.p != null && t.p < D.alfa) return t.semana > 0 ? '<span class="delta mejor">▲ Sube</span>' : '<span class="delta peor">▼ Baja</span>';
+      return '<span class="delta igual">Sin cambio claro</span>';
+    };
+    const semana = d => d ? `${num(d.v, 1)} <span class="muted">(${esc(etiquetaSemana(d.x))}, n ${num(d.n)})</span>` : '—';
+    const filas = An.grupos.map(g => ({ u: g.unidad, n: g.n, t: T[g.unidad] }))
+      .sort((a, b) => (b.t ? b.t.semana : -Infinity) - (a.t ? a.t.semana : -Infinity));
+    const fila = (nombre, n, t, sw, ext) => `<tr${t && (t.p == null || t.p >= D.alfa) ? ' class="adm-ns"' : ''}>
+        <th class="izq">${sw}${esc(nombre)}</th><td>${num(n || 0)}</td><td>${semana(ext[0])}</td><td>${semana(ext[1])}</td>
+        <td><b>${t ? signo(t.semana, 2) : '—'}</b></td><td>${t ? `${signo(t.ic_bajo, 2)} a ${signo(t.ic_alto, 2)}` : '—'}</td>
+        <td>${t ? valorP(t.p) : '—'}</td><td>${lectura(t)}</td></tr>`;
+    const G = An.tendencia_global;
+    return `<div class="tabla-scroll"><table class="ice-tabla">
+      <thead><tr><th class="izq">Unidad</th><th>Evaluaciones</th><th>Primera semana</th><th>Última semana</th>
+        <th>Tendencia (puntos por semana)</th><th>IC ${num((1 - D.alfa) * 100, 0)} %</th><th>p</th><th>¿Va mejorando?</th></tr></thead>
+      <tbody>${filas.map(f => fila(f.u, f.n, f.t, `<span class="adm-sw" style="background:${color(f.u)}" aria-hidden="true"></span>`, extremos(f.u))).join('')}</tbody>
+      <tfoot>${fila('Todas las unidades', (An.global || {}).n, G, '', extremos('', semTodas))}</tfoot>
+    </table></div>
+    <p class="adm-nota">Tendencia = pendiente de la recta de mínimos cuadrados de la calificación ICE de cada evaluación contra su fecha, en puntos por semana (por ejemplo, +1.5 = cada semana sus evaluaciones salen 1.5 puntos más altas, en promedio). <b>Sube</b> o <b>Baja</b> solo si el cambio es claro (p &lt; ${num(D.alfa, 2)}: el intervalo no cruza el cero); si no, puede ser azar. Ojo: cada día el auditor evalúa tiendas distintas, así que una tendencia también puede venir de qué tiendas tocaron y no solo de que mejoraran.</p>`;
   }
 
   // Violín y barras de lo elegido (calificación ICE o una submétrica)

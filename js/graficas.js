@@ -311,6 +311,10 @@ const Graficas = (function () {
         });
         el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': s.ancho || 2,
                      'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'pointer-events': 'none' }, svg);
+        // op.marcas: un punto en cada valor (series con huecos, como el promedio de cada día)
+        if (op.marcas) s.valores.forEach((v, i) => {
+          if (v != null) el('circle', { cx: x(i), cy: y(v), r: 3, fill: s.color, 'pointer-events': 'none' }, svg);
+        });
         const ult = s.valores.reduce((a, v, i) => v != null ? i : a, -1);
         if (ult >= 0) {
           el('circle', { cx: x(ult), cy: y(s.valores[ult]), r: 4, fill: s.color, stroke: T.sup,
