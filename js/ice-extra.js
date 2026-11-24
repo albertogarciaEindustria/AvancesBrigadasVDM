@@ -1,5 +1,5 @@
-/* Reporte ICE: información del sistema, pestaña Cinética y hoja descargable
- * "Mis clientes ICE".
+/* Reporte ICE: información del sistema, pestaña Cinética y hojas descargables
+ * "Mis clientes ICE" y "Buscador de clientes".
  *
  * Información del sistema: cuándo se actualizó la página y hasta qué fecha llegan
  * los datos ICE (la usan la unidad y el administrador).
@@ -17,7 +17,13 @@
  * día, con su ICE del mes en mapa de calor: verde 85+, naranja 70–84.9, rojo
  * menos de 70). Al tocar un cliente se abre su ficha: mapa, cómo llegar, datos y
  * desglose de su última evaluación con la submétrica que más le quitó en rojo.
- * Se arma en el navegador con los datos ya descifrados. */
+ *
+ * Hoja "Buscador de clientes": otro archivo suelto (sin contraseña) con todos
+ * los clientes del universo ICE de la unidad y los evaluados en el mes que no
+ * están en él. Se escribe el SAP (o parte del nombre), sale el nombre y con
+ * Entrar se abre la misma ficha, con su tipo de cliente explicado, la sección
+ * «¿Dónde está?» y el checklist de la submétrica que más le quitó ya abierto.
+ * Las dos hojas se arman en el navegador con los datos ya descifrados. */
 const IceExtra = (function () {
   'use strict';
   const { esc, num } = Util;
@@ -140,7 +146,7 @@ const IceExtra = (function () {
           <tbody>${filas.map(([k, v, h]) => `<tr><th scope="row">${esc(k)}</th><td class="izq">${esc(v)}</td><td class="izq">${esc(h)}</td></tr>`).join('')}</tbody>
         </table></div></section>
       ${CK ? `<section class="ice-seccion"><header class="ice-sec-cab"><div><h2>Checklist ICE por cliente</h2>
-        <p>En las fichas de cliente (Mapa, Semanas, Preventa, Farmers, Polígonos y la hoja «Mis clientes ICE») cada barra dice el porcentaje de la submétrica, los puntos que sumó de su total y, a un lado, los que perdió, con los puntos del manual ICE 2026 para el tipo de cliente con que se calificó (tamaño, y Fonda o Puesto en On Premise, con o sin reja en Home Market). Al tocar una barra sale el checklist de esa submétrica para ese cliente: lo que vale cada paso y, en SOCI y SOVI, cuántos frentes de Coca-Cola le faltan para la meta. Las metas las pone el líder con /sovisoci en el bot:</p></div></header>
+        <p>En las fichas de cliente (Mapa, Semanas, Preventa, Farmers, Polígonos y las hojas «Mis clientes ICE» y «Buscador de clientes») cada barra dice el porcentaje de la submétrica, los puntos que sumó de su total y, a un lado, los que perdió, con los puntos del manual ICE 2026 para el tipo de cliente con que se calificó (tamaño, y Fonda o Puesto en On Premise, con o sin reja en Home Market). Al tocar una barra sale el checklist de esa submétrica para ese cliente: lo que vale cada paso y, en SOCI y SOVI, cuántos frentes de Coca-Cola le faltan para la meta. Las metas las pone el líder con /sovisoci en el bot:</p></div></header>
         <div class="tabla-scroll"><table class="ice-tabla">
           <thead><tr><th>Canal</th><th class="izq">Meta</th><th>Valor</th></tr></thead>
           <tbody>${metasCk.map(([c, n, v]) => `<tr><th scope="row">${esc(c)}</th><td class="izq">${esc(n)}</td><td>${v != null ? `${esc(String(v))}%` : '<span class="muted">sin meta</span>'}</td></tr>`).join('')}</tbody>
@@ -449,10 +455,13 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
 @media print{.nav,.tabs,.seg,.f-mapa,.f-botones{display:none!important}.cab,.calor,.bola,.f-cab{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 `;
 
-  // Programa de la hoja: se guarda como texto y corre dentro del archivo
-  // descargado (ES5, para que abra también en celulares viejos)
-  function programaHoja() {
-    var D = JSON.parse(document.getElementById('datos').textContent);
+  // ── Ficha del cliente (las dos hojas descargables) ────────────────────
+  // La misma ficha en «Mis clientes ICE» y en el «Buscador de clientes»: tipo
+  // de cliente, mapa y cómo llegar, desglose de su última evaluación ICE (cada
+  // barra abre el checklist de esa submétrica) y sus datos. Se guarda como
+  // texto y corre dentro del archivo descargado (ES5, para que abra también en
+  // celulares viejos); usa IceChecklist, que va antes en el mismo archivo.
+  function programaFicha() {
     // Cliente: [0 SAP, 1 nombre, 2 tipo (1–3 prioridad, 4 no prioritario, 0 fuera del universo),
     //  3 lat, 4 lon, 5 dirección, 6 jefatura, 7 ruta de preventa, 8 frecuencia de preventa,
     //  9 farmer, 10 frecuencia del farmer, 11 canal, 12 visitas ICE del mes anterior,
@@ -462,25 +471,17 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     //  20 ÉPICA del mes [brigadistas, preventa, farmers]: [fecha, calificación, NoGeo, foto de foto] o 0,
     //  21 fecha y 22 ICE de su última evaluación antes del mes, 23 meses con ICE en la ventana de
     //  prioridad y 24 puntos de prioridad (null fuera del universo)]
-    var $ = function (id) { return document.getElementById(id); };
+    var D = null, fichaU = null;
     var ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ESC[c]; }); };
     var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
     var TIPO = { 0: 'Fuera del universo ICE', 1: 'Prioridad 1', 2: 'Prioridad 2', 3: 'Prioridad 3', 4: 'No prioritario' };
     var LETRA = { L: 'lunes', M: 'martes', R: 'miércoles', J: 'jueves', V: 'viernes', F: 'viernes', S: 'sábado', D: 'domingo' };
-    var FARMER = '__farmer__';            // valor de la opción Farmer en la lista de jefaturas
-    var CANAL_CORTO = { 'Home Market': 'HM', 'On Premise': 'OP' };   // columna Canal de las listas
-    var CLAVE = 'MisClientesICE:' + D.unidad;
-    var est = { g: '', j: '', r: '', dia: 'hoy', tab: 'p' };
-    var vista = '', desdeLista = false, scrollLista = 0, fichaU = null;
-    // Checklist ICE de cada submétrica (programaChecklist de js/ice-checklist.js, copiado en este archivo)
-    IceChecklist.preparar(D.checklist);
-    var porSap = {};
-    D.clientes.forEach(function (c, i) { porSap[c[0]] = i; });
-    try {
-      var g = JSON.parse(localStorage.getItem(CLAVE) || 'null');
-      if (g && g.r) { est.g = g.g; est.j = g.j; est.r = g.r; }
-    } catch (e) { /* sin almacenamiento local: se elige cada vez */ }
+    function preparar(datos) {
+      D = datos;
+      // Checklist ICE de cada submétrica (programaChecklist de js/ice-checklist.js, copiado en el archivo)
+      IceChecklist.preparar(D.checklist);
+    }
 
     // Un decimal, mitades hacia arriba sobre la forma decimal del número (como toLocaleString en el sitio)
     var r1 = function (v) { var r = Math.round(Number(v + 'e1')) / 10; return isNaN(r) ? Math.round(v * 10) / 10 : r; };
@@ -530,6 +531,147 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
       var w = D.pesos[u[1]] || [];
       return (u[3] || []).map(function (v, i) { return v == null ? null : (w[i] != null ? w[i] : 0.01) * Math.max(0, 100 - v); });
     }
+    // Qué es su tipo de cliente (D.tipos: [puntos, descripción, ejemplo] por tipo)
+    function textoTipo(p) {
+      var t = D.tipos && D.tipos[p];
+      if (t) return esc(t[0]) + (t[1] ? ': ' + esc(t[1]) : '') + ' (' + esc(t[2]) + ').';
+      return p === 0 ? 'No está en el universo ICE de ' + esc(D.unidad) + ': no tiene tipo de cliente.' : '';
+    }
+
+    var fila = function (k, v) { return v == null || v === '' ? '' : '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; };
+    function textoEpica(e) {
+      if (!e) return '<span class="gris">Pendiente</span>';
+      return '<b>' + dec1(e[1]) + '</b> · ' + esc(fecha(e[0])) + (e[2] ? '<span class="alerta">NoGeo</span>' : '') + (e[3] ? '<span class="alerta">Foto de foto</span>' : '');
+    }
+    function desglose(c, op) {
+      var u = c[18];
+      if (!u) return '<p class="f-peor ok">Este cliente <b>nunca se ha evaluado en ICE</b>: todavía no hay calificaciones de submétricas.</p>';
+      var perd = perdidos(u), f = falto(u, false), conPts = IceChecklist.conPuntos(u[0]), noCuentan = [];
+      // Barra = botón: «Enfriador 80% 36/45» y a la derecha los puntos perdidos; al
+      // tocarla se despliega debajo el checklist de esa submétrica
+      var mets = D.metricas.map(function (m, i) {
+        var v = (u[3] || [])[i];
+        if (v == null) return '';
+        if (conPts && IceChecklist.noAplica(u[1], u[6], i)) { noCuentan.push(m[0]); return ''; }
+        var inf = IceChecklist.info(u[1], u[6], i, v, u[0]);
+        var p = inf ? inf.perdidos : perd[i];
+        return '<button type="button" class="met' + (u[4] === i ? ' peor' : '') + '" data-i="' + i + '" aria-expanded="false" aria-controls="ck-' + i + '"><span class="ico">' + m[2] + '</span>'
+          + '<span class="barra"><i style="width:' + Math.max(0, Math.min(100, v)) + '%"></i><em>' + esc(inf ? m[1] : m[0]) + '</em>'
+          + '<span class="pts">' + Math.round(v) + '%' + (inf ? ' ' + IceChecklist.pts(inf.ganados) + '/' + IceChecklist.pts(inf.total) : '') + '</span></span>'
+          + '<b>' + (p > 0.05 ? '−' + (inf ? IceChecklist.pts(p) : p.toFixed(1)) : '0') + '</b></button>'
+          + '<div class="ck-sitio" id="ck-' + i + '" hidden></div>';
+      }).join('');
+      return '<div class="f-ice">' + celdaCalor(u[2]) + '<p><b>' + (c[19] ? 'Evaluación de ' + esc(D.mes) : 'Última evaluación ICE') + '</b><br>'
+        + esc(fecha(u[0])) + ' · ' + esc(D.canales[u[1]] || '') + '</p></div>'
+        + (u[4] != null
+          ? '<p class="f-peor">Lo que más le quitó: <b>' + esc(f.t) + '</b>' + (u[5] != null ? ' (−' + u[5].toFixed(1) + ' puntos)' : '')
+            + (op.abrirPeor ? '. Está en rojo abajo, con su checklist abierto: ahí ves qué corregir.</p>' : '. Está en rojo abajo.</p>')
+          : '<p class="f-peor ok">' + (f.t === 'Todo al 100%' ? 'No perdió puntos en ninguna submétrica.' : 'El reporte no trae el desglose de esta evaluación.') + '</p>')
+        + (mets ? '<div class="mets">' + mets + '</div>'
+          + (noCuentan.length ? '<p class="nota">' + esc(noCuentan.join(' y ')) + ': no ' + (noCuentan.length > 1 ? 'cuentan' : 'cuenta') + ' para un cliente ' + esc((IceChecklist.formato(u[1], u[6]).split(' · ')[1] || '').toLowerCase()) + '.</p>' : '')
+          + '<p class="nota">' + (conPts
+            ? 'En cada barra: porcentaje de la submétrica y los puntos que sumó de su total (puntos del manual ICE 2026 para un cliente <b>' + esc(IceChecklist.formato(u[1], u[6])) + '</b>); a la derecha, los que perdió.'
+            : 'Porcentaje de cada submétrica y, a la derecha, los puntos aproximados que le quitó: esta evaluación es de antes de las reglas de hoy.')
+          + ' <b>Toca una barra para ver su checklist</b>: lo que vale cada paso y, en SOCI y SOVI, cuántos frentes faltan.</p>' : '');
+    }
+
+    // HTML de la ficha (sin la barra de navegación). op = { ubicacion: sección
+    // «¿Dónde está?» con el mapa, la dirección, la jefatura, la ruta y el farmer;
+    // tipos: qué es su tipo de cliente bajo el nombre; abrirPeor: avisa que el
+    // checklist de la submétrica que más le quitó sale abierto (ver abrirPeor) }
+    function ficha(c, op) {
+      op = op || {};
+      var m = c[19], ep = c[20] || [0, 0, 0];
+      fichaU = c[18] || null;
+      var conCoord = c[3] != null && c[4] != null;
+      var ll = conCoord ? (+c[3]) + ',' + (+c[4]) : '';
+      // Semana del mes en que más veces lo ha evaluado el auditor
+      var semana = c[14] ? 'Semana ' + c[14] + ' <span class="gris">(días ' + ['1 a 7', '8 a 14', '15 a 21', '22 al fin de mes'][c[14] - 1] + ')</span>'
+        + (c[16] ? '<br><span class="gris">Ahí cayeron ' + c[15] + ' de sus ' + plural(c[16], 'visita') + ' ICE</span>' : '') : '';
+      var mapa = conCoord
+        ? '<div class="f-mapa"><iframe title="Ubicación de ' + esc(c[1] || c[0]) + '" src="https://www.google.com/maps?q=' + ll + '&z=17&hl=es&output=embed" allowfullscreen></iframe></div>'
+          + '<div class="f-botones"><a class="btn rojo" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '&travelmode=driving">Cómo llegar</a>'
+          + '<a class="btn" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&query=' + ll + '">Ver en Google Maps</a></div>'
+        : '<div class="f-mapa sin">Este cliente no tiene coordenadas en la Master Data: no se puede ubicar en el mapa.</div>';
+      var donde = fila('Dirección', esc(c[5]))
+        + fila('Jefatura', esc(c[6]))
+        + fila('Ruta de preventa', c[7] ? esc(c[7]) + (c[8] ? ' · ' + frecuencia(c[8]) : '') : '')
+        + fila('Farmer', c[9] ? esc(c[9]) + (c[10] ? ' · ' + frecuencia(c[10]) : '') : '<span class="gris">Sin farmer</span>');
+      var tipo = op.tipos ? textoTipo(c[2]) : '';
+      return '<div class="f-cab p' + c[2] + '"><p class="f-tipo">' + TIPO[c[2]]
+        + (m ? ' · ya evaluado en ' + esc(D.mes) : ' · sin ICE en ' + esc(D.mes)) + '</p>'
+        + '<h2>' + esc(c[1] || 'Cliente sin nombre') + '</h2><p class="f-sap">SAP <b>' + esc(c[0]) + '</b></p>'
+        + (tipo ? '<p class="f-desc">' + tipo + '</p>' : '') + '</div>'
+        + (op.ubicacion ? '<section class="f-sec"><h3>¿Dónde está?</h3>' + mapa + '<dl class="datos">' + donde + '</dl></section>' : mapa)
+        + '<section class="f-sec"><h3>' + (c[19] ? 'Su evaluación ICE de ' + esc(D.mes) : 'Su última evaluación ICE') + '</h3>' + desglose(c, op) + '</section>'
+        + '<section class="f-sec"><h3>Datos del cliente</h3><dl class="datos">'
+        + fila('Tipo de cliente', '<span class="bola p' + c[2] + '" style="vertical-align:-2px;margin-right:6px"></span>' + TIPO[c[2]])
+        + (op.ubicacion ? '' : donde)
+        + fila('Canal', esc(D.canales[c[11]] || ''))
+        + fila('ICE de ' + D.mes, m ? celdaCalor(m[1]) + ' <span class="gris">' + esc(fecha(m[0])) + (m[2] ? ' · auditor ' + esc(m[2]) : '') + (m[3] === 'Far' ? ' · encuesta lejos del cliente' : '') + '</span>' : '<span class="gris">Todavía no se evalúa</span>')
+        + (m ? fila('Evaluación anterior', c[21] ? esc(fecha(c[21])) + ' · ICE ' + dec1(c[22]) : '<span class="gris">Ninguna: es su primera evaluación</span>')
+             : fila('Última evaluación', c[18] ? esc(fecha(c[18][0])) + ' · ICE ' + dec1(c[18][2]) : '<span class="gris">Nunca</span>'))
+        + fila('Promedio ICE antes de ' + D.mes, c[17] != null ? dec1(c[17]) : '')
+        + fila('Puntos de prioridad', c[24] != null ? '<b>' + c[24] + '</b> <span class="gris">(' + c[23] + ' de ' + D.prioridad.meses_ventana
+             + ' meses con ICE' + (c[12] ? ' + 1 por ' + esc(D.prioridad.mes_anterior) : '') + ')</span>' : '')
+        + fila('Semana del mes', semana)
+        + fila('ÉPICA de ' + D.mes, ['Brigadistas', 'Preventa', 'Farmers'].map(function (q, k) {
+          return '<span class="ep">' + q + ': ' + textoEpica(ep[k]) + '</span>';
+        }).join(''))
+        + '</dl></section>';
+    }
+
+    // Abre o cierra, bajo su barra, el checklist de la submétrica de un botón .met
+    function alternar(b) {
+      var i = +b.getAttribute('data-i'), caja = document.getElementById('ck-' + i), abierto = b.getAttribute('aria-expanded') === 'true';
+      if (!abierto && !caja.innerHTML) {
+        caja.innerHTML = IceChecklist.html({ ci: fichaU[1], fmt: fichaU[6], fmtMaster: fichaU[7], i: i, pct: fichaU[3][i],
+                                             fecha: fichaU[0], metrica: D.metricas[i][0] });
+      }
+      caja.hidden = abierto;
+      b.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+    }
+    // Una sola vez por contenedor de la ficha: barras y calculadoras SOCI/SOVI
+    function enlazar(raiz) {
+      raiz.addEventListener('click', function (ev) {
+        var b = ev.target;
+        while (b && b !== raiz && !(b.getAttribute && b.getAttribute('data-i') !== null)) b = b.parentNode;
+        if (!b || b === raiz || !fichaU) return;
+        alternar(b);
+      });
+      IceChecklist.enlazar(raiz);
+    }
+    // Con la ficha ya en la página: abre el checklist de la submétrica que más le quitó
+    function abrirPeor(raiz) {
+      if (!fichaU || fichaU[4] == null) return;
+      var b = raiz.querySelector('button.met[data-i="' + fichaU[4] + '"]');
+      if (b && b.getAttribute('aria-expanded') !== 'true') alternar(b);
+    }
+
+    return { preparar: preparar, esc: esc, r1: r1, dec1: dec1, plural: plural, celdaCalor: celdaCalor, falto: falto,
+             TIPO: TIPO, ficha: ficha, enlazar: enlazar, abrirPeor: abrirPeor };
+  }
+
+  // Programa de la hoja «Mis clientes ICE»: se guarda como texto y corre
+  // dentro del archivo descargado (ES5); la ficha es la de programaFicha
+  function programaHoja() {
+    var D = JSON.parse(document.getElementById('datos').textContent);
+    // Campos de cada cliente: ver programaFicha
+    var F = FichaICE;
+    F.preparar(D);
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = F.esc, r1 = F.r1, dec1 = F.dec1, plural = F.plural, celdaCalor = F.celdaCalor, falto = F.falto, TIPO = F.TIPO;
+    var FARMER = '__farmer__';            // valor de la opción Farmer en la lista de jefaturas
+    var CANAL_CORTO = { 'Home Market': 'HM', 'On Premise': 'OP' };   // columna Canal de las listas
+    var CLAVE = 'MisClientesICE:' + D.unidad;
+    var est = { g: '', j: '', r: '', dia: 'hoy', tab: 'p' };
+    var vista = '', desdeLista = false, scrollLista = 0;
+    var porSap = {};
+    D.clientes.forEach(function (c, i) { porSap[c[0]] = i; });
+    try {
+      var g = JSON.parse(localStorage.getItem(CLAVE) || 'null');
+      if (g && g.r) { est.g = g.g; est.j = g.j; est.r = g.r; }
+    } catch (e) { /* sin almacenamiento local: se elige cada vez */ }
 
     function grupoDe(g) { return g === 'farmer' ? D.farmers : D.preventa; }
     function rutaSel() {
@@ -658,97 +800,16 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     });
     $('btnCambiar').addEventListener('click', function () { location.hash = 'inicio'; });
 
-    // ── Ficha del cliente ──
-    var fila = function (k, v) { return v == null || v === '' ? '' : '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; };
-    function textoEpica(e) {
-      if (!e) return '<span class="gris">Pendiente</span>';
-      return '<b>' + dec1(e[1]) + '</b> · ' + esc(fecha(e[0])) + (e[2] ? '<span class="alerta">NoGeo</span>' : '') + (e[3] ? '<span class="alerta">Foto de foto</span>' : '');
-    }
-    function desglose(c) {
-      var u = c[18];
-      if (!u) return '<p class="f-peor ok">Este cliente <b>nunca se ha evaluado en ICE</b>: todavía no hay calificaciones de submétricas.</p>';
-      var perd = perdidos(u), f = falto(u, false), conPts = IceChecklist.conPuntos(u[0]), noCuentan = [];
-      // Barra = botón: «Enfriador 80% 36/45» y a la derecha los puntos perdidos; al
-      // tocarla se despliega debajo el checklist de esa submétrica
-      var mets = D.metricas.map(function (m, i) {
-        var v = (u[3] || [])[i];
-        if (v == null) return '';
-        if (conPts && IceChecklist.noAplica(u[1], u[6], i)) { noCuentan.push(m[0]); return ''; }
-        var inf = IceChecklist.info(u[1], u[6], i, v, u[0]);
-        var p = inf ? inf.perdidos : perd[i];
-        return '<button type="button" class="met' + (u[4] === i ? ' peor' : '') + '" data-i="' + i + '" aria-expanded="false" aria-controls="ck-' + i + '"><span class="ico">' + m[2] + '</span>'
-          + '<span class="barra"><i style="width:' + Math.max(0, Math.min(100, v)) + '%"></i><em>' + esc(inf ? m[1] : m[0]) + '</em>'
-          + '<span class="pts">' + Math.round(v) + '%' + (inf ? ' ' + IceChecklist.pts(inf.ganados) + '/' + IceChecklist.pts(inf.total) : '') + '</span></span>'
-          + '<b>' + (p > 0.05 ? '−' + (inf ? IceChecklist.pts(p) : p.toFixed(1)) : '0') + '</b></button>'
-          + '<div class="ck-sitio" id="ck-' + i + '" hidden></div>';
-      }).join('');
-      return '<div class="f-ice">' + celdaCalor(u[2]) + '<p><b>' + (c[19] ? 'Evaluación de ' + esc(D.mes) : 'Última evaluación ICE') + '</b><br>'
-        + esc(fecha(u[0])) + ' · ' + esc(D.canales[u[1]] || '') + '</p></div>'
-        + (u[4] != null
-          ? '<p class="f-peor">Lo que más le quitó: <b>' + esc(f.t) + '</b>' + (u[5] != null ? ' (−' + u[5].toFixed(1) + ' puntos)' : '') + '. Está en rojo abajo.</p>'
-          : '<p class="f-peor ok">' + (f.t === 'Todo al 100%' ? 'No perdió puntos en ninguna submétrica.' : 'El reporte no trae el desglose de esta evaluación.') + '</p>')
-        + (mets ? '<div class="mets">' + mets + '</div>'
-          + (noCuentan.length ? '<p class="nota">' + esc(noCuentan.join(' y ')) + ': no ' + (noCuentan.length > 1 ? 'cuentan' : 'cuenta') + ' para un cliente ' + esc((IceChecklist.formato(u[1], u[6]).split(' · ')[1] || '').toLowerCase()) + '.</p>' : '')
-          + '<p class="nota">' + (conPts
-            ? 'En cada barra: porcentaje de la submétrica y los puntos que sumó de su total (puntos del manual ICE 2026 para un cliente <b>' + esc(IceChecklist.formato(u[1], u[6])) + '</b>); a la derecha, los que perdió.'
-            : 'Porcentaje de cada submétrica y, a la derecha, los puntos aproximados que le quitó: esta evaluación es de antes de las reglas de hoy.')
-          + ' <b>Toca una barra para ver su checklist</b>: lo que vale cada paso y, en SOCI y SOVI, cuántos frentes faltan.</p>' : '');
-    }
+    // ── Ficha del cliente (programaFicha) ──
     function pintarFicha(sap) {
-      var c = D.clientes[porSap[sap]], m = c[19], ep = c[20] || [0, 0, 0];
-      fichaU = c[18] || null;
-      var conCoord = c[3] != null && c[4] != null;
-      var ll = conCoord ? (+c[3]) + ',' + (+c[4]) : '';
-      // Semana del mes en que más veces lo ha evaluado el auditor
-      var semana = c[14] ? 'Semana ' + c[14] + ' <span class="gris">(días ' + ['1 a 7', '8 a 14', '15 a 21', '22 al fin de mes'][c[14] - 1] + ')</span>'
-        + (c[16] ? '<br><span class="gris">Ahí cayeron ' + c[15] + ' de sus ' + plural(c[16], 'visita') + ' ICE</span>' : '') : '';
       $('vFicha').innerHTML = '<div class="nav"><button type="button" class="volver" id="btnVolver">‹ Volver a la lista</button></div>'
-        + '<div class="f-cab p' + c[2] + '"><p class="f-tipo">' + TIPO[c[2]]
-        + (m ? ' · ya evaluado en ' + esc(D.mes) : ' · sin ICE en ' + esc(D.mes)) + '</p>'
-        + '<h2>' + esc(c[1] || 'Cliente sin nombre') + '</h2><p class="f-sap">SAP <b>' + esc(c[0]) + '</b></p></div>'
-        + (conCoord
-          ? '<div class="f-mapa"><iframe title="Ubicación de ' + esc(c[1] || c[0]) + '" src="https://www.google.com/maps?q=' + ll + '&z=17&hl=es&output=embed" allowfullscreen></iframe></div>'
-            + '<div class="f-botones"><a class="btn rojo" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '&travelmode=driving">Cómo llegar</a>'
-            + '<a class="btn" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&query=' + ll + '">Ver en Google Maps</a></div>'
-          : '<div class="f-mapa sin">Este cliente no tiene coordenadas en la Master Data: no se puede ubicar en el mapa.</div>')
-        + '<section class="f-sec"><h3>' + (c[19] ? 'Su evaluación ICE de ' + esc(D.mes) : 'Su última evaluación ICE') + '</h3>' + desglose(c) + '</section>'
-        + '<section class="f-sec"><h3>Datos del cliente</h3><dl class="datos">'
-        + fila('Tipo de cliente', '<span class="bola p' + c[2] + '" style="vertical-align:-2px;margin-right:6px"></span>' + TIPO[c[2]])
-        + fila('Dirección', esc(c[5]))
-        + fila('Jefatura', esc(c[6]))
-        + fila('Ruta de preventa', c[7] ? esc(c[7]) + (c[8] ? ' · ' + frecuencia(c[8]) : '') : '')
-        + fila('Farmer', c[9] ? esc(c[9]) + (c[10] ? ' · ' + frecuencia(c[10]) : '') : '<span class="gris">Sin farmer</span>')
-        + fila('Canal', esc(D.canales[c[11]] || ''))
-        + fila('ICE de ' + D.mes, m ? celdaCalor(m[1]) + ' <span class="gris">' + esc(fecha(m[0])) + (m[2] ? ' · auditor ' + esc(m[2]) : '') + (m[3] === 'Far' ? ' · encuesta lejos del cliente' : '') + '</span>' : '<span class="gris">Todavía no se evalúa</span>')
-        + (m ? fila('Evaluación anterior', c[21] ? esc(fecha(c[21])) + ' · ICE ' + dec1(c[22]) : '<span class="gris">Ninguna: es su primera evaluación</span>')
-             : fila('Última evaluación', c[18] ? esc(fecha(c[18][0])) + ' · ICE ' + dec1(c[18][2]) : '<span class="gris">Nunca</span>'))
-        + fila('Promedio ICE antes de ' + D.mes, c[17] != null ? dec1(c[17]) : '')
-        + fila('Puntos de prioridad', c[24] != null ? '<b>' + c[24] + '</b> <span class="gris">(' + c[23] + ' de ' + D.prioridad.meses_ventana
-             + ' meses con ICE' + (c[12] ? ' + 1 por ' + esc(D.prioridad.mes_anterior) : '') + ')</span>' : '')
-        + fila('Semana del mes', semana)
-        + fila('ÉPICA de ' + D.mes, ['Brigadistas', 'Preventa', 'Farmers'].map(function (q, k) {
-          return '<span class="ep">' + q + ': ' + textoEpica(ep[k]) + '</span>';
-        }).join(''))
-        + '</dl></section>';
+        + F.ficha(D.clientes[porSap[sap]]);
       $('btnVolver').addEventListener('click', function () {
         if (desdeLista) history.back();
         else location.hash = rutaSel() ? 'lista' : 'inicio';
       });
     }
-
-    $('vFicha').addEventListener('click', function (ev) {
-      var b = ev.target, raiz = $('vFicha');
-      while (b && b !== raiz && !(b.getAttribute && b.getAttribute('data-i') !== null)) b = b.parentNode;
-      if (!b || b === raiz || !fichaU) return;
-      var i = +b.getAttribute('data-i'), caja = $('ck-' + i), abierto = b.getAttribute('aria-expanded') === 'true';
-      if (!abierto && !caja.innerHTML) {
-        caja.innerHTML = IceChecklist.html({ ci: fichaU[1], fmt: fichaU[6], fmtMaster: fichaU[7], i: i, pct: fichaU[3][i],
-                                             fecha: fichaU[0], metrica: D.metricas[i][0] });
-      }
-      caja.hidden = abierto;
-      b.setAttribute('aria-expanded', abierto ? 'false' : 'true');
-    });
-    IceChecklist.enlazar($('vFicha'));
+    F.enlazar($('vFicha'));
 
     // ── Navegación con el # de la dirección (el botón Atrás del celular funciona) ──
     function navegar() {
@@ -774,16 +835,227 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     navegar();
   }
 
-  // Datos de la hoja: los clientes ICE de las rutas de preventa y de los farmers
-  // de hoy y de mañana, más los ya evaluados en el mes (de cualquier día)
+  // Programa del «Buscador de clientes» (ES5, como la hoja): se escribe el SAP
+  // (o parte del nombre), sale el nombre del cliente y con Entrar se abre su
+  // ficha: tipo, dónde está, desglose ICE y el checklist de la submétrica que
+  // más le quitó ya abierto
+  function programaBuscador() {
+    var D = JSON.parse(document.getElementById('datos').textContent);
+    // Campos de cada cliente: ver programaFicha
+    var F = FichaICE;
+    F.preparar(D);
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = F.esc;
+    var CLAVE = 'BuscadorClientesICE:' + D.unidad;
+    var MAX = 40, MAX_RECIENTES = 8;          // resultados a la vista y buscados hace poco
+    var TACTIL = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    var MODOS = {
+      sap: { etiqueta: 'SAP del cliente', ayuda: 'Escribe el SAP', teclado: 'numeric' },
+      nombre: { etiqueta: 'Nombre del cliente', ayuda: 'Escribe parte del nombre', teclado: 'text' }
+    };
+    var est = { modo: 'sap', sel: null };
+    var vista = '', desdeBusqueda = false, scrollBusqueda = 0, ultimo = { q: '', lista: [], exacto: -1 };
+
+    // Sin acentos, mayúsculas ni signos, para buscar por nombre
+    function norm(s) {
+      s = String(s == null ? '' : s).toLowerCase();
+      if (s.normalize) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+      return s.replace(/[^a-z0-9]+/g, ' ').replace(/^ +| +$/g, '');
+    }
+    // El SAP sin ceros a la izquierda (así da igual si se escriben)
+    var sinCeros = function (s) { return String(s == null ? '' : s).replace(/\D/g, '').replace(/^0+/, ''); };
+    var porSap = {}, saps = [], nombres = [];
+    D.clientes.forEach(function (c, i) { porSap[c[0]] = i; saps.push(sinCeros(c[0])); nombres.push(norm(c[1])); });
+    var recientes = [];
+    try {
+      recientes = (JSON.parse(localStorage.getItem(CLAVE) || '[]') || []).filter(function (s) { return porSap.hasOwnProperty(s); });
+    } catch (e) { /* sin almacenamiento local: no se recuerdan */ }
+    function recordar(sap) {
+      recientes = [sap].concat(recientes.filter(function (s) { return s !== sap; })).slice(0, MAX_RECIENTES);
+      try { localStorage.setItem(CLAVE, JSON.stringify(recientes)); } catch (e) { /* sin almacenamiento */ }
+    }
+
+    // Resultados: primero el SAP exacto, luego los que empiezan con lo escrito y
+    // (desde 3 cifras) los que lo traen en medio. Por nombre: todas las palabras
+    // escritas, primero los que empiezan así
+    function buscar(texto) {
+      var r = { q: '', lista: [], exacto: -1 }, i;
+      if (est.modo === 'sap') {
+        var q = sinCeros(texto);
+        r.q = q;
+        if (!q) return r;
+        var g = [[], [], []];
+        for (i = 0; i < saps.length; i++) {
+          var k = saps[i].indexOf(q);
+          if (k < 0) continue;
+          if (saps[i] === q) { if (r.exacto < 0) r.exacto = i; g[0].push(i); }
+          else if (k === 0) g[1].push(i);
+          else if (q.length >= 3) g[2].push(i);
+        }
+        var porNumero = function (a, b) { return (saps[a].length - saps[b].length) || (saps[a] < saps[b] ? -1 : saps[a] > saps[b] ? 1 : 0); };
+        r.lista = g[0].concat(g[1].sort(porNumero), g[2].sort(porNumero));
+      } else {
+        var n = norm(texto);
+        r.q = n;
+        if (n.length < 2) return r;
+        var pal = n.split(' '), h = [[], [], []];
+        for (i = 0; i < nombres.length; i++) {
+          var nom = nombres[i], ok = true;
+          for (var p = 0; p < pal.length && ok; p++) ok = nom.indexOf(pal[p]) >= 0;
+          if (!ok) continue;
+          h[nom.indexOf(n) === 0 ? 0 : (' ' + nom).indexOf(' ' + pal[0]) >= 0 ? 1 : 2].push(i);
+        }
+        var alfabetico = function (a, b) { return nombres[a] < nombres[b] ? -1 : nombres[a] > nombres[b] ? 1 : 0; };
+        r.lista = h[0].sort(alfabetico).concat(h[1].sort(alfabetico), h[2].sort(alfabetico));
+      }
+      return r;
+    }
+
+    // Marca en el SAP la parte que coincide con lo escrito
+    function resaltar(sap, q) {
+      var s = String(sap), k = q ? s.indexOf(q) : -1;
+      if (k < 0) return esc(s);
+      return esc(s.slice(0, k)) + '<mark>' + esc(s.slice(k, k + q.length)) + '</mark>' + esc(s.slice(k + q.length));
+    }
+    function detalle(c) {
+      return [c[6], c[7] ? 'Ruta ' + c[7] : '', c[9] ? 'Farmer ' + c[9] : '', D.canales[c[11]] || '']
+        .filter(function (x) { return x; }).map(esc).join(' · ');
+    }
+    function item(i, q) {
+      var c = D.clientes[i];
+      return '<li><a class="res-it" href="#c-' + encodeURIComponent(c[0]) + '" role="option" id="op-' + i + '" aria-selected="' + (i === est.sel ? 'true' : 'false') + '">'
+        + '<span class="bola p' + c[2] + '" title="' + F.TIPO[c[2]] + '"></span>'
+        + '<span class="res-sap">' + (q ? resaltar(c[0], q) : esc(c[0])) + '</span>'
+        + '<span class="res-nom">' + esc(c[1] || 'Cliente sin nombre') + '<small>' + detalle(c) + '</small></span>'
+        + '<span class="res-ir" aria-hidden="true">›</span></a></li>';
+    }
+
+    function pintarBusqueda() {
+      var texto = $('q').value, r = buscar(texto), sap = est.modo === 'sap';
+      ultimo = r;
+      var vis = r.lista.slice(0, MAX);
+      // El elegido: el que se marcó con las flechas, el SAP exacto o el único resultado
+      if (est.sel == null || vis.indexOf(est.sel) < 0) est.sel = r.exacto >= 0 ? r.exacto : r.lista.length === 1 ? r.lista[0] : null;
+      var el = $('elegido');
+      if (est.sel != null) {
+        var c = D.clientes[est.sel];
+        el.className = 'elegido p' + c[2];
+        el.innerHTML = '<span class="el-tipo"><span class="bola p' + c[2] + '"></span>' + esc(F.TIPO[c[2]]) + '</span>'
+          + '<b>' + esc(c[1] || 'Cliente sin nombre') + '</b><small>SAP ' + esc(c[0]) + (detalle(c) ? ' · ' + detalle(c) : '') + '</small>';
+      } else {
+        el.className = 'elegido nada';
+        el.innerHTML = '<span>' + (!r.q
+          ? (sap ? 'Escribe el SAP: aquí sale el nombre del cliente.' : 'Escribe al menos 2 letras del nombre.')
+          : !r.lista.length
+            ? (sap ? 'No hay ningún cliente con el SAP <b>' + esc(r.q) + '</b>' : 'No hay ningún cliente que se llame así') + ' en ' + esc(D.unidad) + '.'
+            : 'Hay <b>' + F.plural(r.lista.length, 'cliente') + '</b> ' + (sap ? (r.lista.length === 1 ? 'que tiene' : 'que tienen') + ' esas cifras' : 'con ese nombre')
+              + ': toca el tuyo en la lista' + (sap ? ' o termina de escribir el SAP' : ' o escribe más') + '.') + '</span>';
+      }
+      $('btnEntrar').disabled = est.sel == null;
+      $('btnLimpiar').hidden = !texto;
+
+      // Lista: los resultados (si hay más de uno) o, sin nada escrito, los buscados hace poco
+      var html = '';
+      if (!r.q) {
+        if (recientes.length) {
+          html = '<h3 class="res-tit">Buscados hace poco</h3><ul class="res" role="listbox" aria-label="Buscados hace poco">'
+            + recientes.map(function (s) { return item(porSap[s], ''); }).join('') + '</ul>'
+            + '<button type="button" class="borrar" id="btnBorrar">Borrar esta lista</button>';
+        }
+      } else if (r.lista.length > 1) {
+        html = '<ul class="res" role="listbox" aria-label="Clientes encontrados">' + vis.map(function (i) { return item(i, sap ? r.q : ''); }).join('') + '</ul>'
+          + (r.lista.length > MAX ? '<p class="res-mas">Y ' + F.plural(r.lista.length - MAX, 'cliente') + ' más: escribe más para encontrarlo.</p>' : '');
+      }
+      $('resultados').innerHTML = html;
+    }
+
+    function entrar() {
+      if (est.sel != null) location.hash = 'c-' + encodeURIComponent(D.clientes[est.sel][0]);
+    }
+    function ponerModo(m) {
+      est.modo = m;
+      est.sel = null;
+      var M = MODOS[m];
+      $('txtQ').textContent = M.etiqueta;
+      $('q').setAttribute('inputmode', M.teclado);
+      $('q').setAttribute('placeholder', M.ayuda);
+      $('q').value = '';
+      ['sap', 'nombre'].forEach(function (x) { $('modo-' + x).setAttribute('aria-pressed', x === m ? 'true' : 'false'); });
+      pintarBusqueda();
+    }
+    $('fBuscar').addEventListener('submit', function (ev) { ev.preventDefault(); entrar(); });
+    $('q').addEventListener('input', function () { est.sel = null; pintarBusqueda(); });
+    $('q').addEventListener('keydown', function (ev) {
+      var k = ev.key || ev.keyCode, abajo = k === 'ArrowDown' || k === 'Down' || k === 40, arriba = k === 'ArrowUp' || k === 'Up' || k === 38;
+      var vis = ultimo.lista.slice(0, MAX);
+      if (!(abajo || arriba) || vis.length < 2) return;
+      ev.preventDefault();
+      var p = vis.indexOf(est.sel);
+      est.sel = vis[p < 0 ? (abajo ? 0 : vis.length - 1) : Math.max(0, Math.min(vis.length - 1, p + (abajo ? 1 : -1)))];
+      pintarBusqueda();
+      var op = $('op-' + est.sel);
+      if (op && op.scrollIntoView) op.scrollIntoView({ block: 'nearest' });
+    });
+    $('btnLimpiar').addEventListener('click', function () { $('q').value = ''; est.sel = null; pintarBusqueda(); $('q').focus(); });
+    $('modo-sap').addEventListener('click', function () { ponerModo('sap'); $('q').focus(); });
+    $('modo-nombre').addEventListener('click', function () { ponerModo('nombre'); $('q').focus(); });
+    $('resultados').addEventListener('click', function (ev) {
+      if (ev.target && ev.target.id === 'btnBorrar') {
+        recientes = [];
+        try { localStorage.removeItem(CLAVE); } catch (e) { /* sin almacenamiento */ }
+        pintarBusqueda();
+      }
+    });
+
+    // ── Ficha del cliente (programaFicha) ──
+    function pintarFicha(sap) {
+      $('vFicha').innerHTML = '<div class="nav"><button type="button" class="volver" id="btnVolver">‹ Buscar otro cliente</button></div>'
+        + F.ficha(D.clientes[porSap[sap]], { ubicacion: true, tipos: true, abrirPeor: true });
+      F.abrirPeor($('vFicha'));
+      $('btnVolver').addEventListener('click', function () {
+        if (desdeBusqueda) history.back();
+        else location.hash = 'buscar';
+      });
+    }
+    F.enlazar($('vFicha'));
+
+    // ── Navegación con el # de la dirección (el botón Atrás del celular funciona) ──
+    function mostrar(id) {
+      vista = id;
+      ['vBuscar', 'vFicha'].forEach(function (v) { $(v).hidden = v !== id; });
+    }
+    function navegar() {
+      var h = decodeURIComponent(location.hash.replace(/^#/, ''));
+      var antes = vista;
+      if (h.indexOf('c-') === 0 && porSap.hasOwnProperty(h.slice(2))) {
+        if (antes === 'vBuscar') scrollBusqueda = window.pageYOffset || 0;
+        desdeBusqueda = antes === 'vBuscar';
+        recordar(h.slice(2));
+        mostrar('vFicha');
+        pintarFicha(h.slice(2));
+        window.scrollTo(0, 0);
+      } else {
+        mostrar('vBuscar');
+        pintarBusqueda();
+        window.scrollTo(0, antes === 'vFicha' ? scrollBusqueda : 0);
+      }
+    }
+    window.addEventListener('hashchange', navegar);
+    navegar();
+    if (vista === 'vBuscar' && !TACTIL) $('q').focus();
+  }
+
+  // ── Datos de las hojas ────────────────────────────────────────────────
+  // Lo que comparten las dos hojas y el armado de cada cliente (ver el orden
+  // de los campos en programaFicha)
   const CORTO_HOJA = { precio: 'Com. de precios', plataformas: 'Act. plataformas' };
-  function datosHoja(D) {
+  function baseHoja(D) {
     const porSap = new Map(D.clientes.map(c => [c[0], c]));
     const delMes = new Map(D.evaluados.map(e => [e[0], e]));
     const indice = new Map(), clientes = [];
     const limpio = v => String(v == null ? '' : v).trim();
     const epica = (m, sap) => { const e = m && m[sap]; return e ? [e[0], e[1], e[2] ? 1 : 0, e[3] ? 1 : 0] : 0; };
-    // Ver el orden de los campos en programaHoja
+    // lat y lon: coordenadas de la Master Data para quien no las tiene en el universo
     function cliente(sap, lat, lon) {
       if (indice.has(sap)) return indice.get(sap);
       const c = porSap.get(sap), e = delMes.get(sap);
@@ -798,11 +1070,25 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
            c[10] || '', c[11], c[21], c[22]]
         : [sap, e[1] || '', e[11] || 0, e[2], e[3], '', D.zonas[e[10]] || '', limpio(e[14]), '', e[15] || '', '',
            e[4], null, null, 0, 0, 0, null, ult, mes, ep, '', null, null, null];
-      if (r[3] == null && lat != null) { r[3] = lat; r[4] = lon; }   // coordenadas de la Master Data
+      if (r[3] == null && lat != null) { r[3] = lat; r[4] = lon; }
       indice.set(sap, clientes.length);
       clientes.push(r);
       return clientes.length - 1;
     }
+    const comunes = {
+      unidad: D.unidad, mes: D.mes, generado: D.generado, corte: D.corte ? D.corte.texto : '',
+      prioridad: { mes_anterior: D.prioridad.mes_anterior, meses_ventana: D.prioridad.meses_ventana, ventana: D.prioridad.ventana },
+      metricas: D.metricas.map(m => [m.nombre, CORTO_HOJA[m.id] || m.nombre, Ice.util.svgIcono(m.id)]),
+      canales: D.canales.map(n => n === 'Traditional' ? 'Home Market' : n),   // como las pestañas del sitio
+      pesos: D.canales.map(n => (D.desglose && D.desglose.pesos && D.desglose.pesos[n]) || []),
+    };
+    return { cliente, clientes, comunes, porSap, limpio };
+  }
+
+  // «Mis clientes ICE»: los clientes ICE de las rutas de preventa y de los
+  // farmers de hoy y de mañana, más los ya evaluados en el mes (de cualquier día)
+  function datosHoja(D) {
+    const { cliente, clientes, comunes, porSap, limpio } = baseHoja(D);
     // R = rutas de hoy y mañana (D.rutas o D.farmers), S = las de la semana
     // (para tener todas las rutas y la jefatura de cada una), rutaEv = ruta de
     // un cliente evaluado en el mes
@@ -844,25 +1130,44 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     const farmers = grupo(D.farmers, D.farmers_semana, e => limpio(e[15] != null ? e[15] : (porSap.get(e[0]) || [])[19]));
     const dia = R => ({ dia: R.dia, fecha: R.fecha, texto: R.texto });
     return {
-      unidad: D.unidad, mes: D.mes, generado: D.generado, corte: D.corte ? D.corte.texto : '',
-      prioridad: { mes_anterior: D.prioridad.mes_anterior, meses_ventana: D.prioridad.meses_ventana, ventana: D.prioridad.ventana },
-      metricas: D.metricas.map(m => [m.nombre, CORTO_HOJA[m.id] || m.nombre, Ice.util.svgIcono(m.id)]),
-      canales: D.canales.map(n => n === 'Traditional' ? 'Home Market' : n),   // como las pestañas del sitio
-      pesos: D.canales.map(n => (D.desglose && D.desglose.pesos && D.desglose.pesos[n]) || []),
+      ...comunes,
       dias: { hoy: dia(D.rutas.hoy), manana: dia(D.rutas.manana) },
       preventa, farmers, clientes,
       checklist: D.checklist || null,     // reglas del checklist ICE (Programas/checklist_ice.py)
     };
   }
 
-  function htmlHoja(D) {
-    const datos = datosHoja(D);
-    // Dentro de <script> solo hay que cuidar "<" (cierre de etiqueta) y los separadores de línea de JS
-    const json = JSON.stringify(datos).replace(/</g, '\\u003c')
-      .split(String.fromCharCode(0x2028)).join('\\u2028').split(String.fromCharCode(0x2029)).join('\\u2029');
-    const H = D.rutas.hoy, M = D.rutas.manana, P = D.prioridad;
-    const diaCorto = R => `${R.dia} ${Number(R.fecha.slice(8, 10))}`;
-    return `<!DOCTYPE html>
+  // «Buscador de clientes»: todos los clientes del universo ICE de la unidad
+  // más los evaluados en el mes que no están en él
+  function datosBuscador(D) {
+    const { cliente, clientes, comunes } = baseHoja(D);
+    // Primero los evaluados, con las coordenadas de la Master Data por si el universo no las trae
+    for (const e of D.evaluados) cliente(e[0], e[2], e[3]);
+    for (const c of D.clientes) cliente(c[0]);
+    return {
+      ...comunes,
+      tipos: D.prioridad.tipos,           // qué es cada tipo de cliente (bajo el nombre en la ficha)
+      clientes,
+      checklist: D.checklist || null,
+    };
+  }
+
+  // JSON dentro de <script>: solo hay que cuidar "<" (cierre de etiqueta) y los separadores de línea de JS
+  const jsonEnScript = datos => JSON.stringify(datos).replace(/</g, '\\u003c')
+    .split(String.fromCharCode(0x2028)).join('\\u2028').split(String.fromCharCode(0x2029)).join('\\u2029');
+
+  // «¿Qué es cada tipo de cliente?» de las dos hojas
+  function tiposHoja(D) {
+    const P = D.prioridad;
+    return `<details class="tipos"><summary>¿Qué es cada tipo de cliente?</summary><p class="nota">${esc(P.formula)}</p><dl>
+${[[1, 'Prioridad 1'], [2, 'Prioridad 2'], [3, 'Prioridad 3'], [4, 'No prioritario']].map(([p, nombre]) => {
+      const t = P.tipos[p];
+      return `      <dt><span class="bola p${p}"></span>${nombre}</dt><dd><b>${esc(t[0])}</b>${t[1] ? `: ${esc(t[1])}` : ''} (${esc(t[2])}).${p === 4 ? ` El tipo se fija al iniciar ${esc(D.mes)}: uno que se evalúa por primera vez este mes sigue como no prioritario.` : ''}</dd>`;
+    }).join('\n')}
+    </dl>`;
+  }
+  // Encabezado del archivo (hasta <body>) y pie con los programas
+  const cabezaHoja = (titulo, css) => `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -870,11 +1175,25 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#F40000">
-<title>Mis clientes ICE · ${esc(D.unidad)} · ${esc(H.fecha)}</title>
+<title>${titulo}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap">
-<style>${CSS_HOJA}${IceChecklist.css}</style>
+<style>${css}</style>
 </head>
-<body>
+<body>`;
+  const pieHoja = (datos, programa) => `<footer class="pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>
+<script type="application/json" id="datos">${jsonEnScript(datos)}</script>
+<script>var IceChecklist = (${programaChecklist.toString()})();</script>
+<script>var FichaICE = (${programaFicha.toString()})();</script>
+<script>(${programa.toString()})();</script>
+</body>
+</html>
+`;
+
+  function htmlHoja(D) {
+    const datos = datosHoja(D);
+    const H = D.rutas.hoy, M = D.rutas.manana;
+    const diaCorto = R => `${R.dia} ${Number(R.fecha.slice(8, 10))}`;
+    return `${cabezaHoja(`Mis clientes ICE · ${esc(D.unidad)} · ${esc(H.fecha)}`, CSS_HOJA + IceChecklist.css)}
 <header class="cab">
   <p class="kicker">Brigadas VDM · ICE</p>
   <h1>Mis clientes ICE.<br>${esc(D.unidad)}</h1>
@@ -902,24 +1221,91 @@ button.met:hover .barra,button.met:focus-visible .barra{box-shadow:inset 0 0 0 1
     </div>
     <p class="resumen" id="resumen"></p>
     <div id="tabla" role="tabpanel"></div>
-    <details class="tipos"><summary>¿Qué es cada tipo de cliente?</summary><p class="nota">${esc(P.formula)}</p><dl>
-${[[1, 'Prioridad 1'], [2, 'Prioridad 2'], [3, 'Prioridad 3'], [4, 'No prioritario']].map(([p, nombre]) => {
-      const t = P.tipos[p];
-      return `      <dt><span class="bola p${p}"></span>${nombre}</dt><dd><b>${esc(t[0])}</b>${t[1] ? `: ${esc(t[1])}` : ''} (${esc(t[2])}).${p === 4 ? ` El tipo se fija al iniciar ${esc(D.mes)}: uno que se evalúa por primera vez este mes sigue como no prioritario.` : ''}</dd>`;
-    }).join('\n')}
-    </dl>
+    ${tiposHoja(D)}
     <p class="nota">Canal: <b>HM</b> = Home Market, <b>OP</b> = On Premise. «Le faltó» es la submétrica que más puntos le quitó en su última evaluación ICE. Las pestañas de prioridad y de no prioritarios solo traen a los clientes que todavía no tienen ICE en ${esc(D.mes)}, en el orden de tu ruta; los ya evaluados están en la tercera pestaña, con su calificación del mes: verde 85 o más, naranja de 70 a 84.9 y rojo menos de 70. Toca un cliente para ver su ficha.</p></details>
     <p class="nota">Este archivo es una foto del ${esc(D.generado)}: descárgalo de nuevo cada día.</p>
   </section>
   <section id="vFicha" hidden></section>
 </main>
-<footer class="pie"><span>Brigadas VDM · ICE</span><span>Uso interno</span></footer>
-<script type="application/json" id="datos">${json}</script>
-<script>var IceChecklist = (${programaChecklist.toString()})();</script>
-<script>(${programaHoja.toString()})();</script>
-</body>
-</html>
+${pieHoja(datos, programaHoja)}`;
+  }
+
+  // Estilos propios del buscador (lo demás es CSS_HOJA)
+  const CSS_BUSCADOR = `
+.buscar{max-width:560px;padding-top:22px}
+.buscar h2{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
+.buscar .ayuda{margin-top:8px;font-size:14px;line-height:1.5;color:#333}
+.buscar .seg{margin-top:16px}
+.caja-q{position:relative;display:flex;border:2px solid #000;background:#fff}
+.caja-q:focus-within{border-color:#F40000;box-shadow:0 0 0 1px #F40000}
+.caja-q input{flex:1;min-width:0;min-height:60px;padding:10px 14px;font:inherit;font-size:24px;font-weight:800;letter-spacing:.03em;font-variant-numeric:tabular-nums;border:0;border-radius:0;background:transparent;color:#000;-webkit-appearance:none;appearance:none}
+.caja-q input:focus{outline:none}
+.caja-q input::placeholder{font-size:17px;font-weight:600;letter-spacing:0;color:#8C8C8C}
+.limpiar{flex:none;width:56px;border:0;border-left:2px solid #E0E0E0;background:#fff;font-size:26px;line-height:1;color:#4D4D4D;cursor:pointer}
+.elegido{min-height:64px;margin-top:12px;padding:11px 14px;background:#F4F4F4;border-left:6px solid #000;font-size:13.5px;line-height:1.45}
+.elegido.p1{border-left-color:#F40000;background:#FFE5E5}
+.elegido.p3{border-left-color:#4D4D4D}
+.elegido.p4,.elegido.p0{border-left-color:#BDBDBD}
+.elegido.nada{display:flex;align-items:center;color:#4D4D4D}
+.elegido b{display:block;margin-top:4px;font-size:19px;font-weight:800;line-height:1.2;color:#000}
+.elegido small{display:block;margin-top:3px;font-size:12.5px;color:#4D4D4D}
+.elegido.nada b{display:inline;margin:0;font-size:inherit}
+.el-tipo{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.buscar .entrar{margin-top:12px}
+.res-tit{margin-top:22px;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#4D4D4D}
+.res{list-style:none;margin:10px 0 0;padding:0;border-top:2px solid #000}
+.res-it{display:grid;grid-template-columns:14px 7.4em minmax(0,1fr) 12px;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid #E0E0E0;font-size:13.5px;line-height:1.3;color:#000;text-decoration:none;-webkit-tap-highlight-color:rgba(0,0,0,.08)}
+.res-it:hover{background:#F6F6F6}
+.res-it[aria-selected="true"]{background:#FFE5E5;box-shadow:inset 5px 0 0 #F40000}
+.res-sap{font-weight:700;font-variant-numeric:tabular-nums}
+.res-sap mark{background:#FFD54F;color:inherit}
+.res-nom{font-weight:700;min-width:0;word-break:break-word}
+.res-nom small{display:block;margin-top:2px;font-size:11.5px;font-weight:600;color:#6E6E6E}
+.res-ir{font-size:20px;font-weight:800;color:#8C8C8C}
+.res-mas{margin-top:10px;font-size:12.5px;color:#4D4D4D}
+.borrar{margin-top:10px;padding:6px 0;border:0;background:none;font-size:12px;font-weight:700;text-decoration:underline;color:#4D4D4D;cursor:pointer}
+.f-desc{margin-top:8px;font-size:12.5px;line-height:1.45}
+@media (max-width:440px){
+.res-it{grid-template-columns:12px 6.6em minmax(0,1fr) 10px;gap:8px;padding:10px 2px;font-size:13px}
+.caja-q input{font-size:21px}
+}
+@media print{.buscar .seg,.caja-q,.buscar .entrar{display:none!important}}
 `;
+
+  function htmlBuscador(D) {
+    const datos = datosBuscador(D);
+    const fuera = datos.clientes.length - D.clientes.length;
+    return `${cabezaHoja(`Buscador de clientes · ${esc(D.unidad)} · ${esc(D.rutas.hoy.fecha)}`, CSS_HOJA + CSS_BUSCADOR + IceChecklist.css)}
+<header class="cab">
+  <p class="kicker">Brigadas VDM · ICE</p>
+  <h1>Buscador de clientes.<br>${esc(D.unidad)}</h1>
+  <p class="sub">Datos publicados el ${esc(D.generado)}${D.corte ? ` · corte ICE al ${esc(D.corte.texto)}` : ''}</p>
+</header>
+<main>
+  <section id="vBuscar" class="buscar" hidden>
+    <h2>¿Qué cliente buscas?</h2>
+    <p class="ayuda">Escribe el <b>SAP</b> del cliente: aparece su nombre y con <b>Entrar</b> ves su tipo de cliente, dónde está, cómo le fue en su evaluación ICE y el <b>checklist</b> de lo que hay que corregir.</p>
+    <div class="seg" role="group" aria-label="Buscar por">
+      <button type="button" id="modo-sap" aria-pressed="true">Por SAP</button>
+      <button type="button" id="modo-nombre" aria-pressed="false">Por nombre</button>
+    </div>
+    <form id="fBuscar" role="search" autocomplete="off" novalidate>
+      <label class="campo" for="q"><span id="txtQ">SAP del cliente</span></label>
+      <div class="caja-q" style="margin-top:6px">
+        <input id="q" type="text" inputmode="numeric" enterkeyhint="go" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Escribe el SAP" aria-describedby="elegido" aria-controls="resultados">
+        <button type="button" class="limpiar" id="btnLimpiar" aria-label="Borrar lo escrito" hidden>×</button>
+      </div>
+      <div class="elegido nada" id="elegido" role="status" aria-live="polite"></div>
+      <button type="submit" class="entrar" id="btnEntrar" disabled>Entrar</button>
+    </form>
+    <div id="resultados"></div>
+    ${tiposHoja(D)}
+    <p class="nota">Aquí están los <b>${num(D.clientes.length)}</b> clientes del universo ICE de ${esc(D.unidad)}${fuera > 0 ? ` y ${num(fuera)} ${fuera === 1 ? 'cliente evaluado' : 'clientes evaluados'} en ${esc(D.mes)} que no están en él` : ''}. En la ficha, el desglose es el de su evaluación ICE más reciente (la de ${esc(D.mes)} si ya se evaluó); toca cualquier barra para ver su checklist. La bolita es el tipo de cliente: roja prioridad 1, negra prioridad 2, blanca prioridad 3 y gris no prioritario o fuera del universo.</p></details>
+    <p class="nota">Este archivo es una foto del ${esc(D.generado)}: descárgalo de nuevo cada día.</p>
+  </section>
+  <section id="vFicha" hidden></section>
+</main>
+${pieHoja(datos, programaBuscador)}`;
   }
 
   function descargarHoja(D) {
@@ -928,5 +1314,11 @@ ${[[1, 'Prioridad 1'], [2, 'Prioridad 2'], [3, 'Prioridad 3'], [4, 'No prioritar
     return html.length;
   }
 
-  return { cinetica, descargarHoja, htmlHoja, htmlInfo };
+  function descargarBuscador(D) {
+    const html = htmlBuscador(D);
+    Archivos.descargar(new Blob([html], { type: 'text/html;charset=utf-8' }), `BuscadorClientesICE_${D.unidad}_${D.rutas.hoy.fecha}.html`);
+    return html.length;
+  }
+
+  return { cinetica, descargarHoja, descargarBuscador, htmlHoja, htmlBuscador, htmlInfo };
 })();

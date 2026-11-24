@@ -2,8 +2,9 @@
  * y llegan resueltas por formato en el payload "checklist").
  *
  * Lo usan las fichas de ice.html (js/ice.js: barras de submétricas y hoja que
- * sube desde abajo) y la hoja descargable «Mis clientes ICE» (js/ice-extra.js
- * copia programaChecklist con toString y la corre dentro del archivo). Por eso
+ * sube desde abajo) y las hojas descargables «Mis clientes ICE» y «Buscador de
+ * clientes» (js/ice-extra.js copia programaChecklist con toString y la corre
+ * dentro del archivo). Por eso
  * está en ES5 y no usa nada de afuera.
  *
  * Formato de una evaluación = '<tamaño>_<tipo>': tamaño c/m/g; tipo rsr/puesto
